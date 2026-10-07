@@ -44,28 +44,49 @@ module.exports = async function handler(req, res) {
     }
 
     // Callback OAuth 2.0 officiel (en cas de flux par redirection complète)
-    if (req.method === 'GET' && (action === 'callback' || (req.url && req.url.includes('code=')))) {
-      const code = req.query?.code || new URL(req.url, 'http://localhost').searchParams.get('code');
+    if (req.method === 'GET' && (action === 'callback' || (req.url && (req.url.includes('/callback') || req.url.includes('code=') || req.url.includes('error='))))) {
+      const urlObj = new URL(req.url, 'http://localhost');
+      const errorParam = req.query?.error || urlObj.searchParams.get('error');
+      if (errorParam) {
+        console.warn('[Google Auth Callback] Annulé ou refusé:', errorParam);
+        res.writeHead(302, { Location: '/#catalog?auth_error=' + encodeURIComponent(errorParam) });
+        return res.end();
+      }
+
+      const code = req.query?.code || urlObj.searchParams.get('code');
       if (code) {
         const proto = req.headers['x-forwarded-proto'] || (req.socket?.encrypted ? 'https' : 'http');
-        const host = req.headers['host'] || 'localhost:3000';
+        const host = req.headers['x-forwarded-host'] || req.headers['host'] || 'getvirtu.shop';
         const redirectUri = `${proto}://${host}/api/auth/google/callback`;
-        const result = await authService.continueWithGoogle({ code, redirect_uri: redirectUri });
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connexion GetVirtu...</title></head><body>
-          <script>
-            try {
-              localStorage.setItem('vs_session', JSON.stringify(${JSON.stringify(result.session)}));
-              var users = JSON.parse(localStorage.getItem('vs_users') || '[]');
-              var user = ${JSON.stringify(result.user)};
-              var idx = users.findIndex(function(u){ return u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase(); });
-              if (idx !== -1) { users[idx] = Object.assign({}, users[idx], user); } else { users.push(user); }
-              localStorage.setItem('vs_users', JSON.stringify(users));
-            } catch(e){}
-            window.location.href = '/#catalog';
-          </script>
-        </body></html>`;
-        res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-        return res.end(html);
+
+        try {
+          const result = await authService.continueWithGoogle({ code, redirect_uri: redirectUri });
+          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connexion GetVirtu...</title></head><body>
+            <script>
+              try {
+                localStorage.setItem('vs_session', JSON.stringify(${JSON.stringify(result.session)}));
+                var users = JSON.parse(localStorage.getItem('vs_users') || '[]');
+                var user = ${JSON.stringify(result.user)};
+                var idx = users.findIndex(function(u){ return u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()); });
+                if (idx !== -1) { users[idx] = Object.assign({}, users[idx], user); } else { users.push(user); }
+                localStorage.setItem('vs_users', JSON.stringify(users));
+              } catch(e){}
+              window.location.href = '/#catalog';
+            </script>
+          </body></html>`;
+          res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+          return res.end(html);
+        } catch (authErr) {
+          console.error('[Google Auth Callback Error]', authErr.message);
+          const errHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Erreur de connexion</title></head><body>
+            <script>
+              alert("Erreur de connexion Google: " + ${JSON.stringify(authErr.message)});
+              window.location.href = '/#catalog';
+            </script>
+          </body></html>`;
+          res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+          return res.end(errHtml);
+        }
       }
     }
 

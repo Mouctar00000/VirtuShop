@@ -2047,6 +2047,18 @@ async function initGoogleIdentity() {
   }
 }
 
+function fallbackToGoogleRedirect() {
+  var clientId = configuredGoogleClientId || DEFAULT_GOOGLE_CLIENT_ID;
+  var redirectUri = window.location.origin + '/api/auth/google/callback';
+  var googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+    'client_id=' + encodeURIComponent(clientId) +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&response_type=code' +
+    '&scope=' + encodeURIComponent('openid email profile') +
+    '&prompt=select_account';
+  window.location.href = googleAuthUrl;
+}
+
 // Déclencheur du bouton "Continuer avec Google" (Ouvre DIRECTEMENT le sélecteur de compte Google)
 function handleGoogleAuthTrigger() {
   var clientId = configuredGoogleClientId || DEFAULT_GOOGLE_CLIENT_ID;
@@ -2062,7 +2074,18 @@ function handleGoogleAuthTrigger() {
           callback: function(resp) {
             if (resp && resp.code) {
               handleGoogleCodeExchange(resp.code);
+            } else if (resp && resp.error) {
+              console.warn('[Google Auth] Erreur popup OAuth:', resp.error);
+              if (resp.error === 'popup_closed_by_user') {
+                showToast('Connexion Google annulée.', 'info');
+              } else {
+                fallbackToGoogleRedirect();
+              }
             }
+          },
+          error_callback: function(err) {
+            console.warn('[Google Auth] Error callback popup:', err);
+            fallbackToGoogleRedirect();
           }
         });
       }
@@ -2082,14 +2105,7 @@ function handleGoogleAuthTrigger() {
   }
 
   // 3. Fallback direct : redirection vers l'écran officiel Google de sélection de compte
-  var redirectUri = window.location.origin + '/api/auth/google/callback';
-  var googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
-    'client_id=' + encodeURIComponent(clientId) +
-    '&redirect_uri=' + encodeURIComponent(redirectUri) +
-    '&response_type=code' +
-    '&scope=' + encodeURIComponent('openid email profile') +
-    '&prompt=select_account';
-  window.location.href = googleAuthUrl;
+  fallbackToGoogleRedirect();
 }
 
 function closeGoogleConfigModal() {
@@ -2156,6 +2172,8 @@ function applyAuthenticatedSession(data) {
   DB.set('users', users);
 
   closeAuthModal();
+  updateNavbar();
+  renderConnectedCatalog();
   showToast(`Connecté avec Google : ${data.user.name} ! 👋`, 'success');
   showConnectedCatalog();
 
