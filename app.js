@@ -84,122 +84,45 @@ function generateQrSvg(label) {
   return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="160" height="160"><rect width="200" height="200" fill="%23ffffff"/><rect x="20" y="20" width="45" height="45" fill="%230f172a"/><rect x="28" y="28" width="29" height="29" fill="%23ffffff"/><rect x="34" y="34" width="17" height="17" fill="%230f172a"/><rect x="135" y="20" width="45" height="45" fill="%230f172a"/><rect x="143" y="28" width="29" height="29" fill="%23ffffff"/><rect x="149" y="34" width="17" height="17" fill="%230f172a"/><rect x="20" y="135" width="45" height="45" fill="%230f172a"/><rect x="28" y="143" width="29" height="29" fill="%23ffffff"/><rect x="34" y="149" width="17" height="17" fill="%230f172a"/><rect x="85" y="25" width="12" height="25" fill="%230f172a"/><rect x="105" y="45" width="15" height="15" fill="%230f172a"/><rect x="85" y="85" width="30" height="30" fill="%23f59e0b"/><rect x="135" y="90" width="15" height="25" fill="%230f172a"/><rect x="30" y="90" width="20" height="15" fill="%230f172a"/><rect x="80" y="135" width="25" height="15" fill="%230f172a"/><rect x="115" y="130" width="20" height="45" fill="%230f172a"/><rect x="145" y="145" width="30" height="30" fill="%230f172a"/><text x="100" y="192" font-family="sans-serif" font-size="8" font-weight="bold" text-anchor="middle" fill="%230f172a">${encoded}</text></svg>`;
 }
 
-// ========== INITIALISATION DE LA BASE ==========
+// ========== INITIALISATION DE LA BASE (PRODUCTION CLEANED) ==========
 function initDB() {
-  console.log('[Init] Démarrage GetVirtu (getvirtu.shop)...');
+  console.log('[Init] Démarrage GetVirtu (getvirtu.shop) - Mode Production...');
 
-  // Produits avec images dédiées, distinctes et stables
-  var prods = DB.get('products');
-  var needProdsInit = !prods || !Array.isArray(prods) || prods.length === 0 || prods.some(function(p) { return !p.image || p.image.indexOf('base64') === -1; });
-  if (needProdsInit) {
-    DB.set('products', [
-      {
-        id: 1,
-        name: "Compte Gmail Vérifié (2FA + Secours)",
-        price: 0.86,
-        stock: 68,
-        category: "gmail",
-        published: true,
-        description: "Compte propre vérifié avec 2FA activé & codes de secours inclus.",
-        image: getReliableProductSvg("gmail", "GMAIL 2FA VÉRIFIÉ", "blue")
-      },
-      {
-        id: 2,
-        name: "Gmail Ancien 2020-2025 (Aged)",
-        price: 1.23,
-        stock: 12,
-        category: "gmail",
-        published: true,
-        description: "Compte âgé (Aged), excellente réputation pour éviter les blocages.",
-        image: getReliableProductSvg("gmail", "GMAIL AGED 2020-2025", "amber")
-      },
-      {
-        id: 3,
-        name: "Gmail Aléatoire + Portail OTP Direct",
-        price: 1.69,
-        stock: 435,
-        category: "gmail",
-        published: true,
-        description: "Accès automatique en 1 clic à vos codes de vérification OTP.",
-        image: getReliableProductSvg("gmail", "GMAIL + OTP DIRECT", "emerald")
-      },
-      {
-        id: 4,
-        name: "Chaîne YouTube Monétisée (1k+ Abonnés)",
-        price: 45.00,
-        stock: 4,
-        category: "youtube",
-        published: true,
-        description: "1 000+ abonnés, 4 000h visionnage validées, éligible AdSense.",
-        image: getReliableProductSvg("youtube", "YOUTUBE MONÉTISÉE", "red")
-      },
-      {
-        id: 5,
-        name: "Discord Nitro 1 Mois (2 Boosts Inclus)",
-        price: 4.50,
-        stock: 25,
-        category: "discord",
-        published: true,
-        description: "Lien officiel Discord Nitro 1 mois avec 2 boosts de serveur.",
-        image: getReliableProductSvg("discord", "DISCORD NITRO 1 MOIS", "purple")
-      }
-    ]);
+  // Nettoyage impératif et définitif de toutes les données de test antérieures
+  var isCleaned = DB.get('production_cleaned_2026');
+  if (!isCleaned) {
+    console.log('[Production] Purge de sécurité : suppression des données de démonstration...');
+    // Réinitialisation des tables à zéro pour un départ de production propre
+    DB.set('products', []);
+    DB.set('orders', []);
+    DB.set('recharges', []);
+    DB.set('vault', {});
+
+    // Suppression des faux comptes utilisateurs de test
+    var currentUsers = DB.get('users', []);
+    if (Array.isArray(currentUsers)) {
+      var realUsers = currentUsers.filter(function(u) {
+        if (!u || !u.email) return false;
+        var em = u.email.toLowerCase();
+        return em !== 'alexandre.dupont@gmail.com' &&
+               em !== 'sarah.bennani@gmail.com' &&
+               em !== 'client@test.com' &&
+               em !== 'demo@virtushop.com';
+      });
+      DB.set('users', realUsers);
+    }
+    DB.set('production_cleaned_2026', true);
   }
 
-  // Coffre-fort numérique sécurisé
-  var vault = DB.get('vault');
-  if (!vault || typeof vault !== 'object') {
-    DB.set('vault', {
-      1: { type: 'text', content: 'identifiant: user_pro_2026@gmail.com | pass: Gml$889!SecurPass | 2FA_Key: JBSWY3DPEHPK3PXP | Code_Secours: 84920481' },
-      2: { type: 'text', content: 'identifiant: vintage.account2021@gmail.com | pass: K9#PassVintage2021 | 2FA: Désactivé | Mail_Recup: sec-rec@proton.me' },
-      3: { type: 'link', content: 'https://getvirtu.shop/otp-portal/access?token=VK-OTP-99283-SECURE' },
-      4: { type: 'text', content: 'Chaîne: TechTrend Pulse (1.25k abonnés) | Owner_Transfer: Envoyez votre email à support@getvirtu.shop | Token: {"session_token":"yt_monetized_88291"}' },
-      5: { type: 'link', content: 'https://discord.gift/XkJ89qZbWw662YtP' }
-    });
-  }
-
-  // Méthodes de paiement (avec flag qrCode conditionnel)
-  var methods = DB.get('payment_methods');
-  if (!methods || !Array.isArray(methods) || methods.length === 0) {
-    DB.set('payment_methods', [
-      {
-        id: 1,
-        name: "USDT (TRC20)",
-        type: "crypto",
-        address: "TWej9xKqPzL8VnR4mB81sCgNqYe86F7zLm",
-        qrCode: generateQrSvg("USDT TRC20"),
-        instructions: "Envoyez en USDT TRC20. Consigne : Scanner avec Binance ou TrustWallet.",
-        enabled: true
-      },
-      {
-        id: 2,
-        name: "Bitcoin (BTC)",
-        type: "crypto",
-        address: "bc1q9v8h2p5w4k6f7s8d9a0m1n2b3c4x5y6z7w8",
-        qrCode: generateQrSvg("Bitcoin BTC"),
-        instructions: "Envoyez en BTC à cette adresse. Consigne : Scanner avec votre application de portefeuille.",
-        enabled: true
-      },
-      {
-        id: 3,
-        name: "Orange Money",
-        type: "mobile_money",
-        address: "+237 690 123 456",
-        qrCode: null, // Pas de QR code pour mobile money !
-        instructions: "Effectuez un dépôt direct vers ce numéro (Nom : GetVirtu Services).",
-        enabled: true
-      }
-    ]);
-  }
-
+  if (!DB.get('products')) DB.set('products', []);
+  if (!DB.get('vault')) DB.set('vault', {});
   if (!DB.get('orders')) DB.set('orders', []);
   if (!DB.get('recharges')) DB.set('recharges', []);
   if (!DB.get('min_recharge')) DB.set('min_recharge', 5);
 
-  // Méthodes de paiement (avec options Binance, réseau, et consignes éditables)
+  // Méthodes de paiement prêtes pour la production
   var methods = DB.get('payment_methods');
-  var needMethodsInit = !methods || !Array.isArray(methods) || methods.length === 0;
-  if (needMethodsInit) {
+  if (!methods || !Array.isArray(methods) || methods.length === 0) {
     DB.set('payment_methods', [
       {
         id: 1,
@@ -230,23 +153,32 @@ function initDB() {
         network: "",
         isBinance: false,
         address: "+237 690 123 456",
-        qrCode: null, // Pas de QR code pour mobile money !
+        qrCode: null,
         instructions: "Effectuez un dépôt direct vers ce numéro Orange Money (Nom : GetVirtu Services).",
         enabled: true
       }
     ]);
   }
 
-  // Admin par défaut (aucun mot de passe stocké en clair)
+  // Admin par défaut avec SOLDE INITIAL DE 0.00 $ (aucun faux solde en production)
   var users = DB.get('users', []);
   if (!Array.isArray(users)) users = [];
-  users = users.filter(function(u) { return u && u.role !== 'admin'; });
-  users.push({
-    id: ADMIN.id, name: ADMIN.name, email: ADMIN.email,
-    passwordHash: ADMIN_HASH, role: 'admin', balance: 50.00,
-    createdAt: new Date().toISOString()
-  });
-  DB.set('users', users);
+  var existingAdmin = users.find(function(u) { return u && u.role === 'admin'; });
+  if (!existingAdmin) {
+    users.push({
+      id: ADMIN.id,
+      name: ADMIN.name,
+      email: ADMIN.email,
+      passwordHash: ADMIN_HASH,
+      role: 'admin',
+      balance: 0.00, // Zéro strict en production
+      createdAt: new Date().toISOString()
+    });
+    DB.set('users', users);
+  } else if (existingAdmin.balance === 50.00) {
+    existingAdmin.balance = 0.00;
+    DB.set('users', users);
+  }
 }
 
 function getMinRecharge() {
@@ -429,6 +361,17 @@ function renderLandingShowcase() {
   var prods = DB.get('products', []).filter(function(p) { return p.published; });
   var topProds = prods.slice(0, 3);
 
+  if (topProds.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 28px 16px; color: var(--text-muted);">
+        <div style="font-size: 26px; margin-bottom: 6px;">📦</div>
+        <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary);">Catalogue en réapprovisionnement</div>
+        <div style="font-size: 11.5px; margin-top: 4px; color: var(--text-secondary);">De nouveaux comptes et services vérifiés seront bientôt disponibles.</div>
+      </div>
+    `;
+    return;
+  }
+
   var html = '';
   topProds.forEach(function(p) {
     var oos = p.stock <= 0;
@@ -531,9 +474,10 @@ function renderConnectedCatalog() {
 function renderProductCardsInto(container, prods) {
   if (prods.length === 0) {
     container.innerHTML = `
-      <div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-        <p style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Aucun produit trouvé</p>
-        <p style="font-size: 12.5px;">Essayez avec un autre terme ou une autre catégorie.</p>
+      <div style="grid-column: 1/-1; text-align: center; padding: 48px 20px; color: var(--text-muted); background: #ffffff; border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle); box-shadow: var(--shadow-sm);">
+        <div style="font-size: 38px; margin-bottom: 12px;">📦</div>
+        <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">Catalogue en cours de réapprovisionnement</h3>
+        <p style="font-size: 13px; max-width: 480px; margin: 0 auto; line-height: 1.5; color: var(--text-secondary);">Nos équipes préparent et contrôlent les prochains stocks de comptes vérifiés et services digitaux. Revenez très prochainement !</p>
       </div>
     `;
     return;
@@ -1007,7 +951,7 @@ async function handleDepositProofSelected(event) {
   reader.readAsDataURL(file);
 }
 
-function submitDepositRequest() {
+async function submitDepositRequest() {
   var u = getCurrentUser();
   if (!u) { openAuthModal('login'); return; }
 
@@ -1029,11 +973,33 @@ function submitDepositRequest() {
 
   var methods = DB.get('payment_methods', []);
   var m = methods.find(function(x) { return x.id == currentDepositMethodId; });
+  var txId = 'TXN-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
 
-  // Création d'une demande de recharge en attente de validation administrateur
+  // 1. Enregistrement côté backend de production si disponible
+  try {
+    var resp = await fetch('/api/payments/deposit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: u.id,
+        amount: amount,
+        currency: 'USD',
+        paymentMethodId: m ? m.id : null,
+        proofImage: currentDepositProofBase64 || null
+      })
+    });
+    var data = await resp.json();
+    if (data && data.transaction && data.transaction.id) {
+      txId = data.transaction.id;
+    }
+  } catch (err) {
+    console.warn('[Payments] API locale/hors-ligne:', err.message);
+  }
+
+  // 2. Création de la transaction en statut STRICT "En attente" (Zéro solde crédité à ce stade)
   var recharges = DB.get('recharges', []);
   var newRecharge = {
-    id: 'RCH-' + Date.now().toString().slice(-6),
+    id: txId,
     userId: u.id,
     userName: u.name,
     userEmail: u.email,
@@ -1051,11 +1017,11 @@ function submitDepositRequest() {
   recharges.unshift(newRecharge);
   DB.set('recharges', recharges);
 
-  showToast(`Demande de recharge de +${amount.toFixed(2)} USD soumise ! Validation par l'administrateur sous peu.`, 'success');
+  showToast(`Demande de transaction initiée (+${amount.toFixed(2)} USD). Statut : En attente de vérification.`, 'success');
   closeDepositModal();
 
   if (pendingPurchaseProductId) {
-    alert(`Votre demande de recharge de ${amount.toFixed(2)} USD est en attente de validation.\n\nDès que l'administrateur confirme votre paiement, votre solde sera crédité et votre produit pourra être débloqué.`);
+    alert(`Votre demande de recharge de ${amount.toFixed(2)} USD est en cours de vérification.\n\nDès que la transaction est confirmée par le serveur ou l'administrateur, votre solde sera crédité et votre commande sera débloquée.`);
   }
 }
 
@@ -1256,6 +1222,115 @@ function switchAuthTab(t) {
   }
 }
 
+// ========== AUTHENTIFICATION SÉCURISÉE PRODUCTION (EMAIL & GOOGLE OAUTH 2.0) ==========
+var configuredGoogleClientId = null;
+
+// Initialisation de Google Identity Services
+async function initGoogleIdentity() {
+  try {
+    var res = await fetch('/api/auth/config');
+    if (res.ok) {
+      var conf = await res.json();
+      if (conf && conf.googleClientId) {
+        configuredGoogleClientId = conf.googleClientId;
+      }
+    }
+  } catch (e) {
+    console.log('[Google Auth] Mode local ou configuration par défaut.');
+  }
+
+  // Si l'API Google Identity Services est chargée et l'ID client configuré
+  if (configuredGoogleClientId && window.google && window.google.accounts && window.google.accounts.id) {
+    try {
+      window.google.accounts.id.initialize({
+        client_id: configuredGoogleClientId,
+        callback: handleGoogleCredentialResponse,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+
+      var slot = document.getElementById('g_id_signin_slot');
+      var triggerBtn = document.getElementById('btn-google-trigger');
+      if (slot) {
+        window.google.accounts.id.renderButton(slot, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+          width: 320
+        });
+        if (triggerBtn) triggerBtn.style.display = 'none';
+      }
+    } catch (err) {
+      console.warn('[Google Auth] Erreur d\'initialisation du bouton Google:', err);
+    }
+  }
+}
+
+// Déclencheur du bouton "Continuer avec Google"
+function handleGoogleAuthTrigger() {
+  if (configuredGoogleClientId && window.google && window.google.accounts && window.google.accounts.id) {
+    window.google.accounts.id.prompt();
+  } else {
+    // Affiche la modale informative si Google Client ID n'est pas encore renseigné dans les variables d'environnement
+    var modal = document.getElementById('google-config-modal');
+    if (modal) modal.classList.add('active');
+  }
+}
+
+function closeGoogleConfigModal() {
+  var modal = document.getElementById('google-config-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+// Réception et vérification du jeton officiel Google ID Token
+async function handleGoogleCredentialResponse(response) {
+  if (!response || !response.credential) {
+    showToast('Erreur lors de l\'authentification Google.', 'error');
+    return;
+  }
+
+  try {
+    var res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: response.credential })
+    });
+    var data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Vérification Google échouée.');
+    }
+
+    // Authentification confirmée côté serveur
+    DB.set('session', data.session);
+
+    // Mettre à jour l'utilisateur local si nécessaire
+    var users = DB.get('users', []);
+    var uIdx = users.findIndex(function(u) { return u.id === data.user.id || u.email.toLowerCase() === data.user.email.toLowerCase(); });
+    if (uIdx !== -1) {
+      users[uIdx] = { ...users[uIdx], ...data.user };
+    } else {
+      users.push(data.user);
+    }
+    DB.set('users', users);
+
+    closeAuthModal();
+    showToast(`Connecté avec Google : ${data.user.name} ! 👋`, 'success');
+    showConnectedCatalog();
+
+    if (pendingPurchaseProductId) {
+      var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+      startProductPurchase(pId);
+    }
+  } catch (err) {
+    showToast(err.message || 'Échec de connexion Google.', 'error');
+  }
+}
+
+// 1. CONNEXION AVEC EMAIL ET MOT DE PASSE
 async function handleLoginSubmit(e) {
   e.preventDefault();
   var email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -1263,7 +1338,7 @@ async function handleLoginSubmit(e) {
   var err = document.getElementById('login-error-msg');
   err.classList.add('hidden');
 
-  // 1. Protection Anti Brute-Force
+  // Anti brute-force côté client
   if (typeof Security !== 'undefined') {
     var rl = Security.checkRateLimit('client_login', 5, 5 * 60 * 1000);
     if (!rl.allowed) {
@@ -1274,8 +1349,44 @@ async function handleLoginSubmit(e) {
     }
   }
 
-  // 2. Détection du compte administrateur avec vérification salée SHA-256
-  var isAdminEmail = (email === 'admin@getvirtu.shop' || email === 'admin@virtushop.com' || email === 'admin' || email === 'admin@admin.com');
+  // Tentative via l'API de production backend
+  try {
+    var res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: pass })
+    });
+    var data = await res.json();
+
+    if (res.ok && data.success) {
+      if (typeof Security !== 'undefined') Security.resetRateLimit('client_login');
+      DB.set('session', data.session);
+
+      if (data.user.role === 'admin') {
+        showToast('Connexion administrateur réussie ! 🔒', 'success');
+        setTimeout(function() { window.location.href = 'admin.html'; }, 350);
+      } else {
+        showToast('Bienvenue ' + data.user.name + ' ! 👋', 'success');
+        closeAuthModal();
+        showConnectedCatalog();
+        if (pendingPurchaseProductId) {
+          var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+          startProductPurchase(pId);
+        }
+      }
+      return;
+    } else if (res.status === 400 || res.status === 401 || res.status === 429) {
+      err.textContent = data.error || 'Adresse e-mail ou mot de passe incorrect.';
+      err.style.color = 'var(--rose-500)';
+      err.classList.remove('hidden');
+      return;
+    }
+  } catch (apiErr) {
+    console.warn('[Auth] Backend distant inaccessible, bascule sur authentification locale:', apiErr.message);
+  }
+
+  // Fallback local sécurisé
+  var isAdminEmail = (email === 'admin@getvirtu.shop' || email === 'admin@virtushop.com' || email === 'admin');
   var isCorrectAdminPass = false;
   if (typeof Security !== 'undefined') {
     isCorrectAdminPass = await Security.verifyPassword(pass, ADMIN_HASH, ADMIN_SALT) || await Security.verifyPassword(pass, ADMIN_LEGACY_HASH, ADMIN_SALT);
@@ -1295,7 +1406,6 @@ async function handleLoginSubmit(e) {
     return;
   }
 
-  // 3. Vérification des utilisateurs clients
   var users = DB.get('users', []);
   var matchedUser = null;
   for (var i = 0; i < users.length; i++) {
@@ -1307,14 +1417,8 @@ async function handleLoginSubmit(e) {
     var passMatch = false;
     if (u.passwordHash && typeof Security !== 'undefined') {
       passMatch = await Security.verifyPassword(pass, u.passwordHash, ADMIN_SALT);
-    } else if (u.password) {
-      passMatch = (u.password === pass);
-      // Migration transparente vers hachage salé SHA-256
-      if (passMatch && typeof Security !== 'undefined') {
-        u.passwordHash = await Security.hashPassword(pass, ADMIN_SALT);
-        delete u.password;
-        DB.set('users', users);
-      }
+    } else if (u.password_hash && typeof Security !== 'undefined') {
+      passMatch = await Security.verifyPassword(pass, u.password_hash, ADMIN_SALT);
     }
 
     if (passMatch) {
@@ -1327,50 +1431,55 @@ async function handleLoginSubmit(e) {
     if (typeof Security !== 'undefined') {
       Security.recordFailedAttempt('client_login', 5 * 60 * 1000);
       var rlAfter = Security.checkRateLimit('client_login', 5, 5 * 60 * 1000);
-      err.textContent = 'Adresse e-mail, identifiant ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '');
+      err.textContent = 'Adresse e-mail ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '');
     } else {
-      err.textContent = 'Adresse e-mail, identifiant ou mot de passe incorrect.';
+      err.textContent = 'Adresse e-mail ou mot de passe incorrect.';
     }
     err.style.color = 'var(--rose-500)';
     err.classList.remove('hidden');
     return;
   }
 
-  // Connexion réussie : réinitialisation du compteur d'essais
   if (typeof Security !== 'undefined') {
     Security.resetRateLimit('client_login');
     DB.set('session', Security.createSession(matchedUser, matchedUser.role || 'client'));
   } else {
-    DB.set('session', { userId: matchedUser.id, role: matchedUser.role || 'client', name: matchedUser.name, email: matchedUser.email, avatarColor: matchedUser.avatarColor });
+    DB.set('session', { userId: matchedUser.id, role: matchedUser.role || 'client', name: matchedUser.name, email: matchedUser.email });
   }
 
-  if (matchedUser.role === 'admin') {
-    showToast('Connexion administrateur en cours...', 'success');
-    setTimeout(function() { window.location.href = 'admin.html'; }, 350);
-  } else {
-    showToast('Bienvenue ' + matchedUser.name + ' ! 👋', 'success');
-    closeAuthModal();
-    // Parcours direct : Connexion -> Catalogue des produits
-    showConnectedCatalog();
-    if (pendingPurchaseProductId) {
-      var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-      startProductPurchase(pId);
-    }
+  showToast('Bienvenue ' + matchedUser.name + ' ! 👋', 'success');
+  closeAuthModal();
+  showConnectedCatalog();
+  if (pendingPurchaseProductId) {
+    var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+    startProductPurchase(pId);
   }
 }
 
+// 2. INSCRIPTION AVEC EMAIL ET MOT DE PASSE (PRODUCTION : 0.00 $ DE SOLDE DE DÉPART)
 async function handleRegisterSubmit(e) {
   e.preventDefault();
   var name = document.getElementById('reg-name').value.trim();
   var email = document.getElementById('reg-email').value.trim().toLowerCase();
-  var phone = (document.getElementById('reg-phone')?.value || '').trim();
   var pass = document.getElementById('reg-password').value;
-  var passConfirm = document.getElementById('reg-password-confirm')?.value || pass;
+  var passConfirm = document.getElementById('reg-password-confirm').value;
   var err = document.getElementById('reg-error-msg');
   err.classList.add('hidden');
 
-  if (pass.length < 6) {
-    err.textContent = 'Le mot de passe doit comporter au moins 6 caractères.';
+  // Validations strictes de production
+  var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    err.textContent = 'Veuillez saisir une adresse e-mail valide.';
+    err.classList.remove('hidden'); return;
+  }
+
+  if (pass.length < 8) {
+    err.textContent = 'Le mot de passe doit comporter au moins 8 caractères.';
+    err.classList.remove('hidden'); return;
+  }
+
+  if (!/[A-Za-z]/.test(pass) || !/[0-9]/.test(pass)) {
+    err.textContent = 'Le mot de passe doit combiner au moins une lettre et un chiffre.';
     err.classList.remove('hidden'); return;
   }
 
@@ -1379,30 +1488,68 @@ async function handleRegisterSubmit(e) {
     err.classList.remove('hidden'); return;
   }
 
+  // 1. Appel du backend de production
+  try {
+    var res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        email: email,
+        password: pass,
+        confirmPassword: passConfirm
+      })
+    });
+    var data = await res.json();
+
+    if (res.ok && data.success) {
+      DB.set('session', data.session);
+
+      var users = DB.get('users', []);
+      users.push(data.user);
+      DB.set('users', users);
+
+      showToast(`Compte créé avec succès ! Bienvenue ${data.user.name} ⚡`, 'success');
+      closeAuthModal();
+      showConnectedCatalog();
+
+      if (pendingPurchaseProductId) {
+        var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+        startProductPurchase(pId);
+      }
+      return;
+    } else if (res.status === 400 || res.status === 409) {
+      err.textContent = data.error || 'Erreur lors de l\'inscription.';
+      err.classList.remove('hidden');
+      return;
+    }
+  } catch (apiErr) {
+    console.warn('[Auth] Backend distant inaccessible, bascule sur inscription locale:', apiErr.message);
+  }
+
+  // Fallback local si backend hors-ligne
   var users = DB.get('users', []);
   if (users.some(function(u) { return u.email && u.email.toLowerCase() === email; })) {
-    err.textContent = 'Un compte existe déjà avec cette adresse e-mail.';
+    err.textContent = 'Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter.';
     err.classList.remove('hidden'); return;
   }
 
-  // Hachage cryptographique salé SHA-256 (Web Crypto API)
   var passwordHash = typeof Security !== 'undefined'
     ? await Security.hashPassword(pass, ADMIN_SALT)
     : pass;
 
   var safeName = typeof Security !== 'undefined' ? Security.escapeHtml(name) : name;
-  var safePhone = typeof Security !== 'undefined' ? Security.escapeHtml(phone) : phone;
 
+  // Strict zéro solde de départ en production (0.00 USD)
   var newUser = {
     id: 'user-' + Date.now(),
     name: safeName,
     email: email,
-    phone: safePhone,
-    passwordHash: passwordHash,
+    password_hash: passwordHash,
     role: 'client',
-    balance: 5.00, // Bonus de bienvenue de 5 USD
+    balance: 0.00, // Zéro strict
     avatarColor: '#2563eb',
-    createdAt: new Date().toISOString()
+    created_at: new Date().toISOString()
   };
 
   users.push(newUser);
@@ -1411,90 +1558,17 @@ async function handleRegisterSubmit(e) {
   if (typeof Security !== 'undefined') {
     DB.set('session', Security.createSession(newUser, 'client'));
   } else {
-    DB.set('session', { userId: newUser.id, role: 'client', name: newUser.name, email: newUser.email, avatarColor: newUser.avatarColor });
+    DB.set('session', { userId: newUser.id, role: 'client', name: newUser.name, email: newUser.email });
   }
 
-  showToast('Compte créé avec succès ! Bonus de bienvenue : 5.00 USD ⚡', 'success');
+  showToast(`Compte créé avec succès ! Bienvenue ${newUser.name} ⚡`, 'success');
   closeAuthModal();
-  // Parcours direct : Inscription -> Catalogue des produits
   showConnectedCatalog();
 
   if (pendingPurchaseProductId) {
     var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
     startProductPurchase(pId);
   }
-}
-
-// ========== GOOGLE ACCOUNT SELECTOR & GOOGLE OAUTH ==========
-function openGoogleModal() {
-  var m = document.getElementById('google-account-modal');
-  if (m) m.classList.add('active');
-}
-
-function closeGoogleModal() {
-  var m = document.getElementById('google-account-modal');
-  if (m) m.classList.remove('active');
-}
-
-function toggleCustomGoogleAccountForm() {
-  var f = document.getElementById('google-custom-form');
-  if (f) f.classList.toggle('hidden');
-}
-
-function selectGoogleAccount(name, email, avatarColor) {
-  if (!email) return;
-  var cleanEmail = email.trim().toLowerCase();
-  var rawName = name ? name.trim() : cleanEmail.split('@')[0];
-  var cleanName = typeof Security !== 'undefined' ? Security.escapeHtml(rawName) : rawName;
-
-  var users = DB.get('users', []);
-  var u = users.find(function(x) { return x && x.email && x.email.toLowerCase() === cleanEmail; });
-
-  if (!u) {
-    var oauthSecureHash = typeof Security !== 'undefined' ? Security.generateSecureToken(16) : 'g-oauth-secured';
-    u = {
-      id: 'google-' + Date.now(),
-      name: cleanName,
-      email: cleanEmail,
-      passwordHash: oauthSecureHash,
-      role: 'client',
-      balance: 15.00, // Solde initial Google
-      avatarColor: avatarColor || '#2563eb',
-      isGoogle: true,
-      createdAt: new Date().toISOString()
-    };
-    users.push(u);
-    DB.set('users', users);
-  }
-
-  if (typeof Security !== 'undefined') {
-    DB.set('session', Security.createSession(u, u.role || 'client'));
-  } else {
-    DB.set('session', { userId: u.id, role: u.role || 'client', name: u.name, email: u.email, avatarColor: u.avatarColor || avatarColor });
-  }
-
-  closeGoogleModal();
-  closeAuthModal();
-  showToast('Connecté avec Google : ' + u.name + ' ! 🎉', 'success');
-  // Parcours direct : Google Login -> Catalogue des produits
-  showConnectedCatalog();
-
-  if (pendingPurchaseProductId) {
-    var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-    startProductPurchase(pId);
-  }
-}
-
-function submitCustomGoogleAccount() {
-  var name = document.getElementById('custom-google-name').value.trim();
-  var email = document.getElementById('custom-google-email').value.trim();
-
-  if (!email || email.indexOf('@') === -1) {
-    alert('Veuillez renseigner une adresse e-mail Google valide (ex: votre.nom@gmail.com).');
-    return;
-  }
-
-  selectGoogleAccount(name || email.split('@')[0], email, '#ea4335');
 }
 
 function handleLogout() {
@@ -1539,10 +1613,11 @@ window.addEventListener('storage', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('[GetVirtu] Initialisation client...');
+  console.log('[GetVirtu] Initialisation client (Production)...');
   try {
     initDB();
     routeUserExperience();
+    initGoogleIdentity();
   } catch (e) {
     console.error(e);
   }

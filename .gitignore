@@ -31,3 +31,5 @@ Thumbs.db
 # Temporaires de tests
 temp_*.js
 *.tmp
+data/*.json
+

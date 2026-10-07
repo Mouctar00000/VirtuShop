@@ -2485,11 +2485,27 @@
       showToast('Moyen supprimé.', 'success');
     }
 
-    // ========== 6. GRAPHIQUES CHART.JS ==========
+    // ========== 6. GRAPHIQUES CHART.JS (DYNAMIQUES DEPUIS LA BASE RÉELLE) ==========
     function renderCharts(orders) {
-      var labels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-      var revs = [15.5, 28.0, 12.6, 52.0, 22.4, 41.0, 65.0];
-      var vols = [3, 5, 2, 4, 3, 6, 8];
+      var days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+      var now = new Date();
+      var labels = [];
+      var revs = [];
+      var vols = [];
+
+      var completed = (orders || []).filter(function(o) { return o.status === 'Complété' || o.status === 'Livré'; });
+
+      for (var i = 6; i >= 0; i--) {
+        var d = new Date();
+        d.setDate(now.getDate() - i);
+        labels.push(days[d.getDay()]);
+        var dStr = d.toISOString().split('T')[0];
+        var dayOrders = completed.filter(function(o) { return o.date && o.date.startsWith(dStr); });
+        var dayRev = dayOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+        var dayVol = dayOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+        revs.push(Math.round(dayRev * 100) / 100);
+        vols.push(dayVol);
+      }
 
       var canvasR = document.getElementById('chartRevenue');
       var canvasV = document.getElementById('chartVolume');

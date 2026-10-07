@@ -67,6 +67,48 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Gestionnaire d'API REST unifié (compatible Node.js & Vercel Serverless)
+  if (safePath.startsWith('/api/')) {
+    let bodyData = '';
+    req.on('data', chunk => { bodyData += chunk; });
+    req.on('end', async () => {
+      try {
+        req.body = bodyData ? JSON.parse(bodyData) : {};
+      } catch (e) {
+        req.body = bodyData;
+      }
+
+      res.status = function(code) {
+        res.statusCode = code;
+        return res;
+      };
+      res.json = function(data) {
+        res.writeHead(res.statusCode || 200, {
+          'Content-Type': 'application/json; charset=UTF-8',
+          ...SECURITY_HEADERS
+        });
+        res.end(JSON.stringify(data));
+      };
+
+      try {
+        if (safePath.startsWith('/api/auth')) {
+          return await require('./api/auth')(req, res);
+        }
+        if (safePath.startsWith('/api/payments')) {
+          return await require('./api/payments')(req, res);
+        }
+        if (safePath.startsWith('/api/data')) {
+          return await require('./api/data')(req, res);
+        }
+        res.status(404).json({ error: 'Endpoint API non trouvé.' });
+      } catch (err) {
+        console.error('[Server API Error]', err);
+        res.status(500).json({ error: 'Erreur interne du serveur.' });
+      }
+    });
+    return;
+  }
+
   // Normalize path and resolve
   const resolvedPath = path.normalize(path.join(ROOT_DIR, safePath));
 

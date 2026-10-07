@@ -3,7 +3,10 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/admin", "destination": "/admin.html" }
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/api/auth/:path*", "destination": "/api/auth" },
+    { "source": "/api/payments/:path*", "destination": "/api/payments" },
+    { "source": "/api/data/:path*", "destination": "/api/data" }
   ],
   "headers": [
     {
