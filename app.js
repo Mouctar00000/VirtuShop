@@ -459,8 +459,8 @@ function updateNavbar() {
     `;
   } else {
     container.innerHTML = `
-      <button type="button" class="btn-secondary btn-sm" onclick="openAuthModal('login')">Connexion</button>
-      <button type="button" class="btn-primary btn-sm" onclick="openAuthModal('register')">S'inscrire ⚡</button>
+      <button type="button" class="btn-secondary btn-sm btn-nav-auth btn-nav-login" onclick="openAuthModal('login')">Connexion</button>
+      <button type="button" class="btn-primary btn-sm btn-nav-auth btn-nav-register" onclick="openAuthModal('register')"><span>S'inscrire</span><span class="auth-bolt-icon"> ⚡</span></button>
     `;
   }
 }
@@ -760,11 +760,26 @@ window.selectTrybitCrypto = function(cryptoId, containerId, inputId) {
   }
 };
 
+// Récupération stricte de l'email client connecté (l'email admin ne doit JAMAIS être retourné)
+function getActiveCustomerEmail() {
+  var s = AuthState.getSession();
+  var u = AuthState.getUser();
+  if (!s || !u) return '';
+  if (s.role === 'admin' || u.role === 'admin') return '';
+  var em = (u.email || '').trim();
+  var low = em.toLowerCase();
+  if (!em.includes('@') || low.includes('admin@virtushop.com') || low.includes('admin@getvirtu.shop') || low.startsWith('admin@')) {
+    return '';
+  }
+  return em;
+}
+
 function renderPurchaseModal() {
   var container = document.getElementById('pay-dynamic-content');
   if (!container || !selectedPayProd) return;
 
   var u = getCurrentUser();
+  var defaultContact = getActiveCustomerEmail();
   var userBal = getUserBalance();
   var stock = selectedPayProd.stock || 0;
   var unitPrice = selectedPayProd.price;
@@ -882,7 +897,7 @@ function renderPurchaseModal() {
         <label for="purchase-contact-input">
           <span>📱 Numéro WhatsApp ou Email pour notification (Optionnel)</span>
         </label>
-        <input type="text" id="purchase-contact-input" placeholder="Ex: +33 6 12 34 56 78 ou mon.email@domaine.com">
+        <input type="text" id="purchase-contact-input" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
       </div>
 
       ${hasEnough ? `
@@ -917,7 +932,7 @@ function renderPurchaseModal() {
         </div>
         <div class="optional-contact-box" style="margin-bottom: 0;">
           <label for="purchase-contact-input"><span>📱 Email ou WhatsApp de confirmation :</span></label>
-          <input type="text" id="purchase-contact-input" placeholder="Ex: client@email.com">
+          <input type="text" id="purchase-contact-input" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
         </div>
       </div>
       <button type="button" class="btn-pay-now" onclick="startPurchaseMomoPayment(${total}, ${currentPurchaseQty})">
@@ -933,7 +948,7 @@ function renderPurchaseModal() {
         </div>
         <div class="optional-contact-box" style="margin-bottom: 0;">
           <label for="purchase-contact-input"><span>📱 Email ou WhatsApp de confirmation :</span></label>
-          <input type="text" id="purchase-contact-input" placeholder="Ex: client@email.com">
+          <input type="text" id="purchase-contact-input" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
         </div>
       </div>
       <button type="button" class="btn-pay-now" onclick="startPurchaseTrybitPayment(${total}, ${currentPurchaseQty})">
@@ -1124,6 +1139,17 @@ async function startPurchaseTrybitPayment(total, qty) {
   try {
     var session = DB.get('session');
     var token = session ? session.token : null;
+
+    var safeEmail = '';
+    if (rawContact && rawContact.includes('@')) {
+      safeEmail = rawContact;
+    } else {
+      safeEmail = getActiveCustomerEmail();
+    }
+    if (safeEmail && (safeEmail.toLowerCase().includes('admin@') || safeEmail.toLowerCase().includes('virtushop.com'))) {
+      safeEmail = '';
+    }
+
     var res = await fetch('/api/payments/trybit/create', {
       method: 'POST',
       headers: {
@@ -1134,8 +1160,8 @@ async function startPurchaseTrybitPayment(total, qty) {
         userId: u.id,
         amount: total,
         cryptocurrency: selectedCrypto || null,
-        customerEmail: u.email,
-        customerName: u.name,
+        customerEmail: safeEmail || null,
+        customerName: (u.role === 'admin' ? 'Client GetVirtu' : u.name),
         returnUrl: window.location.origin + '/#catalog?order_crypto=success'
       })
     });
@@ -1262,6 +1288,17 @@ async function startPurchaseMomoPayment(total, qty) {
   try {
     var session = DB.get('session');
     var token = session ? session.token : null;
+
+    var safeEmail = '';
+    if (rawContact && rawContact.includes('@')) {
+      safeEmail = rawContact;
+    } else {
+      safeEmail = getActiveCustomerEmail();
+    }
+    if (safeEmail && (safeEmail.toLowerCase().includes('admin@') || safeEmail.toLowerCase().includes('virtushop.com'))) {
+      safeEmail = '';
+    }
+
     var res = await fetch('/api/payments/saspay/create', {
       method: 'POST',
       headers: {
@@ -1274,8 +1311,8 @@ async function startPurchaseMomoPayment(total, qty) {
         phone: phone,
         country: selectedMomoCountry,
         network: selectedMomoNetwork,
-        customerName: u.name,
-        customerEmail: u.email
+        customerName: (u.role === 'admin' ? 'Client GetVirtu' : u.name),
+        customerEmail: safeEmail || null
       })
     });
     var data = await res.json();
@@ -2096,8 +2133,8 @@ async function submitTrybitDeposit() {
         userId: u.id,
         amount: amount,
         cryptocurrency: selectedCrypto || null,
-        customerEmail: u.email,
-        customerName: u.name,
+        customerEmail: getActiveCustomerEmail() || null,
+        customerName: (u.role === 'admin' ? 'Client GetVirtu' : u.name),
         returnUrl: window.location.origin + '/#catalog?payment=success'
       })
     });
@@ -3034,10 +3071,20 @@ function toggleFaq(btn) {
 function renderFooterBadges() {
   var c = document.getElementById('footer-payment-badges');
   if (!c) return;
-  var methods = DB.get('payment_methods', []).filter(function(m) { return m.enabled; });
-  var html = '<span style="font-size: 11.5px; margin-right: 4px;">Paiements acceptés :</span><span class="pay-badge">Solde GetVirtu</span>';
-  methods.forEach(function(m) { html += `<span class="pay-badge">${escapeHtml(m.name)}</span>`; });
-  c.innerHTML = html;
+  c.innerHTML = `
+    <div class="footer-pay-card">
+      <span class="footer-pay-icon">💳</span>
+      <span class="footer-pay-name">Solde GetVirtu</span>
+    </div>
+    <div class="footer-pay-card">
+      <span class="footer-pay-icon">📱</span>
+      <span class="footer-pay-name">Mobile Money</span>
+    </div>
+    <div class="footer-pay-card">
+      <span class="footer-pay-icon">⚡</span>
+      <span class="footer-pay-name">Crypto Instantané</span>
+    </div>
+  `;
 }
 
 function showToast(msg, type) {
@@ -3080,6 +3127,14 @@ function startApp() {
   console.log('[GetVirtu] Initialisation client (Production)...');
   try {
     initDB();
+
+    // Nettoyage de sécurité : si la session courante en stockage est celle d'un admin, la détacher du client
+    var currentS = DB.get('session');
+    if (currentS && (currentS.role === 'admin' || (currentS.email && currentS.email.toLowerCase().includes('admin@')))) {
+      DB.del('session');
+      AuthState._session = null;
+      AuthState._user = null;
+    }
 
     // Nettoyage fluide du paramètre URL après retour Google OAuth
     if (window.location.search && window.location.search.includes('auth_success=google')) {

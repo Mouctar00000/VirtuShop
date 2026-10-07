@@ -116,7 +116,10 @@ class TrybitService {
     };
 
     if (email && email.includes('@')) {
-      payload.email = email.trim();
+      const lowEmail = email.toLowerCase().trim();
+      if (!lowEmail.includes('admin@virtushop.com') && !lowEmail.includes('admin@getvirtu.shop') && !lowEmail.startsWith('admin@')) {
+        payload.email = email.trim();
+      }
     }
 
     const addFields = {

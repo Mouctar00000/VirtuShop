@@ -1365,7 +1365,7 @@
     var ADMIN_LEGACY_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256
 
     function checkAdminAuth() {
-      var s = DB.get('session');
+      var s = DB.get('admin_session') || DB.get('session');
       var loginScreen = document.getElementById('admin-login-screen');
       var dashboard = document.getElementById('admin-dashboard-container');
 
@@ -1373,7 +1373,10 @@
       var isValid = s && s.role === 'admin' && (typeof Security !== 'undefined' ? Security.isSessionValid(s) : true);
 
       if (!isValid) {
-        if (s) DB.del('session'); // Purge de session expirée ou invalide
+        if (s) {
+          DB.del('admin_session');
+          if (s.role === 'admin') DB.del('session');
+        }
         if (loginScreen) loginScreen.classList.remove('hidden');
         if (dashboard) dashboard.classList.add('hidden');
         return false;
@@ -1414,7 +1417,8 @@
         var apiData = await apiRes.json();
         if (apiRes.ok && apiData && apiData.session && apiData.user && apiData.user.role === 'admin') {
           if (typeof Security !== 'undefined') Security.resetRateLimit('admin_login');
-          DB.set('session', apiData.session);
+          DB.set('admin_session', apiData.session);
+          DB.del('session'); // Purge store session to prevent admin email from auto-filling customer checkouts
           var users = DB.get('users', []);
           var uIdx = users.findIndex(function(u) { return u.id === apiData.user.id || (u.email && u.email.toLowerCase() === apiData.user.email.toLowerCase()); });
           if (uIdx !== -1) users[uIdx] = Object.assign({}, users[uIdx], apiData.user);
@@ -1475,13 +1479,15 @@
       }
 
       if (authenticatedUser) {
+        var sessObj;
         if (typeof Security !== 'undefined') {
           Security.resetRateLimit('admin_login');
-          var session = Security.createSession(authenticatedUser, 'admin');
-          DB.set('session', session);
+          sessObj = Security.createSession(authenticatedUser, 'admin');
         } else {
-          DB.set('session', { userId: authenticatedUser.id || 'admin-001', role: 'admin', name: authenticatedUser.name || 'Admin', email: authenticatedUser.email });
+          sessObj = { userId: authenticatedUser.id || 'admin-001', role: 'admin', name: authenticatedUser.name || 'Admin', email: authenticatedUser.email };
         }
+        DB.set('admin_session', sessObj);
+        DB.del('session'); // Purge store session to prevent admin email from auto-filling customer checkouts
         showToast('Connexion réussie ! Bienvenue dans l\'administration 🔒', 'success');
         checkAdminAuth();
         switchAdminTab('products');
@@ -1503,6 +1509,7 @@
     }
 
     function adminLogout() {
+      DB.del('admin_session');
       DB.del('session');
       checkAdminAuth();
       showToast('Déconnexion effectuée.', 'info');

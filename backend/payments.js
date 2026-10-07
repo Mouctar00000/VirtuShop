@@ -205,7 +205,7 @@ class PaymentService {
           currency: currency,
           description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD - ${user.email}`,
           country: countryCode,
-          customer_email: customerEmail || user.email,
+          customer_email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : (user.role !== 'admin' && !user.email.includes('admin@') ? user.email.trim() : `client_${user.id}@getvirtu.shop`),
           customer_name: customerName || user.name,
           customer_phone: cleanPhone || '',
           return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
@@ -250,7 +250,7 @@ class PaymentService {
           country: countryCode,
           network: network,
           customer: {
-            email: customerEmail || user.email,
+            email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : (user.role !== 'admin' && !user.email.includes('admin@') ? user.email.trim() : `client_${user.id}@getvirtu.shop`),
             first_name: firstName,
             last_name: lastName,
             phone: cleanPhone || '+2250700000000'
@@ -670,11 +670,18 @@ class PaymentService {
     console.log(`[Trybit] Initiation de paiement : ${txId} (${parsedUsd} USD) pour ${user.email}`);
 
     try {
+      const isClientEmail = (em) => {
+        if (!em || typeof em !== 'string' || !em.includes('@')) return false;
+        const low = em.toLowerCase().trim();
+        return !low.includes('admin@virtushop.com') && !low.includes('admin@getvirtu.shop') && !low.startsWith('admin@');
+      };
+      const safeEmail = isClientEmail(customerEmail) ? customerEmail.trim() : (isClientEmail(user.email) && user.role !== 'admin' ? user.email.trim() : null);
+
       const invoice = await trybitService.createInvoice({
         amount: parsedUsd,
         currency: 'USD',
         orderId: txId,
-        email: customerEmail || user.email,
+        email: safeEmail,
         cryptocurrency: cryptocurrency || null
       });
 
