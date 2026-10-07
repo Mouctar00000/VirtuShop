@@ -109,8 +109,19 @@ class PaymentService {
   async createSasPayDeposit({ userId, amountUsd, country, network, phone, customerName, customerEmail, returnUrl }) {
     if (!userId) throw new Error('Utilisateur non authentifié.');
 
-    const user = db.getUserById(userId);
-    if (!user) throw new Error('Compte utilisateur introuvable.');
+    let user = db.getUserById(userId);
+    if (!user && customerEmail) {
+      user = db.getUserByEmail(customerEmail);
+    }
+    if (!user) {
+      user = db.createUser({
+        id: userId,
+        email: customerEmail || `client_${userId}@getvirtu.shop`,
+        name: customerName || 'Client GetVirtu',
+        role: 'client',
+        balance: 0.00
+      });
+    }
 
     const parsedUsd = parseFloat(amountUsd);
     const minRecharge = db.data.settings?.min_recharge || 5.0;
@@ -297,7 +308,16 @@ class PaymentService {
     if (!tx && providerTxId) tx = db.getTransactionByProviderTxId(providerTxId);
 
     if (!tx) {
-      throw new Error('Transaction introuvable dans la base de données.');
+      if (providerTxId) {
+        tx = {
+          id: transactionId || `TXN-${providerTxId.substring(0, 8).toUpperCase()}`,
+          providerTxId: providerTxId,
+          amount: 0,
+          status: 'pending'
+        };
+      } else {
+        throw new Error('Transaction introuvable dans la base de données.');
+      }
     }
 
     const effectiveProviderTxId = providerTxId || tx.providerTxId;
@@ -306,7 +326,10 @@ class PaymentService {
     }
 
     // Protection Idempotence : si la transaction a déjà été validée avec succès
-    const user = db.getUserById(tx.userId);
+    let user = tx.userId ? db.getUserById(tx.userId) : null;
+    if (!user && tx.userEmail) {
+      user = db.getUserByEmail(tx.userEmail);
+    }
     if (tx.status === 'completed') {
       return {
         success: true,
@@ -355,7 +378,17 @@ class PaymentService {
           return { success: true, status: 'completed', newBalance: user.balance, transaction: freshTx };
         }
 
-        const creditAmount = tx.amount; // Montant en USD
+        if (!user) {
+          user = db.createUser({
+            id: tx.userId || `user-${Date.now()}`,
+            email: tx.userEmail || `client_${tx.id}@getvirtu.shop`,
+            name: tx.userName || 'Client GetVirtu',
+            role: 'client',
+            balance: 0.00
+          });
+        }
+
+        const creditAmount = tx.amount || 0; // Montant en USD
         const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
 
         db.updateUser(user.id, { balance: newBalance });

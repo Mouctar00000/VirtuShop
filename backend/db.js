@@ -5,9 +5,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'database.json');
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_DIR = isServerless ? os.tmpdir() : path.join(__dirname, '..', 'data');
+const DB_FILE = path.join(DATA_DIR, isServerless ? 'virtushop_database.json' : 'database.json');
 
 // Assurer l'existence du dossier data
 if (!fs.existsSync(DATA_DIR)) {
@@ -93,6 +95,13 @@ class Database {
           payment_methods: parsed.payment_methods || INITIAL_DB.payment_methods,
           settings: parsed.settings || INITIAL_DB.settings
         };
+      }
+      const seedFile = path.join(__dirname, '..', 'data', 'database.json');
+      if (fs.existsSync(seedFile)) {
+        const rawSeed = fs.readFileSync(seedFile, 'utf8');
+        const parsedSeed = JSON.parse(rawSeed);
+        this.saveData(parsedSeed);
+        return parsedSeed;
       }
     } catch (e) {
       console.error('[DB] Erreur chargement base:', e.message);
