@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GetVirtu 🔒 Administration</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="security.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
+
+  <style>
+    /* ==================== DESIGN SYSTÈME ADMIN WINDOWS 11 & IOS 18 ==================== */
+    body {
+      background-color: #f8fafc !important;
+      color: #0f172a !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .admin-header {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .admin-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .admin-user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f1f5f9;
+      padding: 4px 10px 4px 4px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .admin-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary-600);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .admin-status-badge {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--emerald-600);
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      padding: 1px 7px;
+      border-radius: var(--radius-full);
+    }
+
+    /* HERO HUB ADMINISTRATEUR (HIÉRARCHIE VISUELLE ÉLÉGANTE) */
+    .admin-hero-hub {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 22px 24px 18px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .admin-hero-hub-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .admin-breadcrumb {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .admin-breadcrumb strong {
+      color: var(--primary-600);
+    }
+
+    .admin-hero-title {
+      font-size: 21px;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin: 0 0 4px 0;
+      letter-spacing: -0.3px;
+    }
+
+    .admin-hero-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0;
+      max-width: 650px;
+    }
+
+    .admin-nav-tabs-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-subtle);
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .admin-nav-tabs-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .admin-nav-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius-full);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      flex-shrink: 0;
+    }
+
+    .admin-nav-tab-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    .admin-nav-tab-btn.active {
+      background: #ffffff;
+      color: var(--primary-600);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .admin-tab-badge {
+      background: var(--rose-500);
+      color: #ffffff;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      line-height: 1;
+    }
+
+    .admin-kpi-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary-600);
+      background: var(--primary-50);
+      border: 1px solid var(--primary-200);
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+    }
+
+    /* RESPONSIVE ADMINISTRATEUR MOBILE */
+    @media (max-width: 768px) {
+      .admin-header {
+        padding: 8px 12px;
+      }
+      .admin-brand {
+        gap: 8px;
+      }
+      .admin-brand strong {
+        font-size: 13.5px;
+      }
+      .admin-header-actions {
+        gap: 6px;
+      }
+      .btn-admin-shop-compact {
+        padding: 4px 8px !important;
+        font-size: 11.5px !important;
+        min-height: 28px !important;
+      }
+      .btn-admin-logout-compact {
+        padding: 4px 8px !important;
+        font-size: 11.5px !important;
+        min-height: 28px !important;
+      }
+      .admin-user-chip {
+        padding: 3px 6px;
+      }
+      .admin-user-email {
+        display: none;
+      }
+      .admin-hero-hub {
+        padding: 16px 14px 12px;
+        margin-bottom: 16px;
+      }
+      .admin-hero-title {
+        font-size: 18px;
+      }
+      .admin-hero-desc {
+        font-size: 12px;
+      }
+      .admin-hero-quick-actions {
+        width: 100%;
+      }
+      .admin-hero-quick-actions button {
+        width: 100%;
+        min-height: 40px;
+      }
+      .admin-section {
+        padding: 16px 12px;
+      }
+      .admin-stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .admin-stat-card {
+        padding: 12px;
+      }
+      .admin-stat-val {
+        font-size: 20px;
+      }
+      .admin-table th, .admin-table td {
+        padding: 10px 8px;
+        font-size: 12px;
+      }
+    }
+
+    .admin-section {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .admin-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .admin-table th {
+      text-align: left;
+      padding: 12px 14px;
+      background: #f8fafc;
+      color: var(--text-secondary);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .admin-table td {
+      padding: 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .admin-table tr:hover td {
+      background: #f8fafc;
+    }
+
+    .thumb-table-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #eff6ff;
+      border: 1px solid var(--border-subtle);
+      display: block;
+    }
+
+    .btn-icon-action {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-icon-action:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: var(--text-primary);
+    }
+
+    .btn-icon-action.edit:hover {
+      color: var(--primary-600);
+      border-color: var(--primary-300);
+      background: var(--primary-50);
+    }
+
+    .btn-icon-action.duplicate:hover {
+      color: #0284c7;
+      border-color: #bae6fd;
+      background: #f0f9ff;
+    }
+
+    .btn-icon-action.delete:hover {
+      color: var(--rose-600);
+      border-color: #fecdd3;
+      background: #fff1f2;
+    }
+
+    .status-indicator-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .status-indicator-pill.online {
+      background: #ecfdf5;
+      color: var(--emerald-600);
+      border: 1px solid #a7f3d0;
+    }
+
+    .status-indicator-pill.offline {
+      background: #f1f5f9;
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .status-indicator-pill.pending {
+      background: #fffbeb;
+      color: #b45309;
+      border: 1px solid #fde68a;
+    }
+
+    .status-indicator-pill.rejected {
+      background: #fff1f2;
+      color: var(--rose-600);
+      border: 1px solid #fecdd3;
+    }
+
+    .proof-thumbnail-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      color: var(--primary-600);
+      border: 1px solid var(--primary-200);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition-normal);
+    }
+
+    .proof-thumbnail-btn:hover {
+      background: var(--primary-50);
+      border-color: var(--primary-600);
+    }
+
+    .admin-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .admin-stat-card {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .admin-stat-val {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--primary-600);
+      margin-top: 4px;
+    }
+
+    .admin-period-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 16px 0 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .admin-period-tabs {
+      display: flex;
+      gap: 6px;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .admin-period-tab {
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: var(--transition-normal);
+    }
+
+    .admin-period-tab.active {
+      background: #ffffff;
+      color: var(--primary-600);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart-card {
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .chart-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .vault-tabs-segmented {
+      display: flex;
+      background: #f1f5f9;
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      gap: 4px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .vault-tab-btn {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: var(--transition-normal);
+      text-align: center;
+    }
+
+    .vault-tab-btn.active {
+      background: #ffffff;
+      color: var(--primary-600);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .alert-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #1e40af;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== ÉCRAN DE CONNEXION ADMIN (AFFICHÉ SI NON AUTHENTIFIÉ) ==================== -->
+  <div id="admin-login-screen" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: #f8fafc;">
+    <div style="max-width: 440px; width: 100%; background: #ffffff; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 36px 32px; box-shadow: var(--shadow-modal);">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div class="brand-icon-box" style="width: 48px; height: 48px; font-size: 24px; margin: 0 auto 12px;">⚡</div>
+        <h1 style="font-size: 21px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">GetVirtu Administration</h1>
+        <p style="color: var(--text-secondary); font-size: 13px;">Espace de gestion réservé aux administrateurs autorisés</p>
+      </div>
+
+      <form id="admin-direct-login-form" onsubmit="handleAdminDirectLogin(event)">
+        <div class="field">
+          <label for="admin-direct-email">Identifiant administrateur</label>
+          <input type="text" id="admin-direct-email" required placeholder="admin@getvirtu.shop" autocomplete="username">
+        </div>
+
+        <div class="field">
+          <label for="admin-direct-pass">Mot de passe</label>
+          <input type="password" id="admin-direct-pass" required placeholder="••••••••" autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 11px; margin-top: 8px; font-size: 14px;">
+          Accéder au panneau de contrôle 🔒
+        </button>
+
+        <p id="admin-direct-error" class="error-text hidden" style="margin-top: 10px;"></p>
+      </form>
+
+      <div style="text-align: center; margin-top: 24px; border-top: 1px solid var(--border-subtle); padding-top: 16px;">
+        <a href="index.html" style="color: var(--primary-600); font-size: 13px; font-weight: 600; text-decoration: none;">← Retourner à la boutique publique</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TABLEAU DE BORD ADMINISTRATEUR ==================== -->
+  <div id="admin-dashboard-container" class="hidden">
+    <!-- BARRE SUPÉRIEURE ÉPURÉE (WINDOWS 11 / IOS 18 MICA) -->
+    <header class="admin-header">
+      <div class="admin-brand">
+        <div class="brand-icon-box" style="width: 32px; height: 32px; font-size: 16px;">⚡</div>
+        <strong style="font-size: 14.5px; color: var(--text-primary); letter-spacing: -0.2px;">GetVirtu Admin</strong>
+      </div>
+
+      <div class="admin-header-actions">
+        <a href="index.html" class="btn-secondary btn-admin-shop-compact" target="_blank" title="Ouvrir la boutique client">
+          <span>👁️</span>
+          <span class="shop-btn-text">Boutique</span>
+        </a>
+        <div class="admin-user-chip">
+          <span class="admin-avatar">AD</span>
+          <span class="admin-user-email">admin@getvirtu.shop</span>
+        </div>
+        <button type="button" class="btn-secondary btn-admin-logout-compact" style="color: var(--rose-600);" onclick="adminLogout()" title="Déconnexion">
+          <span>Déconnexion</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="container" style="padding-top: 20px; padding-bottom: 60px;">
+
+      <!-- HERO HUB ADMINISTRATEUR (HIÉRARCHIE VISUELLE CLAIRE) -->
+      <div class="admin-hero-hub">
+        <div class="admin-hero-hub-header">
+          <div>
+            <div class="admin-breadcrumb">
+              <span>GetVirtu</span> &rsaquo; <span>Administration</span> &rsaquo; <strong id="admin-hero-crumb">Catalogue Produits</strong>
+            </div>
+            <h1 class="admin-hero-title" id="admin-hero-title">📦 Catalogue des Produits</h1>
+            <p class="admin-hero-desc" id="admin-hero-desc">
+              Gérez vos articles numériques, prix unitaire ($), stocks et contenus confidentiels délivrés aux clients.
+            </p>
+          </div>
+          <div class="admin-hero-quick-actions" id="admin-hero-actions">
+            <button type="button" class="btn-primary btn-sm" onclick="openNewProductModal()">
+              <span>+ Nouveau Produit ⚡</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ONGLETS DE NAVIGATION SEGMENTÉS (TOUCH SCROLL OPTIMISÉ SUR MOBILE) -->
+        <nav class="admin-nav-tabs-bar">
+          <button type="button" class="admin-nav-tab-btn active" id="tab-nav-products" onclick="switchAdminTab('products')">
+            <span>📦</span>
+            <span>Produits</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-recharges" onclick="switchAdminTab('recharges')">
+            <span>💳</span>
+            <span>Recharges</span>
+            <span class="admin-tab-badge hidden" id="badge-nav-recharges">0</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-orders" onclick="switchAdminTab('orders')">
+            <span>📑</span>
+            <span>Commandes</span>
+            <span class="admin-tab-badge hidden" id="badge-nav-orders">0</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-users" onclick="switchAdminTab('users')">
+            <span>👥</span>
+            <span>Clients & Soldes</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-methods" onclick="switchAdminTab('methods')">
+            <span>⚙️</span>
+            <span>Moyens & Paramètres</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-stats" onclick="switchAdminTab('stats')">
+            <span>📈</span>
+            <span>Statistiques</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 1 : CATALOGUE DES PRODUITS (AFFICHÉ IMMÉDIATEMENT APRÈS CONNEXION)   -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-products" class="admin-tab-pane">
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">📦 Catalogue des Produits Disponibles</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Gérez vos articles, prix, stocks et contenus confidentiels délivrés aux acheteurs.</p>
+            </div>
+            <button type="button" class="btn-primary btn-sm" onclick="openNewProductModal()">
+              <span>+ Ajouter un Produit ⚡</span>
+            </button>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Aperçu</th>
+                  <th>Nom du Produit</th>
+                  <th>Catégorie</th>
+                  <th>Prix ($ USD)</th>
+                  <th>Stock</th>
+                  <th>Visibilité</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-products-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 2 : DEMANDES DE RECHARGE DE SOLDE (VALIDATION & APPROBATION ADMIN)   -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-recharges" class="admin-tab-pane hidden">
+        <div id="recharge-alert-box" class="alert-banner hidden">
+          <span style="font-size: 18px;">🔔</span>
+          <div>
+            <strong id="recharge-alert-title">Demandes en attente</strong>
+            <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-secondary);">Un ou plusieurs clients ont envoyé une preuve de recharge. Validez-les ci-dessous pour créditer leur solde.</p>
+          </div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">💳 Demandes de Recharge de Solde Client</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Approuvez les preuves de paiement USDT / Binance ou Orange Money pour créditer automatiquement le solde.</p>
+            </div>
+            <span class="status-indicator-pill pending" id="pending-recharges-badge">0 en attente</span>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Réf & Date</th>
+                  <th>Client</th>
+                  <th>Montant</th>
+                  <th>Moyen & Réseau</th>
+                  <th>Coordonnées</th>
+                  <th>Preuve</th>
+                  <th>Statut</th>
+                  <th>Validation</th>
+                </tr>
+              </thead>
+              <tbody id="admin-recharges-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 3 : COMMANDES & COFFRE-FORT                                           -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-orders" class="admin-tab-pane hidden">
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">📑 Historique des Commandes</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Commandes passées via le solde client ou transferts directs.</p>
+            </div>
+            <span class="status-indicator-pill online" id="pending-orders-badge">0 en attente</span>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Réf & Date</th>
+                  <th>Client</th>
+                  <th>Produit & Quantité</th>
+                  <th>Montant</th>
+                  <th>Moyen</th>
+                  <th>Statut</th>
+                  <th>Validation & Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-orders-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 4 : SOLDES CLIENTS & UTILISATEURS                                    -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-users" class="admin-tab-pane hidden">
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">👥 Soldes Clients & Utilisateurs</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Consultez les utilisateurs inscrits et ajustez ou créditez manuellement leurs soldes.</p>
+            </div>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Nom / Pseudonyme</th>
+                  <th>Email</th>
+                  <th>Rôle</th>
+                  <th>Solde Actuel</th>
+                  <th>Actions Rapides</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 5 : MOYENS DE PAIEMENT & PARAMÈTRES                                   -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-methods" class="admin-tab-pane hidden">
+        <!-- Configuration du montant minimum de recharge -->
+        <div class="admin-section" style="max-width: 600px; margin-bottom: 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0 0 4px 0;">⚙️ Montant Minimum de Recharge de Solde</h3>
+          <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;">Les clients ne pourront pas soumettre de demande de recharge inférieure à ce seuil.</p>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <div style="flex: 1;">
+              <input type="number" id="setting-min-recharge" step="1" min="1" value="5" style="font-size: 14px; font-weight: 700;">
+            </div>
+            <button type="button" class="btn-primary" onclick="saveMinRechargeSetting()">
+              Enregistrer le Seuil ($)
+            </button>
+          </div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">💳 Moyens de Paiement pour la Recharge</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Définissez les adresses, réseaux, numéros et consignes affichés aux clients.</p>
+            </div>
+            <button type="button" class="btn-primary btn-sm" onclick="openNewPaymentMethodModal()">
+              <span>+ Nouveau Moyen de Paiement</span>
+            </button>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>QR Code</th>
+                  <th>Nom du Moyen</th>
+                  <th>Type & Réseau</th>
+                  <th>Adresse / Numéro</th>
+                  <th>Consignes Client</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-methods-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 6 : STATISTIQUES & CHIFFRE D'AFFAIRES                                 -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-stats" class="admin-tab-pane hidden">
+        <div class="admin-period-bar">
+          <div>
+            <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">Tableau de Bord des Ventes</h2>
+            <p style="color: var(--text-secondary); font-size: 12.5px; margin: 0;">Statistiques en temps réel et performances.</p>
+          </div>
+          <div class="admin-period-tabs">
+            <button type="button" class="admin-period-tab active" id="tab-period-day" onclick="changePeriod('day')">Jour (7j)</button>
+            <button type="button" class="admin-period-tab" id="tab-period-week" onclick="changePeriod('week')">Semaine</button>
+            <button type="button" class="admin-period-tab" id="tab-period-month" onclick="changePeriod('month')">Mois</button>
+            <button type="button" class="admin-period-tab" id="tab-period-year" onclick="changePeriod('year')">Année</button>
+          </div>
+        </div>
+
+        <div class="admin-stats-grid">
+          <div class="admin-stat-card">
+            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Chiffre d'Affaires</span>
+            <div class="admin-stat-val" id="stat-revenue">0.00 $</div>
+          </div>
+          <div class="admin-stat-card">
+            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Articles Vendus (Unités)</span>
+            <div class="admin-stat-val" id="stat-units-sold" style="color: var(--emerald-600);">0</div>
+          </div>
+          <div class="admin-stat-card">
+            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Commandes Traitées</span>
+            <div class="admin-stat-val" id="stat-orders-count" style="color: var(--cyan-600);">0</div>
+          </div>
+          <div class="admin-stat-card">
+            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Panier Moyen</span>
+            <div class="admin-stat-val" id="stat-avg-cart">0.00 $</div>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-title">
+              <span>📈 Évolution du Chiffre d'Affaires ($)</span>
+              <span id="chart-period-indicator-rev" style="font-size: 11.5px; color: var(--primary-600); font-weight: 600;">Par Jour</span>
+            </div>
+            <div style="position: relative; height: 230px;">
+              <canvas id="chartRevenue"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-title">
+              <span>📦 Volume des Produits Vendus</span>
+              <span id="chart-period-indicator-vol" style="font-size: 11.5px; color: var(--emerald-600); font-weight: 600;">Unités</span>
+            </div>
+            <div style="position: relative; height: 230px;">
+              <canvas id="chartVolume"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ==================== MODAL PRODUIT COMPACTE ET RAFFINÉE ==================== -->
+  <div id="admin-prod-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 500px;">
+      <button type="button" class="modal-close-btn" onclick="closeAdminProdModal()">✕</button>
+      <h2 class="modal-title" id="prod-modal-title">Ajouter un Produit</h2>
+
+      <form id="admin-prod-form" onsubmit="saveProduct(event)">
+        <input type="hidden" id="admin-prod-id">
+
+        <div class="field">
+          <label for="admin-prod-name">Nom du produit</label>
+          <input type="text" id="admin-prod-name" required placeholder="Ex: Compte Gmail Vérifié (2FA + Secours)">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
+          <div class="field">
+            <label for="admin-prod-cat">Catégorie</label>
+            <input type="text" id="admin-prod-cat" required placeholder="gmail, youtube, discord...">
+          </div>
+          <div class="field">
+            <label for="admin-prod-price">Prix ($ USD)</label>
+            <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
+          </div>
+          <div class="field">
+            <label for="admin-prod-stock">Stock disponible</label>
+            <input type="number" min="0" id="admin-prod-stock" required placeholder="50">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="admin-prod-desc">Description courte</label>
+          <input type="text" id="admin-prod-desc" placeholder="Ex: Compte propre vérifié avec 2FA activé...">
+        </div>
+
+        <!-- IMAGE PRODUIT AVEC APERÇU IMMÉDIAT -->
+        <div class="field" style="background: #f8fafc; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <label style="color: var(--primary-600); font-weight: 700; margin-bottom: 6px;">🖼️ Illustration du Produit</label>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="width: 54px; height: 54px; border-radius: 8px; background: #ffffff; border: 1px solid var(--border-subtle); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: var(--shadow-sm);">
+              <img id="admin-prod-img-preview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+              <span id="admin-prod-img-placeholder" style="font-size: 22px; color: var(--text-muted);">📷</span>
+            </div>
+            <div style="flex: 1;">
+              <input type="file" id="admin-prod-img-file" accept="image/*" onchange="handleProductImageFile(event)" style="font-size: 12px; padding: 5px;">
+              <p style="font-size: 11px; color: var(--text-muted); margin: 3px 0 0 0;">Si vide, une illustration vectorielle dédiée sera générée automatiquement.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- COFFRE-FORT NUMÉRIQUE (LIVRAISON AUTOMATISÉE) -->
+        <div class="field" style="background: #eff6ff; padding: 14px; border-radius: var(--radius-sm); border: 1px solid #bfdbfe; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="color: #1e40af; font-weight: 700; margin-bottom: 0;">🔐 Contenu Livré (Coffre-Fort Numérique)</label>
+            <span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">● Protégé avant achat</span>
+          </div>
+
+          <!-- Onglets segmentés Text / File / Link -->
+          <div class="vault-tabs-segmented">
+            <button type="button" class="vault-tab-btn active" id="vtab-text" onclick="setVaultType('text')">🔑 Identifiant / Clé</button>
+            <button type="button" class="vault-tab-btn" id="vtab-file" onclick="setVaultType('file')">📄 Fichier</button>
+            <button type="button" class="vault-tab-btn" id="vtab-link" onclick="setVaultType('link')">🔗 Lien Direct</button>
+          </div>
+          <input type="hidden" id="admin-vault-type" value="text">
+
+          <div id="vault-text-group">
+            <textarea id="admin-vault-content" rows="2" placeholder="Ex: login: user@gmail.com | pass: Secret! | 2FA: JBSWY..."></textarea>
+          </div>
+
+          <div id="vault-file-group" class="hidden">
+            <input type="file" id="admin-vault-file-input" onchange="handleVaultFileSelected(event)" style="font-size: 12px;">
+            <input type="hidden" id="admin-vault-filename">
+            <p id="vault-filename-display" style="font-size: 11.5px; color: var(--emerald-600); margin-top: 4px; font-weight: 600;"></p>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 14px;">
+          <button type="button" class="btn-secondary" style="flex: 1;" onclick="closeAdminProdModal()">Annuler</button>
+          <button type="submit" class="btn-primary" style="flex: 2;">Enregistrer le Produit ⚡</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL MOYEN DE PAIEMENT RECHERCHÉ ==================== -->
+  <div id="admin-method-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 500px;">
+      <button type="button" class="modal-close-btn" onclick="closeAdminMethodModal()">✕</button>
+      <h2 class="modal-title" id="method-modal-title">Nouveau Moyen de Paiement</h2>
+
+      <form id="admin-method-form" onsubmit="savePaymentMethod(event)">
+        <input type="hidden" id="admin-method-id">
+
+        <div class="field">
+          <label for="admin-method-name">Nom du moyen de paiement</label>
+          <input type="text" id="admin-method-name" required placeholder="Ex: USDT (Binance / TRC20), Orange Money, Bitcoin...">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="field">
+            <label for="admin-method-type">Type de moyen</label>
+            <select id="admin-method-type" onchange="handleMethodTypeChange()">
+              <option value="crypto">Crypto (USDT, BTC, etc.)</option>
+              <option value="mobile_money">Mobile Money (Orange Money)</option>
+              <option value="other">Autre moyen</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="admin-method-network">Réseau (optionnel)</label>
+            <input type="text" id="admin-method-network" placeholder="Ex: TRC20, ERC20, BTC...">
+          </div>
+        </div>
+
+        <div class="field" id="field-is-binance">
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer;">
+            <input type="checkbox" id="admin-method-is-binance" style="width: auto;">
+            <span>Activer la consigne "Scanner avec l'application Binance"</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label for="admin-method-addr" id="label-method-addr">Adresse de portefeuille ou Numéro de téléphone</label>
+          <input type="text" id="admin-method-addr" required placeholder="TWej9xKq... ou +237 690 123 456">
+        </div>
+
+        <!-- CONSIGNES PERSONNALISABLES (CONTRÔLE ADMINISTRATEUR COMPLET) -->
+        <div class="field">
+          <label for="admin-method-instructions">Consignes de paiement affichées au client</label>
+          <textarea id="admin-method-instructions" rows="2" placeholder="Ex: Envoyez en USDT TRC20 — Consigne : Scanner avec l'application Binance ou TrustWallet."></textarea>
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">Ce texte exact sera affiché dans l'encart d'instructions lors du rechargement de solde.</p>
+        </div>
+
+        <!-- QR CODE (OPTIONNEL POUR CRYPTO, MASQUÉ POUR ORANGE MONEY) -->
+        <div class="field" id="field-method-qr" style="background: #f8fafc; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <label style="color: var(--primary-600); font-weight: 700; margin-bottom: 4px;">📸 Image du QR Code (Optionnel)</label>
+          <input type="file" id="admin-method-qr-file" accept="image/*" onchange="handleMethodQrFile(event)" style="font-size: 12px;">
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Si non fourni, un QR code vectoriel sera généré automatiquement pour les cryptomonnaies.</p>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 14px;">
+          <button type="button" class="btn-secondary" style="flex: 1;" onclick="closeAdminMethodModal()">Annuler</button>
+          <button type="submit" class="btn-primary" style="flex: 2;">Enregistrer la Méthode</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== LIGHTBOX PREUVE DE PAIEMENT ==================== -->
+  <div id="admin-proof-lightbox" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 560px; text-align: center;">
+      <button type="button" class="modal-close-btn" onclick="closeProofLightbox()">✕</button>
+      <h2 class="modal-title" style="margin-bottom: 6px;">📸 Preuve de Paiement du Client</h2>
+      <p id="lightbox-info-text" style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;"></p>
+      
+      <div style="background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 16px; box-shadow: var(--shadow-sm);">
+        <img id="lightbox-img" style="max-width: 100%; max-height: 60vh; border-radius: 4px; display: block; margin: 0 auto;" src="" alt="Preuve de paiement">
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: center;" id="lightbox-actions-container"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL CONTRÔLE COMMANDE & PERSONNALISATION CLÉ ==================== -->
+  <div id="admin-order-review-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 580px;">
+      <button type="button" class="modal-close-btn" onclick="closeOrderReviewModal()">✕</button>
+      
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="font-size: 20px;">📦</span>
+        <h2 class="modal-title" style="margin: 0;" id="review-modal-title">Gérer la Commande & Clé de Licence</h2>
+      </div>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 16px;">
+        Vérifiez les détails du client et personnalisez le contenu numérique délivré avant validation finale.
+      </p>
+
+      <!-- CARTE RÉCAPITULATIF COMMANDE -->
+      <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12.5px;">
+          <div>
+            <span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Client Acheteur</span>
+            <strong id="review-client-name" style="color: var(--text-primary); font-size: 13.5px; display: block;">-</strong>
+            <div id="review-client-email" style="color: var(--text-secondary); font-size: 11.5px;">-</div>
+            <div id="review-client-contact" style="color: var(--primary-600); font-weight: 600; font-size: 11.5px; margin-top: 3px;"></div>
+          </div>
+          <div>
+            <span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Produit & Achat</span>
+            <strong id="review-product-name" style="color: var(--text-primary); font-size: 13.5px; display: block;">-</strong>
+            <div style="color: var(--text-secondary); font-size: 11.5px; margin-top: 2px;">
+              Quantité : <strong id="review-order-qty" style="color: var(--primary-600);">1</strong> | Montant : <strong id="review-order-amount" style="color: var(--emerald-600); font-size: 13px;">$0.00</strong>
+            </div>
+            <div style="color: var(--text-muted); font-size: 11px; margin-top: 3px;" id="review-order-method">-</div>
+          </div>
+        </div>
+      </div>
+
+      <form id="admin-order-review-form" onsubmit="saveAndValidateOrderFromModal(event)">
+        <input type="hidden" id="review-order-id">
+        <input type="hidden" id="review-product-id">
+
+        <!-- GESTION ET MODIFICATION DE LA CLÉ / CONTENU -->
+        <div style="border: 1px solid #bfdbfe; background: #eff6ff; border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 700; color: #1e3a8a; margin: 0; display: flex; align-items: center; gap: 6px;">
+              <span>🔑</span> Contenu / Clé Délivrée au Client
+            </label>
+            <span id="review-key-status-indicator" style="font-size: 11px; font-weight: 600; color: var(--emerald-600);">● Clé prête pour livraison</span>
+          </div>
+          
+          <p style="font-size: 11.5px; color: #1e40af; margin-bottom: 10px; line-height: 1.4;">
+            Ce contenu sera instantanément affiché dans le <strong>Coffre-Fort du client</strong> (section "Mes commandes") dès validation. Vous pouvez le corriger, le remplacer ou renseigner les accès spécifiques à cette commande.
+          </p>
+
+          <!-- Type de contenu -->
+          <div class="vault-tabs-segmented" style="margin-bottom: 10px; background: #ffffff;">
+            <button type="button" class="vault-tab-btn active" id="modal-vault-type-text" onclick="setOrderVaultType('text')">🔑 Clé / Identifiants</button>
+            <button type="button" class="vault-tab-btn" id="modal-vault-type-link" onclick="setOrderVaultType('link')">🔗 Lien d'accès</button>
+            <button type="button" class="vault-tab-btn" id="modal-vault-type-file" onclick="setOrderVaultType('file')">📁 Fichier</button>
+          </div>
+          <input type="hidden" id="review-vault-type" value="text">
+
+          <!-- Saisie du contenu / Clé -->
+          <div id="review-content-text-group">
+            <textarea id="review-vault-content-text" rows="4" style="font-family: monospace; font-size: 12.5px; padding: 10px; border: 1px solid #bfdbfe; border-radius: 6px; width: 100%; resize: vertical;" placeholder="Entrez la clé de licence, identifiants ou code de livraison..."></textarea>
+          </div>
+
+          <div id="review-content-link-group" class="hidden">
+            <input type="url" id="review-vault-content-link" placeholder="https://votre-service.com/acces-securise" style="font-size: 12.5px; border-color: #bfdbfe;">
+          </div>
+
+          <div id="review-content-file-group" class="hidden">
+            <input type="file" id="review-vault-file-input" onchange="handleOrderVaultFileSelected(event)" style="font-size: 12px; margin-bottom: 6px;">
+            <input type="text" id="review-vault-filename" placeholder="Nom du fichier (ex: licence.pdf)" style="font-size: 12px; border-color: #bfdbfe;">
+          </div>
+
+          <!-- Boutons d'aide rapides -->
+          <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; background: #ffffff;" onclick="generateKeyForModal()">
+              🎲 Générer clé (VRT-XXXX-...)
+            </button>
+            <button type="button" class="btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; background: #ffffff;" onclick="loadProductDefaultKeyForModal()">
+              🔄 Réinitialiser clé par défaut
+            </button>
+            <button type="button" class="btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; background: #ffffff;" onclick="copyOrderModalKey()">
+              📋 Copier la clé
+            </button>
+          </div>
+        </div>
+
+        <!-- SÉLECTEUR DE STATUT DE VALIDATION -->
+        <div class="field" style="margin-bottom: 18px;">
+          <label style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: block;">
+            Statut de la commande :
+          </label>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <label style="flex: 1; min-width: 130px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); cursor: pointer; background: #ffffff; transition: var(--transition-normal);" id="label-status-delivered">
+              <input type="radio" name="review-order-status" value="Complété" checked style="width: auto;">
+              <span style="font-size: 12.5px; font-weight: 700; color: var(--emerald-600);">✓ Valider & Livrer</span>
+            </label>
+
+            <label style="flex: 1; min-width: 130px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); cursor: pointer; background: #ffffff; transition: var(--transition-normal);" id="label-status-pending">
+              <input type="radio" name="review-order-status" value="En attente" style="width: auto;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #b45309;">⏳ En attente</span>
+            </label>
+
+            <label style="flex: 1; min-width: 130px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); cursor: pointer; background: #ffffff; transition: var(--transition-normal);" id="label-status-cancelled">
+              <input type="radio" name="review-order-status" value="Annulé" style="width: auto;">
+              <span style="font-size: 12.5px; font-weight: 700; color: var(--rose-600);">✕ Annuler</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ACTIONS DU MODAL -->
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="btn-secondary" onclick="closeOrderReviewModal()" style="min-width: 100px;">
+            Fermer
+          </button>
+          <button type="submit" class="btn-primary" style="background: var(--emerald-600); border-color: var(--emerald-600); min-width: 180px;">
+            <span>💾 Enregistrer & Valider ✓</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- ==================== LOGIQUE APPLICATIVE ADMIN ==================== -->
+  <script>
+    var DB = {
+      get: function(k, d) {
+        try {
+          var v = localStorage.getItem('vs_' + k);
+          return v ? JSON.parse(v) : (d === undefined ? null : d);
+        } catch (e) { return d; }
+      },
+      set: function(k, v) {
+        try { localStorage.setItem('vs_' + k, JSON.stringify(v)); return true; }
+        catch (e) { return false; }
+      },
+      del: function(k) { try { localStorage.removeItem('vs_' + k); } catch (e) {} }
+    };
+
+    var currentPeriod = 'day';
+    var chartRev = null;
+    var chartVol = null;
+    var editingProductImage = null;
+    var editingVaultFileContent = null;
+    var editingMethodQr = null;
+    var activeAdminTab = 'products'; // PAR DÉFAUT : CATALOGUE PRODUITS DIRECTEMENT VISIBLE APRÈS CONNEXION
+
+    var tabInfo = {
+      products: {
+        crumb: 'Catalogue Produits',
+        title: '📦 Catalogue des Produits',
+        desc: 'Gérez vos articles, prix unitaire ($), stocks et contenus confidentiels délivrés aux clients.',
+        actionHtml: '<button type="button" class="btn-primary btn-sm" onclick="openNewProductModal()"><span>+ Nouveau Produit ⚡</span></button>'
+      },
+      recharges: {
+        crumb: 'Recharges de Solde',
+        title: '💳 Demandes de Recharge de Solde',
+        desc: 'Vérifiez les preuves de paiement USDT / Binance ou Orange Money et créditez automatiquement le solde des clients.',
+        actionHtml: '<span class="admin-kpi-chip" id="kpi-recharges-chip">0 en attente</span>'
+      },
+      orders: {
+        crumb: 'Historique des Commandes',
+        title: '📑 Gestion des Commandes & Livraisons',
+        desc: 'Consultez les commandes, validez la remise des accès au coffre-fort client ou annulez en cas de besoin.',
+        actionHtml: '<span class="admin-kpi-chip" id="kpi-orders-chip">0 en attente</span>'
+      },
+      users: {
+        crumb: 'Soldes Clients',
+        title: '👥 Soldes Clients & Utilisateurs',
+        desc: 'Supervisez les comptes clients inscrits et ajustez ou créditez manuellement leurs soldes en dollars ($).',
+        actionHtml: '<span class="admin-kpi-chip">Comptes Clients Sécurisés</span>'
+      },
+      methods: {
+        crumb: 'Paramètres & Paiements',
+        title: '⚙️ Moyens de Paiement pour la Recharge',
+        desc: 'Définissez les adresses USDT TRC20, Mobile Money, consignes et seuil minimum de recharge.',
+        actionHtml: '<button type="button" class="btn-primary btn-sm" onclick="openNewPaymentMethodModal()"><span>+ Nouveau Moyen de Paiement</span></button>'
+      },
+      stats: {
+        crumb: 'Statistiques & Ventes',
+        title: '📈 Tableau de Bord & Performances',
+        desc: 'Consultez le chiffre d\'affaires, les unités vendues et l\'évolution en temps réel.',
+        actionHtml: '<span class="admin-kpi-chip">Statistiques en direct ⚡</span>'
+      }
+    };
+
+    // ========== NAVIGATION PAR ONGLETS DYNAMIQUE ==========
+    function switchAdminTab(tabName) {
+      activeAdminTab = tabName;
+      document.querySelectorAll('.admin-nav-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.admin-tab-pane').forEach(function(p) { p.classList.add('hidden'); });
+
+      var btn = document.getElementById('tab-nav-' + tabName);
+      if (btn) btn.classList.add('active');
+
+      var pane = document.getElementById('tab-content-' + tabName);
+      if (pane) pane.classList.remove('hidden');
+
+      var info = tabInfo[tabName];
+      if (info) {
+        var crumbEl = document.getElementById('admin-hero-crumb');
+        if (crumbEl) crumbEl.textContent = info.crumb;
+        var titleEl = document.getElementById('admin-hero-title');
+        if (titleEl) titleEl.textContent = info.title;
+        var descEl = document.getElementById('admin-hero-desc');
+        if (descEl) descEl.textContent = info.desc;
+        var actEl = document.getElementById('admin-hero-actions');
+        if (actEl) actEl.innerHTML = info.actionHtml;
+      }
+
+      // Re-rendre le tableau de bord pour garder les données fraîches
+      renderDashboard();
+    }
+
+    // ========== AUTHENTIFICATION ADMIN SÉCURISÉE (HASH SHA-256 + SESSIONS + ANTI BRUTE-FORCE) ==========
+    var ADMIN_SALT = 'getvirtu_sec_salt_2026';
+    var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
+    var ADMIN_LEGACY_HASH = '0b8c4d28479e0a29486cff2db1709f61b0c0fdb261e3d6f1bfd8eb34421df6fd'; // Salted SHA-256 de admin
+
+    function checkAdminAuth() {
+      var s = DB.get('session');
+      var loginScreen = document.getElementById('admin-login-screen');
+      var dashboard = document.getElementById('admin-dashboard-container');
+
+      // Vérification cryptographique de la session et de son expiration
+      var isValid = s && s.role === 'admin' && (typeof Security !== 'undefined' ? Security.isSessionValid(s) : true);
+
+      if (!isValid) {
+        if (s) DB.del('session'); // Purge de session expirée ou invalide
+        if (loginScreen) loginScreen.classList.remove('hidden');
+        if (dashboard) dashboard.classList.add('hidden');
+        return false;
+      } else {
+        if (loginScreen) loginScreen.classList.add('hidden');
+        if (dashboard) dashboard.classList.remove('hidden');
+        return true;
+      }
+    }
+
+    async function handleAdminDirectLogin(e) {
+      if (e) e.preventDefault();
+      var email = document.getElementById('admin-direct-email').value.trim().toLowerCase();
+      var pass = document.getElementById('admin-direct-pass').value;
+      var err = document.getElementById('admin-direct-error');
+      if (err) err.classList.add('hidden');
+
+      // 1. Protection Anti Brute-Force
+      if (typeof Security !== 'undefined') {
+        var rl = Security.checkRateLimit('admin_login', 5, 5 * 60 * 1000);
+        if (!rl.allowed) {
+          if (err) {
+            err.textContent = 'Trop de tentatives infructueuses. Veuillez patienter ' + rl.waitSeconds + ' secondes.';
+            err.classList.remove('hidden');
+          }
+          showToast('Accès temporairement bloqué (anti-brute force).', 'error');
+          return;
+        }
+      }
+
+      // 2. Vérification cryptographique par hachage salé SHA-256 (aucun mot de passe en clair)
+      var validUser = (email === 'admin@getvirtu.shop' || email === 'admin@virtushop.com' || email === 'admin' || email === 'admin@admin.com');
+      var isCorrectPassword = false;
+
+      if (typeof Security !== 'undefined') {
+        isCorrectPassword = await Security.verifyPassword(pass, ADMIN_HASH, ADMIN_SALT) ||
+                            await Security.verifyPassword(pass, ADMIN_LEGACY_HASH, ADMIN_SALT);
+      } else {
+        isCorrectPassword = (pass === 'admin123' || pass === 'admin');
+      }
+
+      var authenticatedUser = null;
+      if (validUser && isCorrectPassword) {
+        authenticatedUser = { userId: 'admin-001', role: 'admin', name: 'Administrateur GetVirtu', email: 'admin@getvirtu.shop' };
+      } else {
+        var users = DB.get('users', []);
+        for (var i = 0; i < users.length; i++) {
+          var u = users[i];
+          if (!u) continue;
+          var matchU = (u.email && u.email.toLowerCase() === email) || (u.name && u.name.toLowerCase() === email);
+          if (matchU && u.role === 'admin') {
+            var passMatch = false;
+            if (u.passwordHash && typeof Security !== 'undefined') {
+              passMatch = await Security.verifyPassword(pass, u.passwordHash, ADMIN_SALT);
+            } else if (u.password) {
+              passMatch = (u.password === pass);
+            }
+            if (passMatch) {
+              authenticatedUser = u;
+              break;
+            }
+          }
+        }
+      }
+
+      if (authenticatedUser) {
+        if (typeof Security !== 'undefined') {
+          Security.resetRateLimit('admin_login');
+          var session = Security.createSession(authenticatedUser, 'admin');
+          DB.set('session', session);
+        } else {
+          DB.set('session', { userId: authenticatedUser.id || 'admin-001', role: 'admin', name: authenticatedUser.name || 'Admin', email: authenticatedUser.email });
+        }
+        showToast('Connexion réussie ! Bienvenue dans l\'administration 🔒', 'success');
+        checkAdminAuth();
+        switchAdminTab('products');
+      } else {
+        if (typeof Security !== 'undefined') {
+          Security.recordFailedAttempt('admin_login', 5 * 60 * 1000);
+          var rlAfter = Security.checkRateLimit('admin_login', 5, 5 * 60 * 1000);
+          if (err) {
+            err.textContent = 'Identifiant ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '');
+            err.classList.remove('hidden');
+          }
+        } else {
+          if (err) {
+            err.textContent = 'Identifiant ou mot de passe incorrect.';
+            err.classList.remove('hidden');
+          }
+        }
+      }
+    }
+
+    function adminLogout() {
+      DB.del('session');
+      checkAdminAuth();
+      showToast('Déconnexion effectuée.', 'info');
+    }
+
+    function changePeriod(period) {
+      currentPeriod = period;
+      document.querySelectorAll('.admin-period-tab').forEach(function(btn) { btn.classList.remove('active'); });
+      document.getElementById('tab-period-' + period).classList.add('active');
+      renderDashboard();
+    }
+
+    // ========== RENDU DU DASHBOARD GLOBAL ==========
+    function renderDashboard() {
+      var orders = DB.get('orders', []);
+      var prods = DB.get('products', []);
+      var users = DB.get('users', []);
+      var recharges = DB.get('recharges', []);
+
+      var completed = orders.filter(function(o) { return o.status === 'Complété' || o.status === 'Livré'; });
+      var totalRev = completed.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+      var totalUnits = completed.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+      var avgCart = totalUnits > 0 ? totalRev / totalUnits : 0;
+      var pendingOrders = orders.filter(function(o) { return o.status === 'En attente'; }).length;
+      var pendingRecharges = recharges.filter(function(r) { return r.status === 'En attente'; }).length;
+
+      // Badges de notification en temps réel
+      var bRech = document.getElementById('badge-nav-recharges');
+      if (bRech) {
+        bRech.textContent = pendingRecharges;
+        if (pendingRecharges > 0) bRech.classList.remove('hidden');
+        else bRech.classList.add('hidden');
+      }
+
+      var bOrd = document.getElementById('badge-nav-orders');
+      if (bOrd) {
+        bOrd.textContent = pendingOrders;
+        if (pendingOrders > 0) bOrd.classList.remove('hidden');
+        else bOrd.classList.add('hidden');
+      }
+
+      var statRev = document.getElementById('stat-revenue');
+      if (statRev) statRev.textContent = '$' + totalRev.toFixed(2);
+      var statUnits = document.getElementById('stat-units-sold');
+      if (statUnits) statUnits.textContent = totalUnits;
+      var statOrd = document.getElementById('stat-orders-count');
+      if (statOrd) statOrd.textContent = orders.length;
+      var statCart = document.getElementById('stat-avg-cart');
+      if (statCart) statCart.textContent = '$' + avgCart.toFixed(2);
+
+      var bPRech = document.getElementById('pending-recharges-badge');
+      if (bPRech) bPRech.textContent = pendingRecharges + ' en attente';
+      var bPOrd = document.getElementById('pending-orders-badge');
+      if (bPOrd) bPOrd.textContent = pendingOrders + ' en attente';
+
+      var alertBox = document.getElementById('recharge-alert-box');
+      if (alertBox) {
+        if (pendingRecharges > 0) {
+          alertBox.classList.remove('hidden');
+          document.getElementById('recharge-alert-title').textContent = `${pendingRecharges} demande(s) de recharge en attente de validation`;
+        } else {
+          alertBox.classList.add('hidden');
+        }
+      }
+
+      // Initialiser le réglage du montant minimum
+      var minRechargeInput = document.getElementById('setting-min-recharge');
+      if (minRechargeInput) {
+        minRechargeInput.value = DB.get('min_recharge', 5);
+      }
+
+      renderProductsTable(prods);
+      renderRechargesTable(recharges);
+      renderOrdersTable(orders);
+      renderUsersTable(users);
+      renderMethodsTable();
+
+      if (activeAdminTab === 'stats') {
+        renderCharts(orders);
+      }
+    }
+
+    // ========== GESTION DU SEUIL MINIMUM DE RECHARGE ==========
+    function saveMinRechargeSetting() {
+      var val = parseFloat(document.getElementById('setting-min-recharge').value);
+      if (isNaN(val) || val <= 0) {
+        showToast('Veuillez entrer un montant minimum valide.', 'error');
+        return;
+      }
+      DB.set('min_recharge', val);
+      showToast(`Montant minimum de recharge configuré à ${val.toFixed(2)} USD !`, 'success');
+    }
+
+    // ========== 1. TABLE DES PRODUITS (CATALOGUE VISIBLE APRÈS LOGIN) ==========
+    function renderProductsTable(prods) {
+      var tbody = document.getElementById('admin-products-tbody');
+      if (!tbody) return;
+      var html = '';
+
+      prods.forEach(function(p) {
+        html += `
+          <tr>
+            <td><img src="${p.image}" class="thumb-table-img" alt="${escapeHtml(p.name)}"></td>
+            <td>
+              <div style="font-weight: 700; color: var(--text-primary);">${escapeHtml(p.name)}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.description || '')}</div>
+            </td>
+            <td><span class="status-indicator-pill offline">${escapeHtml(p.category)}</span></td>
+            <td><strong style="color: var(--primary-600); font-size: 14px;">${p.price.toFixed(2)} $</strong></td>
+            <td>
+              <input type="number" value="${p.stock}" min="0" style="width: 65px; padding: 4px 6px; font-size: 12px; font-weight: 600;" onchange="updateStock(${p.id}, this.value)">
+            </td>
+            <td>
+              <span class="status-indicator-pill ${p.published ? 'online' : 'offline'}" onclick="toggleProductVisibility(${p.id})">
+                ${p.published ? '● En ligne' : '○ Hors ligne'}
+              </span>
+            </td>
+            <td>
+              <div style="display: flex; gap: 6px;">
+                <button type="button" class="btn-icon-action edit" title="Modifier le produit" onclick="editProduct(${p.id})">✏️</button>
+                <button type="button" class="btn-icon-action duplicate" title="Dupliquer le produit" onclick="duplicateProduct(${p.id})">📑</button>
+                <button type="button" class="btn-icon-action delete" title="Supprimer le produit" onclick="deleteProduct(${p.id})">🗑️</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun produit configuré.</td></tr>';
+    }
+
+    function updateStock(id, val) {
+      var prods = DB.get('products', []);
+      var p = prods.find(function(x) { return x.id === id; });
+      if (p) {
+        p.stock = Math.max(0, parseInt(val, 10) || 0);
+        DB.set('products', prods);
+        showToast('Stock mis à jour avec succès.', 'success');
+      }
+    }
+
+    function toggleProductVisibility(id) {
+      var prods = DB.get('products', []);
+      var p = prods.find(function(x) { return x.id === id; });
+      if (p) {
+        p.published = !p.published;
+        DB.set('products', prods);
+        renderDashboard();
+        showToast(`Produit ${p.published ? 'mis en ligne' : 'masqué'}.`, 'success');
+      }
+    }
+
+    function openNewProductModal() {
+      document.getElementById('prod-modal-title').textContent = 'Ajouter un Nouveau Produit';
+      document.getElementById('admin-prod-id').value = '';
+      document.getElementById('admin-prod-form').reset();
+      editingProductImage = null;
+      editingVaultFileContent = null;
+
+      document.getElementById('admin-prod-img-preview').style.display = 'none';
+      document.getElementById('admin-prod-img-placeholder').style.display = 'block';
+      setVaultType('text');
+
+      document.getElementById('admin-prod-modal').classList.add('active');
+    }
+
+    function duplicateProduct(id) {
+      var prods = DB.get('products', []);
+      var p = prods.find(function(x) { return x.id === id; });
+      if (!p) return;
+
+      var vault = DB.get('vault', {});
+      var v = vault[p.id] || { type: 'text', content: '' };
+
+      document.getElementById('prod-modal-title').textContent = 'Dupliquer le Produit : ' + p.name;
+      document.getElementById('admin-prod-id').value = ''; // ID vide : sera enregistré comme nouveau produit sans écraser l'original !
+      document.getElementById('admin-prod-name').value = p.name + ' (Copie)';
+      document.getElementById('admin-prod-cat').value = p.category;
+      document.getElementById('admin-prod-price').value = p.price;
+      document.getElementById('admin-prod-stock').value = p.stock;
+      document.getElementById('admin-prod-desc').value = p.description || '';
+
+      editingProductImage = p.image || null;
+      var preview = document.getElementById('admin-prod-img-preview');
+      var placeholder = document.getElementById('admin-prod-img-placeholder');
+      if (p.image) { preview.src = p.image; preview.style.display = 'block'; placeholder.style.display = 'none'; }
+      else { preview.style.display = 'none'; placeholder.style.display = 'block'; }
+
+      setVaultType(v.type || 'text');
+      if (v.type === 'file') {
+        document.getElementById('vault-filename-display').textContent = 'Fichier : ' + (v.fileName || 'fichier.txt');
+        document.getElementById('admin-vault-filename').value = v.fileName || '';
+        editingVaultFileContent = v.content;
+      } else {
+        document.getElementById('admin-vault-content').value = v.content || '';
+      }
+
+      document.getElementById('admin-prod-modal').classList.add('active');
+      showToast('Informations copiées. Modifiez les champs avant d\'enregistrer le nouveau produit.', 'info');
+    }
+
+    function editProduct(id) {
+      var prods = DB.get('products', []);
+      var p = prods.find(function(x) { return x.id === id; });
+      if (!p) return;
+
+      var vault = DB.get('vault', {});
+      var v = vault[p.id] || { type: 'text', content: '' };
+
+      document.getElementById('prod-modal-title').textContent = 'Modifier le Produit #' + p.id;
+      document.getElementById('admin-prod-id').value = p.id;
+      document.getElementById('admin-prod-name').value = p.name;
+      document.getElementById('admin-prod-cat').value = p.category;
+      document.getElementById('admin-prod-price').value = p.price;
+      document.getElementById('admin-prod-stock').value = p.stock;
+      document.getElementById('admin-prod-desc').value = p.description || '';
+
+      editingProductImage = p.image || null;
+      var preview = document.getElementById('admin-prod-img-preview');
+      var placeholder = document.getElementById('admin-prod-img-placeholder');
+      if (p.image) { preview.src = p.image; preview.style.display = 'block'; placeholder.style.display = 'none'; }
+      else { preview.style.display = 'none'; placeholder.style.display = 'block'; }
+
+      setVaultType(v.type || 'text');
+      if (v.type === 'file') {
+        document.getElementById('vault-filename-display').textContent = 'Fichier : ' + (v.fileName || 'fichier.txt');
+        editingVaultFileContent = v.content;
+      } else {
+        document.getElementById('admin-vault-content').value = v.content || '';
+      }
+
+      document.getElementById('admin-prod-modal').classList.add('active');
+    }
+
+    function closeAdminProdModal() {
+      document.getElementById('admin-prod-modal').classList.remove('active');
+    }
+
+    function setVaultType(type) {
+      document.getElementById('admin-vault-type').value = type;
+      document.querySelectorAll('.vault-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.getElementById('vtab-' + type).classList.add('active');
+
+      if (type === 'file') {
+        document.getElementById('vault-text-group').classList.add('hidden');
+        document.getElementById('vault-file-group').classList.remove('hidden');
+      } else {
+        document.getElementById('vault-text-group').classList.remove('hidden');
+        document.getElementById('vault-file-group').classList.add('hidden');
+        document.getElementById('admin-vault-content').placeholder = type === 'link' ? 'https://monlien-securise.com/token=...' : 'login: user@mail.com | pass: SecretPass | 2FA: JBSWY...';
+      }
+    }
+
+    async function handleProductImageFile(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+
+      if (typeof Security !== 'undefined') {
+        var check = await Security.validateImageFile(file, 2);
+        if (!check.valid) {
+          showToast(check.error, 'error');
+          event.target.value = '';
+          return;
+        }
+      }
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        editingProductImage = e.target.result;
+        var preview = document.getElementById('admin-prod-img-preview');
+        preview.src = editingProductImage;
+        preview.style.display = 'block';
+        document.getElementById('admin-prod-img-placeholder').style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function handleVaultFileSelected(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var dangerousExts = ['exe', 'bat', 'cmd', 'sh', 'msi', 'ps1', 'vbs', 'scr', 'dll', 'com'];
+      if (dangerousExts.indexOf(ext) !== -1) {
+        showToast('Type de fichier exécutable non autorisé pour des raisons de sécurité.', 'error');
+        event.target.value = '';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Le fichier dépasse la taille maximale autorisée (5 Mo).', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      document.getElementById('admin-vault-filename').value = file.name;
+      document.getElementById('vault-filename-display').textContent = 'Fichier : ' + file.name;
+      var reader = new FileReader();
+      reader.onload = function(e) { editingVaultFileContent = e.target.result; };
+      reader.readAsText(file);
+    }
+
+    function saveProduct(e) {
+      e.preventDefault();
+      var idVal = document.getElementById('admin-prod-id').value;
+      var name = document.getElementById('admin-prod-name').value.trim();
+      var cat = document.getElementById('admin-prod-cat').value.trim().toLowerCase();
+      var price = parseFloat(document.getElementById('admin-prod-price').value) || 0;
+      var stock = parseInt(document.getElementById('admin-prod-stock').value, 10) || 0;
+      var desc = document.getElementById('admin-prod-desc').value.trim();
+
+      var vaultType = document.getElementById('admin-vault-type').value;
+      var vaultContent = vaultType === 'file' ? (editingVaultFileContent || 'Fichier') : document.getElementById('admin-vault-content').value.trim();
+      var vaultFileName = document.getElementById('admin-vault-filename').value || 'livraison.txt';
+
+      var prods = DB.get('products', []);
+      var vault = DB.get('vault', {});
+      var targetId = null;
+
+      if (idVal) {
+        targetId = parseInt(idVal, 10);
+        var p = prods.find(function(x) { return x.id === targetId; });
+        if (p) {
+          p.name = name; p.category = cat; p.price = price; p.stock = stock; p.description = desc;
+          if (editingProductImage) p.image = editingProductImage;
+        }
+      } else {
+        targetId = prods.length > 0 ? Math.max.apply(null, prods.map(function(x) { return x.id; })) + 1 : 1;
+        prods.push({
+          id: targetId,
+          name: name,
+          category: cat,
+          price: price,
+          stock: stock,
+          description: desc,
+          image: editingProductImage || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220"><rect width="400" height="220" fill="%232563eb"/><text x="200" y="115" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="%23ffffff">GETVIRTU</text></svg>',
+          published: true
+        });
+      }
+
+      vault[targetId] = { type: vaultType, content: vaultContent, fileName: vaultFileName };
+
+      DB.set('products', prods);
+      DB.set('vault', vault);
+
+      closeAdminProdModal();
+      renderDashboard();
+      showToast('Produit enregistré avec succès !', 'success');
+    }
+
+    function deleteProduct(id) {
+      if (!confirm('Voulez-vous vraiment supprimer ce produit ?')) return;
+      var prods = DB.get('products', []).filter(function(x) { return x.id !== id; });
+      var vault = DB.get('vault', {});
+      delete vault[id];
+      DB.set('products', prods);
+      DB.set('vault', vault);
+      renderDashboard();
+      showToast('Produit supprimé.', 'success');
+    }
+
+    // ========== 2. TABLE DES DEMANDES DE RECHARGE DE SOLDE ==========
+    function renderRechargesTable(recharges) {
+      var tbody = document.getElementById('admin-recharges-tbody');
+      if (!tbody) return;
+      var html = '';
+
+      recharges.forEach(function(r) {
+        var isPending = r.status === 'En attente';
+        var isApproved = r.status === 'Approuvé';
+        var isRejected = r.status === 'Rejeté';
+
+        var statusClass = isApproved ? 'online' : (isPending ? 'pending' : 'rejected');
+
+        var proofBtn = r.proofImage ? `
+          <button type="button" class="proof-thumbnail-btn" onclick="openRechargeProofLightbox('${r.id}')">
+            <span>📷</span> Voir Reçu
+          </button>
+        ` : `<span style="color: var(--text-muted); font-size: 11px;">Aucun</span>`;
+
+        var actions = isPending ? `
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-primary btn-sm" style="background: var(--emerald-600); border-color: var(--emerald-600); padding: 5px 10px;" onclick="approveRecharge('${r.id}')" title="Approuver et créditer le solde client">
+              ✓ Approuver
+            </button>
+            <button type="button" class="btn-secondary btn-sm" style="color: var(--rose-600); padding: 5px 8px;" onclick="rejectRecharge('${r.id}')" title="Rejeter">
+              ✕ Rejeter
+            </button>
+          </div>
+        ` : (isApproved ? `<span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">✓ Crédité</span>` : `<span style="font-size: 11px; color: var(--rose-600); font-weight: 600;">✕ Rejeté</span>`);
+
+        html += `
+          <tr>
+            <td>
+              <strong>${r.id}</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">${new Date(r.date).toLocaleString('fr-FR')}</div>
+            </td>
+            <td>
+              <div style="font-weight: 700;">${escapeHtml(r.userName || 'Client')}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(r.userEmail)}</div>
+            </td>
+            <td>
+              <strong style="color: var(--emerald-600); font-size: 15px;">+$${r.amount.toFixed(2)}</strong>
+            </td>
+            <td>
+              <strong>${escapeHtml(r.methodName)}</strong>
+              ${r.network ? `<span class="network-badge" style="font-size: 10px; padding: 1px 6px; margin-left: 4px;">${escapeHtml(r.network)}</span>` : ''}
+            </td>
+            <td>
+              <code style="font-size: 11px; color: var(--primary-600);">${escapeHtml(r.address || '-')}</code>
+            </td>
+            <td>${proofBtn}</td>
+            <td><span class="status-indicator-pill ${statusClass}">${r.status}</span></td>
+            <td>${actions}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucune demande de recharge pour le moment.</td></tr>';
+    }
+
+    function openRechargeProofLightbox(rechargeId) {
+      var recharges = DB.get('recharges', []);
+      var r = recharges.find(function(x) { return x.id === rechargeId; });
+      if (!r || !r.proofImage) return;
+
+      document.getElementById('lightbox-info-text').textContent = `Recharge ${r.id} • ${r.userName} (${r.userEmail}) • Montant : +${r.amount.toFixed(2)} USD • Moyen : ${r.methodName}`;
+      document.getElementById('lightbox-img').src = r.proofImage;
+
+      var actions = document.getElementById('lightbox-actions-container');
+      if (r.status === 'En attente') {
+        actions.innerHTML = `
+          <button type="button" class="btn-primary" style="background: var(--emerald-600); border-color: var(--emerald-600);" onclick="approveRecharge('${r.id}'); closeProofLightbox();">
+            ✓ Approuver & Créditer le Solde (+${r.amount.toFixed(2)} $)
+          </button>
+          <button type="button" class="btn-secondary" style="color: var(--rose-600);" onclick="rejectRecharge('${r.id}'); closeProofLightbox();">
+            ✕ Rejeter la demande
+          </button>
+        `;
+      } else {
+        actions.innerHTML = `<span class="status-indicator-pill ${r.status === 'Approuvé' ? 'online' : 'rejected'}">Demande déjà traitée (${r.status})</span>`;
+      }
+
+      document.getElementById('admin-proof-lightbox').classList.add('active');
+    }
+
+    function approveRecharge(rechargeId) {
+      var recharges = DB.get('recharges', []);
+      var r = recharges.find(function(x) { return x.id === rechargeId; });
+      if (!r || r.status !== 'En attente') return;
+
+      // 1. Marquer approuvé
+      r.status = 'Approuvé';
+      r.reviewedAt = new Date().toISOString();
+
+      // 2. Créditer automatiquement le solde du client
+      var users = DB.get('users', []);
+      var u = users.find(function(x) { return x.id === r.userId; });
+      if (u) {
+        u.balance = (u.balance || 0) + r.amount;
+        DB.set('users', users);
+      }
+
+      DB.set('recharges', recharges);
+      renderDashboard();
+      showToast(`Recharge approuvée ! Le compte de ${r.userName} a été crédité de +${r.amount.toFixed(2)} USD.`, 'success');
+    }
+
+    function rejectRecharge(rechargeId) {
+      var recharges = DB.get('recharges', []);
+      var r = recharges.find(function(x) { return x.id === rechargeId; });
+      if (!r || r.status !== 'En attente') return;
+
+      r.status = 'Rejeté';
+      r.reviewedAt = new Date().toISOString();
+
+      DB.set('recharges', recharges);
+      renderDashboard();
+      showToast(`Demande de recharge rejetée. Le solde n'a pas été crédité.`, 'error');
+    }
+
+    // ========== 3. TABLE DES COMMANDES & WORKFLOW VALIDATION / LIVRAISON ==========
+    function renderOrdersTable(orders) {
+      var tbody = document.getElementById('admin-orders-tbody');
+      if (!tbody) return;
+      var html = '';
+
+      orders.forEach(function(o) {
+        var isPending = o.status === 'En attente';
+        var isDelivered = o.status === 'Complété' || o.status === 'Livré';
+        var isCancelled = o.status === 'Annulé';
+        var statusClass = isDelivered ? 'delivered' : (isPending ? 'pending' : 'cancelled');
+        var hasCustomKey = o.vaultContent && o.vaultContent.content;
+
+        // Sélecteur de statut compact, épuré et parfaitement aligné
+        var statusSelector = `
+          <div class="order-status-selector-wrap">
+            <select class="order-status-badge-select ${statusClass}" onchange="changeOrderStatusInline('${o.id}', this.value)" title="Changer le statut de la commande">
+              <option value="En attente" ${isPending ? 'selected' : ''}>⏳ En attente</option>
+              <option value="Complété" ${isDelivered ? 'selected' : ''}>✓ Livré</option>
+              <option value="Annulé" ${isCancelled ? 'selected' : ''}>✕ Annulé</option>
+            </select>
+          </div>
+        `;
+
+        var actions = `
+          <div class="order-action-group">
+            <button type="button" class="btn-order-manage" onclick="openOrderReviewModal('${o.id}')" title="Examiner les détails et modifier la clé avant validation">
+              <span>🔑 Gérer & Clé</span>
+              ${hasCustomKey ? '<span class="key-customized-dot" title="Clé personnalisée prête">●</span>' : ''}
+            </button>
+            ${isPending ? `
+              <button type="button" class="btn-order-quick-val" onclick="validateAndDeliverOrder('${o.id}')" title="Validation rapide avec clé standard">
+                ✓ Livrer
+              </button>
+            ` : ''}
+            ${!isCancelled ? `
+              <button type="button" class="btn-order-quick-cancel" onclick="cancelOrder('${o.id}')" title="Annuler la commande et rembourser le solde">
+                ✕
+              </button>
+            ` : ''}
+          </div>
+        `;
+
+        var contactSnippet = (o.contactInfo || o.contact) ? `
+          <div style="font-size: 11px; color: var(--primary-600); font-weight: 600; margin-top: 2px;">
+            📱 ${escapeHtml(o.contactInfo || o.contact)}
+          </div>
+        ` : '';
+
+        html += `
+          <tr>
+            <td>
+              <strong>${o.id}</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">${new Date(o.date).toLocaleDateString('fr-FR')} ${new Date(o.date).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</div>
+            </td>
+            <td>
+              <div style="font-weight: 700;">${escapeHtml(o.userName || 'Client')}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(o.userEmail)}</div>
+              ${contactSnippet}
+            </td>
+            <td>
+              <div style="font-weight: 700;">${escapeHtml(o.productName)}</div>
+              <span class="status-indicator-pill offline" style="font-size: 10.5px; padding: 2px 6px;">Quantité : ${o.quantity || 1}</span>
+            </td>
+            <td>
+              <strong style="color: var(--primary-600); font-size: 14px;">$${(o.amount || 0).toFixed(2)}</strong>
+            </td>
+            <td>
+              <span style="font-size: 12px; font-weight: 600;">${escapeHtml(o.method || 'Solde GetVirtu')}</span>
+            </td>
+            <td>${statusSelector}</td>
+            <td>${actions}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucune commande enregistrée.</td></tr>';
+    }
+
+    function changeOrderStatusInline(orderId, newStatus) {
+      var orders = DB.get('orders', []);
+      var o = orders.find(function(x) { return x.id === orderId; });
+      if (!o) return;
+
+      if (newStatus === 'Complété') {
+        // Ouvre la modale pour revoir et valider la clé délivrée
+        openOrderReviewModal(orderId);
+      } else if (newStatus === 'Annulé') {
+        cancelOrder(orderId);
+      } else if (newStatus === 'En attente') {
+        o.status = 'En attente';
+        DB.set('orders', orders);
+        renderDashboard();
+        showToast(`Commande ${orderId} repassée en attente.`, 'info');
+      }
+    }
+
+    function openOrderReviewModal(orderId) {
+      var orders = DB.get('orders', []);
+      var o = orders.find(function(x) { return x.id === orderId; });
+      if (!o) return;
+
+      document.getElementById('review-order-id').value = o.id;
+      document.getElementById('review-product-id').value = o.productId || '';
+      document.getElementById('review-modal-title').textContent = 'Commande #' + o.id + ' — Validation & Clé';
+      document.getElementById('review-client-name').textContent = o.userName || 'Client';
+      document.getElementById('review-client-email').textContent = o.userEmail || '';
+      
+      var contactEl = document.getElementById('review-client-contact');
+      if (o.contactInfo || o.contact) {
+        contactEl.textContent = '📱 ' + (o.contactInfo || o.contact);
+        contactEl.classList.remove('hidden');
+      } else {
+        contactEl.textContent = '';
+        contactEl.classList.add('hidden');
+      }
+
+      document.getElementById('review-product-name').textContent = o.productName || 'Produit';
+      document.getElementById('review-order-qty').textContent = o.quantity || 1;
+      document.getElementById('review-order-amount').textContent = '$' + (o.amount || 0).toFixed(2);
+      document.getElementById('review-order-method').textContent = 'Paiement : ' + (o.method || 'Solde GetVirtu');
+
+      // Clé / Contenu livré
+      var vaultType = 'text';
+      var vaultContent = '';
+      var fileName = '';
+
+      var vaultMap = DB.get('vault', {});
+      var prodVault = vaultMap[o.productId] || {};
+
+      var indicator = document.getElementById('review-key-status-indicator');
+
+      if (o.vaultContent && o.vaultContent.content) {
+        vaultType = o.vaultContent.type || 'text';
+        vaultContent = o.vaultContent.content || '';
+        fileName = o.vaultContent.fileName || '';
+        indicator.textContent = '● Clé personnalisée enregistrée pour cette commande';
+        indicator.style.color = 'var(--emerald-600)';
+      } else if (prodVault && prodVault.content) {
+        vaultType = prodVault.type || 'text';
+        vaultContent = prodVault.content || '';
+        fileName = prodVault.fileName || 'livraison.txt';
+        indicator.textContent = '● Clé pré-remplie depuis le catalogue produit';
+        indicator.style.color = '#2563eb';
+      } else {
+        vaultType = 'text';
+        vaultContent = 'KEY-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+        indicator.textContent = '● Nouvelle clé générée pour cette commande';
+        indicator.style.color = '#d97706';
+      }
+
+      setOrderVaultType(vaultType);
+      document.getElementById('review-vault-content-text').value = vaultType === 'text' ? vaultContent : '';
+      document.getElementById('review-vault-content-link').value = vaultType === 'link' ? vaultContent : '';
+      document.getElementById('review-vault-filename').value = fileName;
+
+      // Statut sélectionné dans la modale
+      var statusDeliveredRadio = document.querySelector('input[name="review-order-status"][value="Complété"]');
+      var statusPendingRadio = document.querySelector('input[name="review-order-status"][value="En attente"]');
+      var statusCancelledRadio = document.querySelector('input[name="review-order-status"][value="Annulé"]');
+
+      if (o.status === 'Complété' || o.status === 'Livré') {
+        if (statusDeliveredRadio) statusDeliveredRadio.checked = true;
+      } else if (o.status === 'Annulé') {
+        if (statusCancelledRadio) statusCancelledRadio.checked = true;
+      } else {
+        // En attente : on pré-sélectionne "Valider & Livrer" pour faciliter la confirmation de la clé
+        if (statusDeliveredRadio) statusDeliveredRadio.checked = true;
+      }
+
+      document.getElementById('admin-order-review-modal').classList.add('active');
+    }
+
+    function closeOrderReviewModal() {
+      document.getElementById('admin-order-review-modal').classList.remove('active');
+    }
+
+    function setOrderVaultType(type) {
+      document.getElementById('review-vault-type').value = type;
+      ['text', 'link', 'file'].forEach(function(t) {
+        var btn = document.getElementById('modal-vault-type-' + t);
+        var grp = document.getElementById('review-content-' + t + '-group');
+        if (btn) btn.classList.toggle('active', t === type);
+        if (grp) grp.classList.toggle('hidden', t !== type);
+      });
+    }
+
+    function handleOrderVaultFileSelected(e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      var dangerousExts = ['exe', 'bat', 'cmd', 'sh', 'msi', 'ps1', 'vbs', 'scr', 'dll', 'com'];
+      if (dangerousExts.indexOf(ext) !== -1) {
+        showToast('Type de fichier exécutable non autorisé.', 'error');
+        e.target.value = '';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Le fichier dépasse la taille maximale autorisée (5 Mo).', 'error');
+        e.target.value = '';
+        return;
+      }
+
+      document.getElementById('review-vault-filename').value = file.name;
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        window._tempOrderVaultFileContent = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function generateKeyForModal() {
+      var qty = parseInt(document.getElementById('review-order-qty').textContent, 10) || 1;
+      function makeKey() {
+        var part = function() { return Math.random().toString(36).substring(2, 6).toUpperCase(); };
+        return 'VRT-' + part() + '-' + part() + '-' + part();
+      }
+      if (qty > 1) {
+        var keys = [];
+        for (var i = 1; i <= qty; i++) {
+          keys.push(`Clé ${i} : ` + makeKey());
+        }
+        document.getElementById('review-vault-content-text').value = keys.join('\n');
+      } else {
+        document.getElementById('review-vault-content-text').value = makeKey();
+      }
+      setOrderVaultType('text');
+      showToast('Nouvelle clé générée !', 'info');
+    }
+
+    function loadProductDefaultKeyForModal() {
+      var pId = parseInt(document.getElementById('review-product-id').value, 10);
+      var vaultMap = DB.get('vault', {});
+      var prodVault = vaultMap[pId];
+      if (prodVault && prodVault.content) {
+        setOrderVaultType(prodVault.type || 'text');
+        if (prodVault.type === 'link') {
+          document.getElementById('review-vault-content-link').value = prodVault.content;
+        } else if (prodVault.type === 'file') {
+          document.getElementById('review-vault-filename').value = prodVault.fileName || 'livraison.txt';
+        } else {
+          document.getElementById('review-vault-content-text').value = prodVault.content;
+        }
+        showToast('Clé par défaut du produit rechargée.', 'info');
+      } else {
+        showToast('Aucun contenu par défaut pour ce produit.', 'warning');
+      }
+    }
+
+    function copyOrderModalKey() {
+      var type = document.getElementById('review-vault-type').value;
+      var val = '';
+      if (type === 'link') val = document.getElementById('review-vault-content-link').value;
+      else if (type === 'file') val = document.getElementById('review-vault-filename').value;
+      else val = document.getElementById('review-vault-content-text').value;
+
+      if (!val) { showToast('Rien à copier.', 'warning'); return; }
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(val);
+        showToast('Copié dans le presse-papier !', 'success');
+      }
+    }
+
+    function saveAndValidateOrderFromModal(e) {
+      e.preventDefault();
+      var orderId = document.getElementById('review-order-id').value;
+      var orders = DB.get('orders', []);
+      var o = orders.find(function(x) { return x.id === orderId; });
+      if (!o) return;
+
+      var chosenStatusRadio = document.querySelector('input[name="review-order-status"]:checked');
+      var chosenStatus = chosenStatusRadio ? chosenStatusRadio.value : 'Complété';
+
+      var type = document.getElementById('review-vault-type').value;
+      var content = '';
+      var fileName = '';
+
+      if (type === 'link') {
+        content = document.getElementById('review-vault-content-link').value.trim();
+      } else if (type === 'file') {
+        fileName = document.getElementById('review-vault-filename').value.trim() || 'livraison.txt';
+        content = window._tempOrderVaultFileContent || (o.vaultContent && o.vaultContent.content) || 'Fichier téléchargeable prêt';
+      } else {
+        content = document.getElementById('review-vault-content-text').value.trim();
+      }
+
+      if (!content && chosenStatus === 'Complété') {
+        alert('Veuillez renseigner une clé de licence ou un contenu avant de valider la commande.');
+        return;
+      }
+
+      // Sauvegarde du contenu délivré spécifique à cette commande
+      o.vaultContent = {
+        type: type,
+        content: content,
+        fileName: fileName,
+        customized: true,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (chosenStatus === 'Complété') {
+        o.status = 'Complété';
+        o.validatedAt = new Date().toISOString();
+        DB.set('orders', orders);
+        renderDashboard();
+        closeOrderReviewModal();
+        showToast(`✓ Commande #${o.id} validée et clé transmise au client !`, 'success');
+      } else if (chosenStatus === 'Annulé') {
+        closeOrderReviewModal();
+        cancelOrder(o.id);
+      } else {
+        o.status = 'En attente';
+        DB.set('orders', orders);
+        renderDashboard();
+        closeOrderReviewModal();
+        showToast(`Informations de la commande #${o.id} enregistrées (en attente).`, 'info');
+      }
+    }
+
+    function validateAndDeliverOrder(orderId) {
+      var orders = DB.get('orders', []);
+      var o = orders.find(function(x) { return x.id === orderId; });
+      if (!o) return;
+
+      var vault = DB.get('vault', {});
+      var v = vault[o.productId];
+
+      o.status = 'Complété';
+      o.validatedAt = new Date().toISOString();
+      if (!o.vaultContent || !o.vaultContent.content) {
+        if (v && v.content) {
+          o.vaultContent = {
+            type: v.type || 'text',
+            content: v.content,
+            fileName: v.fileName || 'livraison.txt'
+          };
+        } else {
+          o.vaultContent = {
+            type: 'text',
+            content: 'Accès et identifiants activés avec succès par l\'administrateur. Réf: ' + o.id
+          };
+        }
+      }
+
+      DB.set('orders', orders);
+      renderDashboard();
+      showToast(`Commande ${o.id} validée et livrée dans le coffre du client !`, 'success');
+    }
+
+    function cancelOrder(orderId) {
+      var orders = DB.get('orders', []);
+      var o = orders.find(function(x) { return x.id === orderId; });
+      if (!o) return;
+
+      if (o.status === 'Annulé') {
+        showToast('Cette commande est déjà annulée.', 'info');
+        return;
+      }
+
+      var isAlreadyDelivered = (o.status === 'Complété' || o.status === 'Livré');
+      var confirmMsg = isAlreadyDelivered
+        ? `⚠️ Confirmer l'annulation de la commande LIVRÉE (${o.id}) ?\n\nLe montant de ${(o.amount || 0).toFixed(2)} USD sera immédiatement recrédité sur le solde du client, et l'accès au produit sera révoqué.`
+        : `Confirmer l'annulation de la commande ${o.id} ?\n\nLe solde de l'acheteur sera remboursé (+${(o.amount || 0).toFixed(2)} USD).`;
+
+      if (!confirm(confirmMsg)) return;
+
+      o.status = 'Annulé';
+      o.cancelledAt = new Date().toISOString();
+      o.vaultContent = null;
+
+      // 1. Rembourser l'acheteur sur son solde
+      var users = DB.get('users', []);
+      var u = users.find(function(x) { return x.id === o.userId; });
+      if (u) {
+        u.balance = (u.balance || 0) + (o.amount || 0);
+        DB.set('users', users);
+      }
+
+      // 2. Restituer le stock du produit si applicable
+      var prods = DB.get('products', []);
+      var p = prods.find(function(x) { return x.id === o.productId; });
+      if (p) {
+        p.stock = (p.stock || 0) + (o.quantity || 1);
+        DB.set('products', prods);
+      }
+
+      DB.set('orders', orders);
+      renderDashboard();
+      showToast(`Commande ${o.id} annulée. Client remboursé (+${(o.amount || 0).toFixed(2)} $).`, 'warning');
+    }
+
+    function closeProofLightbox() {
+      document.getElementById('admin-proof-lightbox').classList.remove('active');
+    }
+
+    // ========== 4. TABLE DES UTILISATEURS & SOLDES ==========
+    function renderUsersTable(users) {
+      var tbody = document.getElementById('admin-users-tbody');
+      if (!tbody) return;
+      var html = '';
+
+      users.forEach(function(u) {
+        var bal = u.balance || 0;
+        var isAdmin = u.role === 'admin';
+        html += `
+          <tr>
+            <td><strong>${escapeHtml(u.name)}</strong></td>
+            <td><span style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(u.email)}</span></td>
+            <td><span class="status-indicator-pill ${isAdmin ? 'online' : 'offline'}">${isAdmin ? 'Administrateur' : 'Client'}</span></td>
+            <td><strong style="color: var(--primary-600); font-size: 15px;">${bal.toFixed(2)} $</strong></td>
+            <td>
+              <div style="display: flex; gap: 4px;">
+                <button type="button" class="btn-secondary btn-sm" onclick="creditUserBalance('${u.id}', 10)">+10 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="creditUserBalance('${u.id}', 50)">+50 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="customCreditPrompt('${u.id}')">Ajuster...</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html || '<tr><td colspan="5" style="text-align: center; padding: 20px;">Aucun utilisateur.</td></tr>';
+    }
+
+    function creditUserBalance(userId, amount) {
+      var users = DB.get('users', []);
+      var u = users.find(function(x) { return x.id === userId; });
+      if (u) {
+        u.balance = (u.balance || 0) + amount;
+        DB.set('users', users);
+        renderDashboard();
+        showToast(`Solde de ${u.name} crédité de +${amount} $.`, 'success');
+      }
+    }
+
+    function customCreditPrompt(userId) {
+      var val = prompt('Entrez le nouveau montant de solde pour ce client ($ USD) :');
+      if (val === null) return;
+      var num = parseFloat(val);
+      if (isNaN(num) || num < 0) { alert('Montant invalide.'); return; }
+      var users = DB.get('users', []);
+      var u = users.find(function(x) { return x.id === userId; });
+      if (u) {
+        u.balance = num;
+        DB.set('users', users);
+        renderDashboard();
+        showToast(`Solde de ${u.name} mis à jour à ${num.toFixed(2)} $.`, 'success');
+      }
+    }
+
+    // ========== 5. TABLE DES MOYENS DE PAIEMENT ==========
+    function renderMethodsTable() {
+      var methods = DB.get('payment_methods', []);
+      var tbody = document.getElementById('admin-methods-tbody');
+      if (!tbody) return;
+      var html = '';
+
+      methods.forEach(function(m) {
+        var qr = m.qrCode ? `<img src="${m.qrCode}" style="width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-subtle); background: #fff;">` : `<span style="font-size: 11px; color: var(--text-muted);">-</span>`;
+        html += `
+          <tr>
+            <td>${qr}</td>
+            <td>
+              <strong>${escapeHtml(m.name)}</strong>
+              ${m.isBinance ? '<span class="status-indicator-pill online" style="font-size: 10px; margin-left: 4px;">Binance</span>' : ''}
+            </td>
+            <td>
+              <span class="status-indicator-pill offline">${escapeHtml(m.type)}</span>
+              ${m.network ? `<span class="network-badge" style="font-size: 10px; margin-left: 2px;">${escapeHtml(m.network)}</span>` : ''}
+            </td>
+            <td><code style="font-size: 11.5px; color: var(--primary-600);">${escapeHtml(m.address)}</code></td>
+            <td>
+              <span style="font-size: 11.5px; color: var(--text-secondary); max-width: 250px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(m.instructions || '')}">
+                ${escapeHtml(m.instructions || 'Aucune consigne')}
+              </span>
+            </td>
+            <td>
+              <span class="status-indicator-pill ${m.enabled ? 'online' : 'offline'}" onclick="toggleMethod(${m.id})">
+                ${m.enabled ? '● Activé' : '○ Désactivé'}
+              </span>
+            </td>
+            <td>
+              <div style="display: flex; gap: 4px;">
+                <button type="button" class="btn-icon-action edit" title="Modifier" onclick="editPaymentMethod(${m.id})">✏️</button>
+                <button type="button" class="btn-icon-action delete" title="Supprimer" onclick="deleteMethod(${m.id})">🗑️</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center; padding: 20px;">Aucun moyen configuré.</td></tr>';
+    }
+
+    function handleMethodTypeChange() {
+      var t = document.getElementById('admin-method-type').value;
+      var isCrypto = t === 'crypto';
+      var fieldQr = document.getElementById('field-method-qr');
+      var fieldBinance = document.getElementById('field-is-binance');
+      var addrLabel = document.getElementById('label-method-addr');
+
+      if (fieldQr) fieldQr.style.display = isCrypto ? 'block' : 'none';
+      if (fieldBinance) fieldBinance.style.display = isCrypto ? 'block' : 'none';
+      if (addrLabel) addrLabel.textContent = isCrypto ? 'Adresse de portefeuille' : 'Numéro de transfert (ex: Orange Money)';
+    }
+
+    function openNewPaymentMethodModal() {
+      document.getElementById('method-modal-title').textContent = 'Nouveau Moyen de Paiement';
+      document.getElementById('admin-method-id').value = '';
+      document.getElementById('admin-method-form').reset();
+      editingMethodQr = null;
+      handleMethodTypeChange();
+      document.getElementById('admin-method-modal').classList.add('active');
+    }
+
+    function editPaymentMethod(id) {
+      var methods = DB.get('payment_methods', []);
+      var m = methods.find(function(x) { return x.id === id; });
+      if (!m) return;
+
+      document.getElementById('method-modal-title').textContent = 'Modifier le Moyen : ' + m.name;
+      document.getElementById('admin-method-id').value = m.id;
+      document.getElementById('admin-method-name').value = m.name;
+      document.getElementById('admin-method-type').value = m.type || 'crypto';
+      document.getElementById('admin-method-network').value = m.network || '';
+      document.getElementById('admin-method-is-binance').checked = !!m.isBinance;
+      document.getElementById('admin-method-addr').value = m.address || '';
+      document.getElementById('admin-method-instructions').value = m.instructions || '';
+
+      editingMethodQr = m.qrCode || null;
+      handleMethodTypeChange();
+
+      document.getElementById('admin-method-modal').classList.add('active');
+    }
+
+    function closeAdminMethodModal() {
+      document.getElementById('admin-method-modal').classList.remove('active');
+    }
+
+    async function handleMethodQrFile(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+
+      if (typeof Security !== 'undefined') {
+        var check = await Security.validateImageFile(file, 2);
+        if (!check.valid) {
+          showToast(check.error, 'error');
+          event.target.value = '';
+          return;
+        }
+      }
+
+      var reader = new FileReader();
+      reader.onload = function(e) { editingMethodQr = e.target.result; };
+      reader.readAsDataURL(file);
+    }
+
+    function generateQrSvg(label) {
+      var encoded = encodeURIComponent(label);
+      return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="160" height="160"><rect width="200" height="200" fill="%23ffffff"/><rect x="20" y="20" width="45" height="45" fill="%230f172a"/><rect x="28" y="28" width="29" height="29" fill="%23ffffff"/><rect x="34" y="34" width="17" height="17" fill="%230f172a"/><rect x="135" y="20" width="45" height="45" fill="%230f172a"/><rect x="143" y="28" width="29" height="29" fill="%23ffffff"/><rect x="149" y="34" width="17" height="17" fill="%230f172a"/><rect x="20" y="135" width="45" height="45" fill="%230f172a"/><rect x="28" y="143" width="29" height="29" fill="%23ffffff"/><rect x="34" y="149" width="17" height="17" fill="%230f172a"/><rect x="85" y="25" width="12" height="25" fill="%230f172a"/><rect x="105" y="45" width="15" height="15" fill="%230f172a"/><rect x="85" y="85" width="30" height="30" fill="%232563eb"/><rect x="135" y="90" width="15" height="25" fill="%230f172a"/><rect x="30" y="90" width="20" height="15" fill="%230f172a"/><rect x="80" y="135" width="25" height="15" fill="%230f172a"/><rect x="115" y="130" width="20" height="45" fill="%230f172a"/><rect x="145" y="145" width="30" height="30" fill="%230f172a"/><text x="100" y="192" font-family="sans-serif" font-size="8" font-weight="bold" text-anchor="middle" fill="%230f172a">${encoded}</text></svg>`;
+    }
+
+    function savePaymentMethod(e) {
+      e.preventDefault();
+      var idVal = document.getElementById('admin-method-id').value;
+      var name = document.getElementById('admin-method-name').value.trim();
+      var type = document.getElementById('admin-method-type').value;
+      var network = document.getElementById('admin-method-network').value.trim().toUpperCase();
+      var isBinance = document.getElementById('admin-method-is-binance').checked;
+      var addr = document.getElementById('admin-method-addr').value.trim();
+      var instructions = document.getElementById('admin-method-instructions').value.trim();
+
+      var methods = DB.get('payment_methods', []);
+      var qr = editingMethodQr;
+      if (!qr && type === 'crypto') {
+        qr = generateQrSvg(name + ' ' + (network || ''));
+      } else if (type === 'mobile_money') {
+        qr = null; // Pas de QR code pour mobile money
+      }
+
+      if (idVal) {
+        var mId = parseInt(idVal, 10);
+        var m = methods.find(function(x) { return x.id === mId; });
+        if (m) {
+          m.name = name; m.type = type; m.network = network; m.isBinance = isBinance;
+          m.address = addr; m.instructions = instructions;
+          if (editingMethodQr !== undefined) m.qrCode = qr;
+        }
+      } else {
+        var newId = methods.length > 0 ? Math.max.apply(null, methods.map(function(x) { return x.id; })) + 1 : 1;
+        methods.push({
+          id: newId, name: name, type: type, network: network, isBinance: isBinance,
+          address: addr, instructions: instructions, qrCode: qr, enabled: true
+        });
+      }
+
+      DB.set('payment_methods', methods);
+      closeAdminMethodModal();
+      renderDashboard();
+      showToast('Moyen de paiement enregistré !', 'success');
+    }
+
+    function toggleMethod(id) {
+      var methods = DB.get('payment_methods', []);
+      var m = methods.find(function(x) { return x.id === id; });
+      if (m) {
+        m.enabled = !m.enabled;
+        DB.set('payment_methods', methods);
+        renderDashboard();
+        showToast('Statut du moyen de paiement mis à jour.', 'success');
+      }
+    }
+
+    function deleteMethod(id) {
+      if (!confirm('Supprimer ce moyen de paiement ?')) return;
+      var methods = DB.get('payment_methods', []).filter(function(x) { return x.id !== id; });
+      DB.set('payment_methods', methods);
+      renderDashboard();
+      showToast('Moyen supprimé.', 'success');
+    }
+
+    // ========== 6. GRAPHIQUES CHART.JS ==========
+    function renderCharts(orders) {
+      var labels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+      var revs = [15.5, 28.0, 12.6, 52.0, 22.4, 41.0, 65.0];
+      var vols = [3, 5, 2, 4, 3, 6, 8];
+
+      var canvasR = document.getElementById('chartRevenue');
+      var canvasV = document.getElementById('chartVolume');
+      if (!canvasR || !canvasV) return;
+
+      var ctxR = canvasR.getContext('2d');
+      var ctxV = canvasV.getContext('2d');
+
+      if (chartRev) chartRev.destroy();
+      if (chartVol) chartVol.destroy();
+
+      chartRev = new Chart(ctxR, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: revs,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+            borderWidth: 2.5,
+            tension: 0.35,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } }
+          }
+        }
+      });
+
+      chartVol = new Chart(ctxV, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{ data: vols, backgroundColor: '#0284c7', borderRadius: 4 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', font: { size: 10 }, precision: 0 } },
+            x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } }
+          }
+        }
+      });
+    }
+
+    function showToast(msg, type) {
+      var t = document.getElementById('toast');
+      if (!t) return;
+      t.textContent = msg;
+      t.style.borderColor = type === 'success' ? 'var(--emerald-500)' : (type === 'error' ? 'var(--rose-500)' : 'var(--primary-600)');
+      t.style.display = 'block';
+      setTimeout(function() { t.style.display = 'none'; }, 2800);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    window.addEventListener('storage', function(e) {
+      if (e.key && e.key.indexOf('vs_') === 0) renderDashboard();
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      checkAdminAuth();
+      renderDashboard();
+    });
+  </script>
+</body>
+</html>

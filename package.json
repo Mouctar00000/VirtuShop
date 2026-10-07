@@ -1,0 +1,23 @@
+{
+  "name": "getvirtu-shop",
+  "version": "1.0.0",
+  "description": "GetVirtu (getvirtu.shop) - Comptes et Services Numériques Instantanés",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node -c server.js && node -c app.js"
+  },
+  "keywords": [
+    "ecommerce",
+    "digital-products",
+    "getvirtu",
+    "shop"
+  ],
+  "author": "GetVirtu Team",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
