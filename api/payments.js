@@ -1,6 +1,6 @@
 /**
  * Vercel Serverless Function: /api/payments
- * Point d'entrée pour les opérations de paiement et de rechargement.
+ * Point d'entrée pour les opérations de paiement et de rechargement (SasPay Mobile Money & Trybit Crypto).
  */
 
 const paymentService = require('../backend/payments');
@@ -21,6 +21,7 @@ module.exports = async function handler(req, res) {
   const urlParts = rawUrl.split('?')[0].split('/').filter(Boolean);
   const action = urlParts[urlParts.length - 1]; // ex: 'create', 'verify', 'webhook', 'methods', 'deposit'
   const isSasPayRoute = rawUrl.includes('/saspay');
+  const isTrybitRoute = rawUrl.includes('/trybit');
 
   try {
     let body = req.body;
@@ -61,8 +62,45 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(result);
     }
 
+    // 4. Vérification du statut d'une transaction Trybit Crypto (GET ou POST)
+    if (isTrybitRoute && (action === 'verify' || action === 'status')) {
+      const parsedUrl = new URL(rawUrl, 'http://localhost');
+      const transactionId = parsedUrl.searchParams.get('transactionId') || parsedUrl.searchParams.get('txId') || body.transactionId || body.txId;
+      const invoiceUuid = parsedUrl.searchParams.get('invoiceUuid') || parsedUrl.searchParams.get('uuid') || body.invoiceUuid || body.uuid;
+
+      if (!transactionId && !invoiceUuid) {
+        return res.status(400).json({ error: 'transactionId ou invoiceUuid requis.' });
+      }
+
+      const result = await paymentService.verifyTrybitPayment({ transactionId, invoiceUuid });
+      return res.status(200).json(result);
+    }
+
     if (req.method === 'POST') {
-      // 4. Initiation d'un paiement Mobile Money réel via SasPay
+      // 5. Initiation d'un paiement Crypto Instantané via Trybit
+      if (isTrybitRoute && (action === 'create' || action === 'initiate' || action === 'deposit')) {
+        const authHeader = req.headers.authorization || '';
+        const token = authHeader.replace(/^Bearer\s+/i, '');
+        const verified = authService.verifySession(token);
+        const effectiveUserId = (verified && verified.user) ? verified.user.id : body.userId;
+
+        if (!effectiveUserId) {
+          return res.status(401).json({ error: 'Veuillez vous connecter pour initier une recharge.' });
+        }
+
+        const result = await paymentService.createTrybitDeposit({
+          userId: effectiveUserId,
+          amountUsd: body.amount,
+          customerEmail: body.customerEmail || body.email,
+          customerName: body.customerName || body.name,
+          cryptocurrency: body.cryptocurrency,
+          returnUrl: body.returnUrl
+        });
+
+        return res.status(201).json(result);
+      }
+
+      // 6. Initiation d'un paiement Mobile Money réel via SasPay
       if (isSasPayRoute && (action === 'create' || action === 'initiate' || action === 'deposit')) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.replace(/^Bearer\s+/i, '');
@@ -87,8 +125,8 @@ module.exports = async function handler(req, res) {
         return res.status(201).json(result);
       }
 
-      // 5. Initiation d'une recharge manuelle / crypto (TRC20, BTC)
-      if (action === 'deposit') {
+      // 7. Initiation d'une recharge manuelle (TRC20, BTC manuel)
+      if (action === 'deposit' && !isSasPayRoute && !isTrybitRoute) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.replace(/^Bearer\s+/i, '');
         const verified = authService.verifySession(token);
@@ -109,8 +147,8 @@ module.exports = async function handler(req, res) {
         return res.status(201).json(result);
       }
 
-      // 6. Vérification manuelle administrateur
-      if (action === 'verify' && !isSasPayRoute) {
+      // 8. Vérification manuelle administrateur
+      if (action === 'verify' && !isSasPayRoute && !isTrybitRoute) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.replace(/^Bearer\s+/i, '');
         const verified = authService.verifySession(token);
@@ -129,7 +167,13 @@ module.exports = async function handler(req, res) {
         return res.status(200).json(result);
       }
 
-      // 7. Webhook officiel SasPay et autres prestataires
+      // 9. Webhook POSTBACK Trybit (dédié ou détection de signature JWT Trybit)
+      if ((isTrybitRoute && (action === 'webhook' || action === 'postback')) || (action === 'webhook' && (body.invoice_id || body.invoice_info || body.token))) {
+        const result = await paymentService.handleTrybitWebhook(body);
+        return res.status(200).json(result);
+      }
+
+      // 10. Webhook officiel SasPay
       if (action === 'webhook') {
         const result = await paymentService.handleWebhook({
           headers: req.headers,

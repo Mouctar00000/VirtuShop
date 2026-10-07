@@ -44,6 +44,7 @@ const INITIAL_DB = {
       id: 1,
       name: 'Mobile Money Instantané (Wave, Orange, MTN, Moov)',
       type: 'mobile_money',
+      provider: 'saspay',
       network: 'all',
       isBinance: false,
       address: 'Passerelle SasPay Officielle',
@@ -52,8 +53,20 @@ const INITIAL_DB = {
     },
     {
       id: 2,
-      name: 'USDT (Binance / TRC20)',
+      name: 'Crypto Instantané (Trybit - USDT, BTC, ETH, SOL, LTC...)',
+      type: 'crypto_trybit',
+      provider: 'trybit',
+      network: 'multi',
+      isBinance: false,
+      address: 'Passerelle Trybit Officielle',
+      instructions: 'Paiement crypto automatisé instantané avec génération d\'adresse et validation blockchain automatique en temps réel.',
+      enabled: true
+    },
+    {
+      id: 3,
+      name: 'USDT Manuel (Binance / TRC20)',
       type: 'crypto',
+      provider: 'manual',
       network: 'TRC20',
       isBinance: true,
       address: 'TWej9xKqPzL8VnR4mB81sCgNqYe86F7zLm',
@@ -61,9 +74,10 @@ const INITIAL_DB = {
       enabled: true
     },
     {
-      id: 3,
-      name: 'Bitcoin (BTC)',
+      id: 4,
+      name: 'Bitcoin Manuel (BTC)',
       type: 'crypto',
+      provider: 'manual',
       network: 'BTC',
       isBinance: false,
       address: 'bc1q9v8h2p5w4k6f7s8d9a0m1n2b3c4x5y6z7w8',
@@ -330,7 +344,23 @@ class Database {
 
   // ========== MOYENS DE PAIEMENT ==========
   getPaymentMethods() {
-    return this.data.payment_methods || [];
+    let list = this.data.payment_methods || [];
+    if (!list.some(m => m.type === 'crypto_trybit' || m.provider === 'trybit')) {
+      list.splice(1, 0, {
+        id: 2,
+        name: 'Crypto Instantané (Trybit - USDT, BTC, ETH, SOL, LTC...)',
+        type: 'crypto_trybit',
+        provider: 'trybit',
+        network: 'multi',
+        isBinance: false,
+        address: 'Passerelle Trybit Officielle',
+        instructions: 'Paiement crypto automatisé instantané avec génération d\'adresse et validation blockchain automatique en temps réel.',
+        enabled: true
+      });
+      this.data.payment_methods = list;
+      this.persist();
+    }
+    return list;
   }
 
   savePaymentMethod(method) {

@@ -120,15 +120,17 @@ function initDB() {
   if (!DB.get('recharges')) DB.set('recharges', []);
   if (!DB.get('min_recharge')) DB.set('min_recharge', 5);
 
-  // Méthodes de paiement prêtes pour la production (SasPay Mobile Money & Crypto)
+  // Méthodes de paiement prêtes pour la production (SasPay Mobile Money & Trybit Crypto Automatique)
   var methods = DB.get('payment_methods');
   var hasSasPay = Array.isArray(methods) && methods.some(function(m) { return m && (m.type === 'mobile_money' || m.id === 'saspay-mobile-money'); });
-  if (!methods || !Array.isArray(methods) || methods.length === 0 || !hasSasPay) {
+  var hasTrybit = Array.isArray(methods) && methods.some(function(m) { return m && (m.type === 'crypto_trybit' || m.provider === 'trybit'); });
+  if (!methods || !Array.isArray(methods) || methods.length === 0 || !hasSasPay || !hasTrybit) {
     DB.set('payment_methods', [
       {
         id: 1,
         name: "Mobile Money (Wave, Orange, MTN, Moov)",
         type: "mobile_money",
+        provider: "saspay",
         network: "all",
         isBinance: false,
         address: "Passerelle SasPay Officielle",
@@ -137,8 +139,20 @@ function initDB() {
       },
       {
         id: 2,
-        name: "USDT (Binance / TRC20)",
+        name: "Crypto Instantané (Trybit - USDT, BTC, ETH, SOL...)",
+        type: "crypto_trybit",
+        provider: "trybit",
+        network: "multi",
+        isBinance: false,
+        address: "Passerelle Trybit Officielle",
+        instructions: "Paiement crypto automatisé instantané avec génération d'adresse et validation blockchain automatique en temps réel.",
+        enabled: true
+      },
+      {
+        id: 3,
+        name: "USDT Manuel (Binance / TRC20)",
         type: "crypto",
+        provider: "manual",
         network: "TRC20",
         isBinance: true,
         address: "TWej9xKqPzL8VnR4mB81sCgNqYe86F7zLm",
@@ -147,9 +161,10 @@ function initDB() {
         enabled: true
       },
       {
-        id: 3,
-        name: "Bitcoin (BTC)",
+        id: 4,
+        name: "Bitcoin Manuel (BTC)",
         type: "crypto",
+        provider: "manual",
         network: "BTC",
         isBinance: false,
         address: "bc1q9v8h2p5w4k6f7s8d9a0m1n2b3c4x5y6z7w8",
@@ -966,7 +981,7 @@ function renderDepositMethodsTabs() {
   var methods = DB.get('payment_methods', []).filter(function(m) { return m.enabled; });
   var html = '';
   methods.forEach(function(m) {
-    var icon = m.type === 'crypto' ? '🪙' : (m.type === 'mobile_money' ? '📱' : '💳');
+    var icon = (m.type === 'crypto_trybit' || m.provider === 'trybit') ? '⚡' : (m.type === 'crypto' ? '🪙' : (m.type === 'mobile_money' ? '📱' : '💳'));
     html += `
       <div class="payment-method-tab ${currentDepositMethodId == m.id ? 'active' : ''}" onclick="selectDepositMethodTab('${m.id}')">
         ${icon} ${escapeHtml(m.name)}
@@ -990,6 +1005,12 @@ function renderDepositMethodContent() {
   var m = methods.find(function(x) { return x.id == currentDepositMethodId; });
   if (!m) {
     container.innerHTML = '<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">Aucun moyen de paiement configuré.</p>';
+    return;
+  }
+
+  // Si Crypto Automatique Trybit : rendu dédié officiel
+  if (m.type === 'crypto_trybit' || m.provider === 'trybit' || m.id === 2 || m.id === 'trybit') {
+    renderTrybitDepositContent(container);
     return;
   }
 
@@ -1414,6 +1435,283 @@ function onSasPayPaymentConfirmed(txId, amount, newBalance) {
   }
 }
 
+// ========== PASSERELLE CRYPTO INSTANTANÉE TRYBIT ==========
+var trybitPollingTimer = null;
+
+function renderTrybitDepositContent(container) {
+  var amountInput = document.getElementById('deposit-amount-input');
+  var amount = parseFloat(amountInput ? amountInput.value : 0) || 10;
+
+  var cryptos = [
+    { id: '', name: 'Choix libre sur la page Trybit (USDT, BTC, ETH, SOL, LTC...)', icon: '🌐' },
+    { id: 'USDT_TRC20', name: 'USDT (Tron TRC20 - Recommandé)', icon: '🟢' },
+    { id: 'USDT_BSC', name: 'USDT (BNB Smart Chain BEP20)', icon: '🟡' },
+    { id: 'USDT_SOL', name: 'USDT (Solana)', icon: '🟣' },
+    { id: 'BTC', name: 'Bitcoin (BTC)', icon: '₿' },
+    { id: 'ETH', name: 'Ethereum (ETH)', icon: '🔷' },
+    { id: 'SOL', name: 'Solana (SOL)', icon: '⚡' },
+    { id: 'LTC', name: 'Litecoin (LTC)', icon: '🪙' },
+    { id: 'TON', name: 'The Open Network (TON)', icon: '💎' }
+  ];
+
+  var cryptoOptionsHtml = cryptos.map(function(c) {
+    return `<option value="${c.id}">${c.icon} ${escapeHtml(c.name)}</option>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="trybit-deposit-card" style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px; margin-bottom: 12px; box-shadow: var(--shadow-sm);">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 22px;">⚡</span>
+          <div>
+            <strong style="font-size: 14px; color: var(--text-primary); display: block;">Passerelle Crypto Instantanée Trybit</strong>
+            <span style="font-size: 11.5px; color: var(--text-muted);">Paiement multi-blockchain automatisé</span>
+          </div>
+        </div>
+        <span class="status-indicator-pill online" style="font-size: 11px;">Automatique 24/7</span>
+      </div>
+
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 12px 0; line-height: 1.45;">
+        Réglez votre recharge de <strong>$${amount.toFixed(2)} USD</strong> en cryptomonnaie (Binance, Trust Wallet, Metamask, Phantom, etc.).
+        Votre solde est crédité automatiquement dès la confirmation sur la blockchain.
+      </p>
+
+      <div class="field" style="margin-bottom: 12px;">
+        <label for="trybit-crypto-select" style="font-size: 12px; font-weight: 600;">Cryptomonnaie préférée (Optionnel)</label>
+        <select id="trybit-crypto-select" style="width: 100%; padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-primary); color: var(--text-primary); font-size: 13px;">
+          ${cryptoOptionsHtml}
+        </select>
+      </div>
+
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: var(--emerald-600); display: flex; align-items: center; gap: 8px;">
+        <span>🔒</span>
+        <span>Facture Trybit officielle sécurisée avec calcul de conversion en temps réel.</span>
+      </div>
+
+      <button type="button" class="btn-primary" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; padding: 12px;" onclick="submitTrybitDeposit()">
+        <span>Payer $${amount.toFixed(2)} USD en Crypto</span>
+        <span>⚡</span>
+      </button>
+    </div>
+  `;
+}
+
+async function submitTrybitDeposit() {
+  var u = getCurrentUser();
+  if (!u) {
+    openAuthModal('login', 'Veuillez vous connecter pour recharger votre solde.');
+    return;
+  }
+
+  var amountInput = document.getElementById('deposit-amount-input');
+  var amount = parseFloat(amountInput ? amountInput.value : 0) || 0;
+  var min = getMinRecharge();
+
+  if (amount < min) {
+    showToast(`Montant inférieur au minimum ($${min.toFixed(2)} USD).`, 'error');
+    if (amountInput) amountInput.focus();
+    return;
+  }
+
+  var cryptoSelect = document.getElementById('trybit-crypto-select');
+  var selectedCrypto = cryptoSelect ? cryptoSelect.value : '';
+
+  var submitBtn = document.getElementById('btn-submit-trybit');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = 'Génération de la facture sécurisée Trybit... ⏳';
+  }
+
+  var session = DB.get('session');
+  var token = session ? session.token : null;
+
+  try {
+    var resp = await fetch('/api/payments/trybit/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+      },
+      body: JSON.stringify({
+        userId: u.id,
+        amount: amount,
+        cryptocurrency: selectedCrypto || null,
+        customerEmail: u.email,
+        customerName: u.name,
+        returnUrl: window.location.origin + '/#catalog?payment=success'
+      })
+    });
+
+    var data = await resp.json();
+
+    if (!resp.ok || !data.success) {
+      throw new Error(data.error || 'Erreur lors de la génération de la facture Trybit.');
+    }
+
+    if (data.paymentUrl) {
+      window.open(data.paymentUrl, '_blank');
+    }
+
+    // Afficher l'interface de suivi dynamique en direct
+    var container = document.getElementById('deposit-dynamic-content');
+    if (container) {
+      container.innerHTML = `
+        <div class="momo-waiting-box" style="text-align: center; padding: 18px 12px;">
+          <div class="pulse-spinner"></div>
+          <div class="pulse-indicator">⏳ Facture Trybit Active (${escapeHtml(data.invoiceUuid || '')})</div>
+          <h3 style="font-size: 16px; margin: 0 0 6px 0; color: var(--text-primary);">Paiement Crypto Initié ⚡</h3>
+          <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px 0; line-height: 1.45;">
+            La page de paiement officielle Trybit a été ouverte. Transférez les fonds vers l'adresse indiquée sur la page de paiement.
+          </p>
+
+          <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px; text-align: left; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: var(--text-secondary);">Montant à créditer :</span>
+              <strong style="color: var(--emerald-600); font-size: 13px;">+$${amount.toFixed(2)} USD</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: var(--text-secondary);">Réf Facture :</span>
+              <code style="font-size: 11px; background: rgba(0,0,0,0.05); padding: 2px 5px; border-radius: 4px;">${escapeHtml(data.invoiceUuid || data.transactionId)}</code>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Validation :</span>
+              <span style="color: var(--primary-600); font-weight: 600;">Automatique (Blockchain)</span>
+            </div>
+          </div>
+
+          ${data.paymentUrl ? `
+            <a href="${data.paymentUrl}" target="_blank" class="btn-primary" style="display: block; text-decoration: none; text-align: center; margin-bottom: 10px; width: 100%;">
+              Ouvrir la page de paiement Trybit ↗
+            </a>
+          ` : ''}
+
+          <button type="button" class="btn-secondary" onclick="checkTrybitStatusManual('${data.transactionId}', '${data.invoiceUuid || ''}', ${amount})" style="width: 100%;">
+            Vérifier le statut maintenant 🔄
+          </button>
+        </div>
+      `;
+    }
+
+    startTrybitPolling(data.transactionId, data.invoiceUuid, amount);
+
+  } catch (err) {
+    showToast(err.message || 'Impossible d\'initier le paiement en crypto.', 'error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `Payer $${amount.toFixed(2)} USD en Crypto ⚡`;
+    }
+  }
+}
+
+function startTrybitPolling(txId, invoiceUuid, amount) {
+  if (trybitPollingTimer) clearInterval(trybitPollingTimer);
+  var attempts = 0;
+  var maxAttempts = 70; // ~4 minutes de polling
+
+  trybitPollingTimer = setInterval(async function() {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(trybitPollingTimer);
+      trybitPollingTimer = null;
+      return;
+    }
+
+    try {
+      var query = `transactionId=${encodeURIComponent(txId)}`;
+      if (invoiceUuid) query += `&invoiceUuid=${encodeURIComponent(invoiceUuid)}`;
+      var resp = await fetch(`/api/payments/trybit/verify?${query}`);
+      var result = await resp.json();
+
+      if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
+        clearInterval(trybitPollingTimer);
+        trybitPollingTimer = null;
+        onTrybitPaymentConfirmed(txId, amount, result.newBalance);
+      } else if (result.status === 'failed' || result.status === 'canceled') {
+        clearInterval(trybitPollingTimer);
+        trybitPollingTimer = null;
+        showToast('Facture Trybit annulée ou expirée.', 'error');
+      }
+    } catch (e) {}
+  }, 3500);
+}
+
+async function checkTrybitStatusManual(txId, invoiceUuid, amount) {
+  try {
+    showToast('Vérification auprès du serveur Trybit...', 'info');
+    var query = `transactionId=${encodeURIComponent(txId)}`;
+    if (invoiceUuid) query += `&invoiceUuid=${encodeURIComponent(invoiceUuid)}`;
+    var resp = await fetch(`/api/payments/trybit/verify?${query}`);
+    var result = await resp.json();
+
+    if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
+      if (trybitPollingTimer) clearInterval(trybitPollingTimer);
+      trybitPollingTimer = null;
+      onTrybitPaymentConfirmed(txId, amount, result.newBalance);
+    } else {
+      showToast(result.message || 'Paiement en attente de détection sur la blockchain.', 'info');
+    }
+  } catch (err) {
+    showToast('Erreur lors de la vérification : ' + err.message, 'error');
+  }
+}
+
+function onTrybitPaymentConfirmed(txId, amount, newBalance) {
+  var session = DB.get('session');
+  if (session) {
+    if (typeof newBalance === 'number') {
+      session.balance = newBalance;
+    } else {
+      session.balance = (session.balance || 0) + amount;
+    }
+    DB.set('session', session);
+  }
+
+  var users = DB.get('users', []);
+  var u = getCurrentUser();
+  if (u) {
+    var idx = users.findIndex(function(x) { return x.id === u.id; });
+    if (idx !== -1) {
+      if (typeof newBalance === 'number') {
+        users[idx].balance = newBalance;
+      } else {
+        users[idx].balance = (users[idx].balance || 0) + amount;
+      }
+      DB.set('users', users);
+    }
+  }
+
+  updateNavbar();
+  renderConnectedCatalog();
+  renderLandingCatalog();
+
+  var container = document.getElementById('deposit-dynamic-content');
+  if (container) {
+    container.innerHTML = `
+      <div class="deposit-active-flow" style="border-color: #86efac; background: #f0fdf4;">
+        <div style="font-size: 42px; margin-bottom: 8px;">🎉</div>
+        <h3 style="font-size: 17px; margin: 0 0 6px 0; color: #166534;">Paiement Crypto Confirmé !</h3>
+        <p style="font-size: 13px; color: #15803d; margin: 0 0 16px 0;">
+          Votre solde a été crédité de <strong>+$${amount.toFixed(2)} USD</strong>.
+        </p>
+        <button type="button" class="btn-primary" onclick="closeDepositModal()" style="width: 100%;">
+          Parfait, Continuer mes achats ⚡
+        </button>
+      </div>
+    `;
+  }
+
+  showToast(`🎉 Félicitations ! Votre recharge de +$${amount.toFixed(2)} USD en crypto a été confirmée !`, 'success');
+
+  if (pendingPurchaseProductId) {
+    setTimeout(function() {
+      closeDepositModal();
+      var prodId = pendingPurchaseProductId;
+      pendingPurchaseProductId = null;
+      startProductPurchase(prodId);
+    }, 1200);
+  }
+}
+
 async function submitDepositRequest() {
   var u = getCurrentUser();
   if (!u) { openAuthModal('login'); return; }
@@ -1667,6 +1965,10 @@ function openAuthModal(tab, msg) {
     else err.classList.add('hidden');
   }
   document.getElementById('auth-modal').classList.add('active');
+  // Re-tenter l'initialisation de Google si nécessaire
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    initGoogleIdentity();
+  }
 }
 
 function closeAuthModal() { document.getElementById('auth-modal').classList.remove('active'); }
@@ -1686,7 +1988,10 @@ function switchAuthTab(t) {
 }
 
 // ========== AUTHENTIFICATION SÉCURISÉE PRODUCTION (EMAIL & GOOGLE OAUTH 2.0) ==========
-var configuredGoogleClientId = null;
+var DEFAULT_GOOGLE_CLIENT_ID = '136687010554-fnp29c7llrd6vi2mmbu4sbfat9c5simj.apps.googleusercontent.com';
+var configuredGoogleClientId = DEFAULT_GOOGLE_CLIENT_ID;
+var isGoogleIdentityInitialized = false;
+var googleCodeClient = null;
 
 // Initialisation de Google Identity Services
 async function initGoogleIdentity() {
@@ -1699,46 +2004,92 @@ async function initGoogleIdentity() {
       }
     }
   } catch (e) {
-    console.log('[Google Auth] Mode local ou configuration par défaut.');
+    console.log('[Google Auth] Initialisation locale avec Client ID configuré.');
   }
 
-  // Si l'API Google Identity Services est chargée et l'ID client configuré
-  if (configuredGoogleClientId && window.google && window.google.accounts && window.google.accounts.id) {
-    try {
-      window.google.accounts.id.initialize({
-        client_id: configuredGoogleClientId,
-        callback: handleGoogleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
+  var clientId = configuredGoogleClientId || DEFAULT_GOOGLE_CLIENT_ID;
 
-      var slot = document.getElementById('g_id_signin_slot');
-      var triggerBtn = document.getElementById('btn-google-trigger');
-      if (slot) {
-        window.google.accounts.id.renderButton(slot, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          text: 'continue_with',
-          shape: 'rectangular',
-          logo_alignment: 'left',
-          width: 320
+  // 1. Initialiser le Code Client OAuth 2.0 officiel (pour ouverture directe du sélecteur au clic)
+  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+    try {
+      googleCodeClient = window.google.accounts.oauth2.initCodeClient({
+        client_id: clientId,
+        scope: 'openid email profile',
+        ux_mode: 'popup',
+        callback: function(resp) {
+          if (resp && resp.code) {
+            handleGoogleCodeExchange(resp.code);
+          } else if (resp && resp.error) {
+            console.warn('[Google Auth] Erreur popup OAuth:', resp.error);
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('[Google Auth] Erreur initCodeClient:', e);
+    }
+  }
+
+  // 2. Initialiser One Tap et callback ID Token si supporté
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    try {
+      if (!isGoogleIdentityInitialized) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true
         });
-        if (triggerBtn) triggerBtn.style.display = 'none';
+        isGoogleIdentityInitialized = true;
       }
     } catch (err) {
-      console.warn('[Google Auth] Erreur d\'initialisation du bouton Google:', err);
+      console.warn('[Google Auth] Erreur initialisation Google Identity:', err);
     }
   }
 }
 
-// Déclencheur du bouton "Continuer avec Google"
+// Déclencheur du bouton "Continuer avec Google" (Ouvre DIRECTEMENT le sélecteur de compte Google)
 function handleGoogleAuthTrigger() {
-  if (configuredGoogleClientId && window.google && window.google.accounts && window.google.accounts.id) {
-    window.google.accounts.id.prompt();
-  } else {
-    showToast('Connexion Google prête. Vous pouvez aussi vous inscrire ou vous connecter par e-mail ou pseudo.', 'info');
+  var clientId = configuredGoogleClientId || DEFAULT_GOOGLE_CLIENT_ID;
+
+  // 1. Ouvrir immédiatement la popup officielle Google OAuth 2.0 pour choisir son compte
+  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+    try {
+      if (!googleCodeClient) {
+        googleCodeClient = window.google.accounts.oauth2.initCodeClient({
+          client_id: clientId,
+          scope: 'openid email profile',
+          ux_mode: 'popup',
+          callback: function(resp) {
+            if (resp && resp.code) {
+              handleGoogleCodeExchange(resp.code);
+            }
+          }
+        });
+      }
+      googleCodeClient.requestCode();
+      return;
+    } catch (err) {
+      console.warn('[Google Auth] Erreur codeClient.requestCode():', err);
+    }
   }
+
+  // 2. Si Google One Tap est disponible
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    try {
+      window.google.accounts.id.prompt();
+      return;
+    } catch (e) {}
+  }
+
+  // 3. Fallback direct : redirection vers l'écran officiel Google de sélection de compte
+  var redirectUri = window.location.origin + '/api/auth/google/callback';
+  var googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+    'client_id=' + encodeURIComponent(clientId) +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&response_type=code' +
+    '&scope=' + encodeURIComponent('openid email profile') +
+    '&prompt=select_account';
+  window.location.href = googleAuthUrl;
 }
 
 function closeGoogleConfigModal() {
@@ -1746,7 +2097,28 @@ function closeGoogleConfigModal() {
   if (modal) modal.classList.remove('active');
 }
 
-// Réception et vérification du jeton officiel Google ID Token
+// Échange du code d'autorisation OAuth 2.0 auprès du serveur
+async function handleGoogleCodeExchange(code) {
+  try {
+    showToast('Connexion Google en cours... ⏳', 'info');
+    var res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code, redirect_uri: 'postmessage' })
+    });
+    var data = await res.json();
+
+    if (!res.ok || (!data.success && !data.session)) {
+      throw new Error(data.error || 'Échec de vérification du compte Google.');
+    }
+
+    applyAuthenticatedSession(data);
+  } catch (err) {
+    showToast(err.message || 'Erreur lors de la connexion Google.', 'error');
+  }
+}
+
+// Réception et vérification du jeton officiel Google ID Token (One Tap)
 async function handleGoogleCredentialResponse(response) {
   if (!response || !response.credential) {
     showToast('Erreur lors de l\'authentification Google.', 'error');
@@ -1761,33 +2133,35 @@ async function handleGoogleCredentialResponse(response) {
     });
     var data = await res.json();
 
-    if (!res.ok || !data.success) {
+    if (!res.ok || (!data.success && !data.session)) {
       throw new Error(data.error || 'Vérification Google échouée.');
     }
 
-    // Authentification confirmée côté serveur
-    DB.set('session', data.session);
-
-    // Mettre à jour l'utilisateur local si nécessaire
-    var users = DB.get('users', []);
-    var uIdx = users.findIndex(function(u) { return u.id === data.user.id || u.email.toLowerCase() === data.user.email.toLowerCase(); });
-    if (uIdx !== -1) {
-      users[uIdx] = { ...users[uIdx], ...data.user };
-    } else {
-      users.push(data.user);
-    }
-    DB.set('users', users);
-
-    closeAuthModal();
-    showToast(`Connecté avec Google : ${data.user.name} ! 👋`, 'success');
-    showConnectedCatalog();
-
-    if (pendingPurchaseProductId) {
-      var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-      startProductPurchase(pId);
-    }
+    applyAuthenticatedSession(data);
   } catch (err) {
     showToast(err.message || 'Échec de connexion Google.', 'error');
+  }
+}
+
+function applyAuthenticatedSession(data) {
+  DB.set('session', data.session);
+
+  var users = DB.get('users', []);
+  var uIdx = users.findIndex(function(u) { return u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase()); });
+  if (uIdx !== -1) {
+    users[uIdx] = { ...users[uIdx], ...data.user };
+  } else {
+    users.push(data.user);
+  }
+  DB.set('users', users);
+
+  closeAuthModal();
+  showToast(`Connecté avec Google : ${data.user.name} ! 👋`, 'success');
+  showConnectedCatalog();
+
+  if (pendingPurchaseProductId) {
+    var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+    startProductPurchase(pId);
   }
 }
 
@@ -1819,7 +2193,7 @@ async function handleLoginSubmit(e) {
     });
     var data = await res.json();
 
-    if (res.ok && data.success) {
+    if (res.ok && (data.success || data.session)) {
       if (typeof Security !== 'undefined') Security.resetRateLimit('client_login');
       DB.set('session', data.session);
 
@@ -1978,7 +2352,7 @@ async function handleRegisterSubmit(e) {
     });
     var data = await res.json();
 
-    if (res.ok && data.success) {
+    if (res.ok && (data.success || data.session)) {
       DB.set('session', data.session);
 
       var users = DB.get('users', []);

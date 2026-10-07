@@ -10,6 +10,7 @@ const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db');
+const trybitService = require('./trybit');
 
 // Chargement sécurisé des variables d'environnement locales si présentes
 try {
@@ -625,6 +626,256 @@ class PaymentService {
 
   getUserTransactions(userId) {
     return db.getTransactions({ userId });
+  }
+
+  // ========== INTÉGRATION OFFICIELLE CRYPTO TRYBIT ==========
+
+  /**
+   * Création d'une recharge de solde par Crypto Instantané via Trybit
+   */
+  async createTrybitDeposit({ userId, amountUsd, customerEmail, customerName, cryptocurrency, returnUrl }) {
+    if (!userId) throw new Error('Utilisateur non authentifié.');
+    let user = db.getUserById(userId);
+    if (!user) throw new Error('Compte utilisateur introuvable.');
+
+    const parsedUsd = parseFloat(amountUsd);
+    const minRecharge = db.data.settings?.min_recharge || 5.0;
+
+    if (isNaN(parsedUsd) || parsedUsd < minRecharge) {
+      throw new Error(`Le montant minimum de recharge est de ${minRecharge.toFixed(2)} USD.`);
+    }
+
+    const idempotencyKey = crypto.randomBytes(16).toString('hex');
+    const txId = 'TXN-TB-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+
+    // Création de la transaction en statut strict 'pending'
+    const tx = db.createTransaction({
+      id: txId,
+      userId: user.id,
+      amount: Math.round(parsedUsd * 100) / 100,
+      currency: 'USD',
+      paymentMethod: 'Crypto Instantané (Trybit)',
+      provider: 'trybit',
+      providerTxId: null,
+      status: 'pending',
+      idempotencyKey: idempotencyKey,
+      metadata: {
+        customerEmail: customerEmail || user.email,
+        customerName: customerName || user.name,
+        cryptocurrency: cryptocurrency || null,
+        returnUrl: returnUrl || 'https://getvirtu.shop/#deposit_success'
+      }
+    });
+
+    console.log(`[Trybit] Initiation de paiement : ${txId} (${parsedUsd} USD) pour ${user.email}`);
+
+    try {
+      const invoice = await trybitService.createInvoice({
+        amount: parsedUsd,
+        currency: 'USD',
+        orderId: txId,
+        email: customerEmail || user.email,
+        cryptocurrency: cryptocurrency || null
+      });
+
+      // Mettre à jour la transaction avec l'identifiant Trybit (INV-XXXX) et le lien de paiement
+      db.updateTransaction(txId, {
+        providerTxId: invoice.uuid,
+        metadata: {
+          ...tx.metadata,
+          invoiceUuid: invoice.uuid,
+          paymentUrl: invoice.link,
+          amountCrypto: invoice.amountCrypto,
+          cryptoCurrency: invoice.currency,
+          address: invoice.address,
+          expiryDate: invoice.expiryDate
+        }
+      });
+
+      return {
+        success: true,
+        transactionId: txId,
+        invoiceUuid: invoice.uuid,
+        paymentUrl: invoice.link,
+        amountUsd: parsedUsd,
+        amountCrypto: invoice.amountCrypto,
+        currency: invoice.currency,
+        address: invoice.address,
+        status: 'pending',
+        instructions: 'Redirection vers la page de paiement sécurisée Trybit...'
+      };
+    } catch (err) {
+      db.updateTransaction(txId, {
+        status: 'failed',
+        failureReason: err.message
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * Vérification du statut d'une transaction Trybit (requête active auprès de l'API Trybit)
+   */
+  async verifyTrybitPayment({ transactionId, invoiceUuid }) {
+    let tx = null;
+    if (transactionId) tx = db.getTransactionById(transactionId);
+    if (!tx && invoiceUuid) tx = db.getTransactionByProviderTxId(invoiceUuid);
+    if (!tx && invoiceUuid) {
+      tx = db.data.transactions.find(t => t.metadata?.invoiceUuid === invoiceUuid || t.providerTxId === invoiceUuid);
+    }
+
+    if (!tx) {
+      throw new Error('Transaction Trybit introuvable.');
+    }
+
+    if (tx.status === 'completed') {
+      const user = db.getUserById(tx.userId);
+      return { success: true, status: 'completed', newBalance: user ? user.balance : null, transaction: tx };
+    }
+
+    const effectiveUuid = invoiceUuid || tx.providerTxId || tx.metadata?.invoiceUuid;
+    if (!effectiveUuid) {
+      return { success: true, status: 'pending', message: 'En attente de paiement sur Trybit...' };
+    }
+
+    const infos = await trybitService.getInvoiceInfo(effectiveUuid);
+    const invoiceData = Array.isArray(infos) && infos.length > 0 ? infos[0] : null;
+
+    if (!invoiceData) {
+      return { success: true, status: 'pending', message: 'Vérification Trybit en cours...' };
+    }
+
+    const invStatus = (invoiceData.status || '').toLowerCase();
+    const invInvoiceStatus = (invoiceData.invoice_status || '').toLowerCase();
+
+    console.log(`[Trybit Verify] Statut pour ${tx.id} (${effectiveUuid}) : status=${invStatus}, invoice_status=${invInvoiceStatus}`);
+
+    if (invStatus === 'paid' || invStatus === 'overpaid' || invInvoiceStatus === 'success') {
+      return this._creditUserForTransaction(tx, effectiveUuid, invoiceData);
+    } else if (invStatus === 'canceled' || invStatus === 'cancelled') {
+      const failedTx = db.updateTransaction(tx.id, {
+        status: 'failed',
+        failureReason: 'Paiement annulé ou expiré sur Trybit.'
+      });
+      return { success: false, status: 'failed', transaction: failedTx };
+    }
+
+    return {
+      success: true,
+      status: 'pending',
+      message: 'Facture en attente de paiement ou de confirmation blockchain...'
+    };
+  }
+
+  /**
+   * Traitement officiel du POSTBACK webhook Trybit avec vérification JWT HS256
+   */
+  async handleTrybitWebhook(payload) {
+    console.log('[Trybit POSTBACK] Traitement notification webhook...');
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Payload webhook Trybit invalide.');
+    }
+
+    const token = payload.token;
+    if (token) {
+      const isValid = trybitService.verifyWebhookToken(token);
+      if (!isValid) {
+        console.warn('[Trybit POSTBACK] Jeton JWT invalide ou expiré !');
+        throw new Error('Jeton JWT du webhook Trybit invalide.');
+      }
+    }
+
+    const orderId = payload.order_id;
+    const invoiceId = payload.invoice_id;
+    const invoiceInfo = payload.invoice_info || {};
+    const uuid = invoiceInfo.uuid || (invoiceId ? (invoiceId.startsWith('INV-') ? invoiceId : `INV-${invoiceId}`) : null);
+
+    let tx = null;
+    if (orderId) tx = db.getTransactionById(orderId);
+    if (!tx && uuid) tx = db.getTransactionByProviderTxId(uuid);
+    if (!tx && uuid) {
+      tx = db.data.transactions.find(t => t.metadata?.invoiceUuid === uuid || t.providerTxId === uuid);
+    }
+
+    if (!tx) {
+      console.warn(`[Trybit POSTBACK] Transaction introuvable pour order_id: ${orderId}, uuid: ${uuid}`);
+      return { success: true, message: 'Notification reçue (transaction non locale).' };
+    }
+
+    if (tx.status === 'completed') {
+      console.log(`[Trybit POSTBACK] Transaction ${tx.id} déjà traitée (Idempotence).`);
+      return { success: true, message: 'Déjà traitée.' };
+    }
+
+    const status = (payload.status || invoiceInfo.status || '').toLowerCase();
+    const invoiceStatus = (invoiceInfo.invoice_status || '').toLowerCase();
+
+    if (status === 'success' || status === 'paid' || status === 'overpaid' || invoiceStatus === 'success' || invoiceStatus === 'paid') {
+      return this._creditUserForTransaction(tx, uuid, invoiceInfo);
+    } else if (status === 'canceled' || status === 'cancelled') {
+      db.updateTransaction(tx.id, {
+        status: 'failed',
+        failureReason: 'Annulé sur Trybit.'
+      });
+      return { success: true, message: 'Transaction marquée annulée.' };
+    }
+
+    return { success: true, message: 'Statut Trybit enregistré.' };
+  }
+
+  /**
+   * Crédit atomique et sécurisé du solde utilisateur avec protection anti-race condition
+   */
+  _creditUserForTransaction(tx, providerTxId, extraData = {}) {
+    const freshTx = db.getTransactionById(tx.id);
+    if (freshTx && freshTx.status === 'completed') {
+      const u = db.getUserById(freshTx.userId);
+      return { success: true, status: 'completed', newBalance: u ? u.balance : null, transaction: freshTx };
+    }
+
+    let user = db.getUserById(tx.userId);
+    if (!user) {
+      user = db.createUser({
+        id: tx.userId || `user-${Date.now()}`,
+        email: tx.metadata?.customerEmail || `client_${tx.id}@getvirtu.shop`,
+        name: tx.metadata?.customerName || 'Client GetVirtu',
+        role: 'client',
+        balance: 0.00
+      });
+    }
+
+    const creditAmount = tx.amount || 0;
+    const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
+
+    db.updateUser(user.id, { balance: newBalance });
+
+    const completedTx = db.updateTransaction(tx.id, {
+      status: 'completed',
+      providerTxId: providerTxId || tx.providerTxId,
+      completedAt: new Date().toISOString(),
+      metadata: {
+        ...tx.metadata,
+        completedDetails: extraData
+      }
+    });
+
+    var recharges = db.data.recharges || [];
+    var rIdx = recharges.findIndex(r => r.id === tx.id);
+    if (rIdx !== -1) {
+      recharges[rIdx].status = 'Validé';
+      db.persist();
+    }
+
+    console.log(`[Paiement Validé] Transaction ${tx.id} complétée. Solde ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
+
+    return {
+      success: true,
+      status: 'completed',
+      newBalance: newBalance,
+      creditedAmount: creditAmount,
+      transaction: completedTx,
+      message: 'Paiement confirmé avec succès ! Votre solde a été crédité.'
+    };
   }
 }
 

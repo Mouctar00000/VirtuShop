@@ -2,6 +2,29 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Chargement automatique des variables d'environnement locales (.env)
+try {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    const envLines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of envLines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.substring(0, eqIdx).trim();
+          const val = trimmed.substring(eqIdx + 1).trim();
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.warn('[Env] Erreur chargement .env:', e.message);
+}
+
 const PORT = process.env.PORT || 3000;
 const ROOT_DIR = __dirname;
 
@@ -35,8 +58,7 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'SAMEORIGIN',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src https://accounts.google.com https://checkout.saspay.me https://pay.wave.com; connect-src 'self' https://accounts.google.com https://api.saspay.me https://checkout.saspay.me; base-uri 'self'; object-src 'none';"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src https://accounts.google.com https://checkout.saspay.me https://pay.wave.com https://pay.trybit.com; connect-src 'self' https://accounts.google.com https://api.saspay.me https://checkout.saspay.me https://api.trybit.com https://pay.trybit.com; base-uri 'self'; object-src 'none';"
 };
 
 const server = http.createServer((req, res) => {
@@ -153,7 +175,7 @@ const server = http.createServer((req, res) => {
 
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': ext === '.html' ? 'no-cache, no-store, must-revalidate' : 'public, max-age=86400',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
       ...SECURITY_HEADERS
     });
     fs.createReadStream(resolvedPath).pipe(res);

@@ -29,7 +29,13 @@ Thumbs.db
 *.swo
 
 # Temporaires de tests
+# Temporaires de tests & Données
 temp_*.js
 *.tmp
 data/*.json
+
+# Scripts de déploiement
+deploy_*.js
+
+
 

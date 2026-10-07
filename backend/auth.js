@@ -205,7 +205,7 @@ class AuthService {
   }
 
   // 6. CONTINUER AVEC GOOGLE (GOOGLE OAUTH 2.0 / IDENTITY SERVICES)
-  async continueWithGoogle({ credential, code }) {
+  async continueWithGoogle({ credential, code, redirect_uri }) {
     let googleUser = null;
 
     if (credential) {
@@ -213,7 +213,7 @@ class AuthService {
       googleUser = await this.verifyGoogleIdToken(credential);
     } else if (code) {
       // Échange du code d'autorisation OAuth 2.0
-      googleUser = await this.exchangeGoogleAuthCode(code);
+      googleUser = await this.exchangeGoogleAuthCode(code, redirect_uri);
     } else {
       throw new Error('Jeton ou code d\'authentification Google manquant.');
     }
@@ -279,13 +279,18 @@ class AuthService {
             if (data.error || data.error_description) {
               return reject(new Error(data.error_description || data.error || 'Jeton Google invalide.'));
             }
+            const expectedClientId = process.env.GOOGLE_CLIENT_ID;
             // Vérification de l'audience si GOOGLE_CLIENT_ID est configuré
-            if (GOOGLE_CLIENT_ID && data.aud && data.aud !== GOOGLE_CLIENT_ID) {
+            if (expectedClientId && data.aud && data.aud !== expectedClientId) {
               return reject(new Error('Audience du jeton Google non reconnue.'));
+            }
+            // Vérification de l'e-mail vérifié par Google
+            if (data.email_verified !== 'true' && data.email_verified !== true) {
+              return reject(new Error("L'adresse e-mail associée à ce compte Google n'a pas été vérifiée par Google."));
             }
             resolve(data);
           } catch (e) {
-            reject(new Error('Erreur de décodage du jeton Google.'));
+            reject(new Error('Erreur de décodage du jeton Google: ' + e.message));
           }
         });
       }).on('error', err => {
@@ -294,18 +299,23 @@ class AuthService {
     });
   }
 
-  // Échange du code OAuth 2.0 (si flux serveur complet utilisé)
-  exchangeGoogleAuthCode(code) {
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+  // Échange du code OAuth 2.0 (flux code d'autorisation officiel)
+  exchangeGoogleAuthCode(code, customRedirectUri) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    // En mode popup Google Identity Services, le redirect_uri attendu par Google est 'postmessage'
+    const redirectUri = customRedirectUri || process.env.GOOGLE_REDIRECT_URI || 'postmessage';
+
+    if (!clientId || !clientSecret) {
       throw new Error('GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET doivent être configurés sur le serveur.');
     }
 
     return new Promise((resolve, reject) => {
       const postData = new URLSearchParams({
         code: code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri: GOOGLE_REDIRECT_URI,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code'
       }).toString();
 
@@ -324,8 +334,11 @@ class AuthService {
             if (tokenRes.id_token) {
               const profile = await this.verifyGoogleIdToken(tokenRes.id_token);
               resolve(profile);
+            } else if (tokenRes.access_token) {
+              const profile = await this.fetchGoogleUserInfo(tokenRes.access_token);
+              resolve(profile);
             } else {
-              reject(new Error(tokenRes.error_description || 'Impossible d\'échanger le code Google.'));
+              reject(new Error(tokenRes.error_description || tokenRes.error || 'Impossible d\'échanger le code Google.'));
             }
           } catch (e) {
             reject(e);
@@ -335,6 +348,26 @@ class AuthService {
       req.on('error', reject);
       req.write(postData);
       req.end();
+    });
+  }
+
+  fetchGoogleUserInfo(accessToken) {
+    return new Promise((resolve, reject) => {
+      https.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }, res => {
+        let raw = '';
+        res.on('data', c => raw += c);
+        res.on('end', () => {
+          try {
+            const data = JSON.parse(raw);
+            if (data.error) return reject(new Error(data.error_description || data.error));
+            resolve(data);
+          } catch (e) {
+            reject(new Error('Erreur de décodage des données utilisateur Google.'));
+          }
+        });
+      }).on('error', reject);
     });
   }
 

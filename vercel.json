@@ -16,8 +16,7 @@
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "X-XSS-Protection", "value": "1; mode=block" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdn.jsdelivr.net https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://api.saspay.me https://checkout.saspay.me https://pay.wave.com;" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdn.jsdelivr.net https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://api.saspay.me https://checkout.saspay.me https://pay.wave.com https://api.trybit.com https://pay.trybit.com https://cdn.trybit.com https://cdn.cryptocloud.plus https://static.trybit.com;" }
       ]
     },
     {
