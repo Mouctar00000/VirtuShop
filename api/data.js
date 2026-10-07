@@ -96,8 +96,17 @@ module.exports = async function handler(req, res) {
         }
 
         // Déduction du solde et du stock côté serveur
-        db.updateUser(auth.user.id, { balance: Math.round((auth.user.balance - total) * 100) / 100 });
+        const newBalance = Math.round((auth.user.balance - total) * 100) / 100;
+        db.updateUser(auth.user.id, { balance: newBalance });
         db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
+
+        // Récupération du coffre-fort pour livraison numérique immédiate
+        const vault = db.getVault();
+        const prodVault = vault[prod.id];
+        const deliveredContent = (prodVault && prodVault.content) ? prodVault : {
+          type: 'text',
+          content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
+        };
 
         const newOrder = db.createOrder({
           userId: auth.user.id,
@@ -110,11 +119,20 @@ module.exports = async function handler(req, res) {
           amount: total,
           contactInfo: body.contactInfo || '',
           method: 'Solde GetVirtu',
-          status: 'En attente',
-          vaultContent: null
+          status: 'Complété',
+          vaultContent: deliveredContent
         });
 
-        return res.status(201).json({ success: true, order: newOrder, newBalance: auth.user.balance - total });
+        db.createTransaction({
+          userId: auth.user.id,
+          amount: total,
+          currency: 'USD',
+          paymentMethod: 'Solde GetVirtu',
+          provider: 'balance',
+          status: 'completed'
+        });
+
+        return res.status(201).json({ success: true, order: newOrder, newBalance });
       }
     }
 

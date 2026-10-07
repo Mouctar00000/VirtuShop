@@ -71,7 +71,7 @@ module.exports = async function handler(req, res) {
                 if (idx !== -1) { users[idx] = Object.assign({}, users[idx], user); } else { users.push(user); }
                 localStorage.setItem('vs_users', JSON.stringify(users));
               } catch(e){}
-              window.location.href = '/#catalog';
+              window.location.href = '/?auth_success=google#catalog';
             </script>
           </body></html>`;
           res.setHeader('Content-Type', 'text/html; charset=UTF-8');

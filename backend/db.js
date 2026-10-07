@@ -16,15 +16,16 @@ if (!fs.existsSync(DATA_DIR)) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
 }
 
-const DEFAULT_ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
+const DEFAULT_ADMIN_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Salted SHA-256
 
 const INITIAL_DB = {
   users: [
     {
       id: 'admin-001',
-      email: 'admin@getvirtu.shop',
+      email: 'admin@virtushop.com',
       password_hash: DEFAULT_ADMIN_HASH,
-      name: 'Administrateur GetVirtu',
+      name: 'Administrateur VirtuShop',
+      username: 'admin',
       profile_picture: null,
       google_id: null,
       auth_provider: 'email',
@@ -60,28 +61,6 @@ const INITIAL_DB = {
       isBinance: false,
       address: 'Passerelle Trybit Officielle',
       instructions: 'Paiement crypto automatisé instantané avec génération d\'adresse et validation blockchain automatique en temps réel.',
-      enabled: true
-    },
-    {
-      id: 3,
-      name: 'USDT Manuel (Binance / TRC20)',
-      type: 'crypto',
-      provider: 'manual',
-      network: 'TRC20',
-      isBinance: true,
-      address: 'TWej9xKqPzL8VnR4mB81sCgNqYe86F7zLm',
-      instructions: 'Transférez le montant exact en USDT TRC20 vers cette adresse.',
-      enabled: true
-    },
-    {
-      id: 4,
-      name: 'Bitcoin Manuel (BTC)',
-      type: 'crypto',
-      provider: 'manual',
-      network: 'BTC',
-      isBinance: false,
-      address: 'bc1q9v8h2p5w4k6f7s8d9a0m1n2b3c4x5y6z7w8',
-      instructions: 'Envoyez en BTC à cette adresse de portefeuille sécurisée.',
       enabled: true
     }
   ],

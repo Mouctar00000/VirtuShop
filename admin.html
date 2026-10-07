@@ -1276,8 +1276,8 @@
 
     // ========== AUTHENTIFICATION ADMIN SÉCURISÉE (HASH SHA-256 + SESSIONS + ANTI BRUTE-FORCE) ==========
     var ADMIN_SALT = 'getvirtu_sec_salt_2026';
-    var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
-    var ADMIN_LEGACY_HASH = '0b8c4d28479e0a29486cff2db1709f61b0c0fdb261e3d6f1bfd8eb34421df6fd'; // Salted SHA-256 de admin
+    var ADMIN_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Salted SHA-256
+    var ADMIN_LEGACY_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256
 
     function checkAdminAuth() {
       var s = DB.get('session');
@@ -1319,29 +1319,64 @@
         }
       }
 
-      // 2. Vérification cryptographique par hachage salé SHA-256 (aucun mot de passe en clair)
-      var validUser = (email === 'admin@getvirtu.shop' || email === 'admin@virtushop.com' || email === 'admin' || email === 'admin@admin.com');
+      // 2. Tentative d'authentification auprès du backend de production
+      try {
+        var apiRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: email, password: pass })
+        });
+        var apiData = await apiRes.json();
+        if (apiRes.ok && apiData && apiData.session && apiData.user && apiData.user.role === 'admin') {
+          if (typeof Security !== 'undefined') Security.resetRateLimit('admin_login');
+          DB.set('session', apiData.session);
+          var users = DB.get('users', []);
+          var uIdx = users.findIndex(function(u) { return u.id === apiData.user.id || (u.email && u.email.toLowerCase() === apiData.user.email.toLowerCase()); });
+          if (uIdx !== -1) users[uIdx] = Object.assign({}, users[uIdx], apiData.user);
+          else users.push(apiData.user);
+          DB.set('users', users);
+
+          showToast('Connexion réussie ! Bienvenue dans l\'administration 🔒', 'success');
+          checkAdminAuth();
+          switchAdminTab('products');
+          return;
+        }
+      } catch (netErr) {
+        console.warn('[Admin Auth] API distante non joignable, bascule locale:', netErr.message);
+      }
+
+      // 3. Vérification cryptographique locale par hachage salé SHA-256 (aucun mot de passe en clair)
+      var validUser = (email === 'admin@virtushop.com' || email === 'admin@getvirtu.shop' || email === 'admin' || email === 'admin@admin.com');
       var isCorrectPassword = false;
 
       if (typeof Security !== 'undefined') {
         isCorrectPassword = await Security.verifyPassword(pass, ADMIN_HASH, ADMIN_SALT) ||
                             await Security.verifyPassword(pass, ADMIN_LEGACY_HASH, ADMIN_SALT);
-      } else {
-        isCorrectPassword = (pass === 'admin123' || pass === 'admin');
+      } else if (window.crypto && window.crypto.subtle) {
+        try {
+          var enc = new TextEncoder();
+          var buf = await window.crypto.subtle.digest('SHA-256', enc.encode(ADMIN_SALT + ':' + pass));
+          var hex = Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+          isCorrectPassword = (hex === ADMIN_HASH || hex === ADMIN_LEGACY_HASH);
+        } catch (e) {
+          isCorrectPassword = false;
+        }
       }
 
       var authenticatedUser = null;
       if (validUser && isCorrectPassword) {
-        authenticatedUser = { userId: 'admin-001', role: 'admin', name: 'Administrateur GetVirtu', email: 'admin@getvirtu.shop' };
+        authenticatedUser = { userId: 'admin-001', role: 'admin', name: 'Administrateur VirtuShop', email: 'admin@virtushop.com' };
       } else {
         var users = DB.get('users', []);
         for (var i = 0; i < users.length; i++) {
           var u = users[i];
           if (!u) continue;
-          var matchU = (u.email && u.email.toLowerCase() === email) || (u.name && u.name.toLowerCase() === email);
+          var matchU = (u.email && u.email.toLowerCase() === email) || (u.username && u.username.toLowerCase() === email) || (u.name && u.name.toLowerCase() === email);
           if (matchU && u.role === 'admin') {
             var passMatch = false;
-            if (u.passwordHash && typeof Security !== 'undefined') {
+            if (u.password_hash && typeof Security !== 'undefined') {
+              passMatch = await Security.verifyPassword(pass, u.password_hash, ADMIN_SALT);
+            } else if (u.passwordHash && typeof Security !== 'undefined') {
               passMatch = await Security.verifyPassword(pass, u.passwordHash, ADMIN_SALT);
             } else if (u.password) {
               passMatch = (u.password === pass);
