@@ -40,6 +40,16 @@ const INITIAL_DB = {
   payment_methods: [
     {
       id: 1,
+      name: 'Mobile Money Instantané (Wave, Orange, MTN, Moov)',
+      type: 'mobile_money',
+      network: 'all',
+      isBinance: false,
+      address: 'Passerelle SasPay Officielle',
+      instructions: 'Paiement direct sécurisé : validation automatique par Wave, Orange Money ou notification USSD push instantanée sur votre smartphone.',
+      enabled: true
+    },
+    {
+      id: 2,
       name: 'USDT (Binance / TRC20)',
       type: 'crypto',
       network: 'TRC20',
@@ -49,23 +59,13 @@ const INITIAL_DB = {
       enabled: true
     },
     {
-      id: 2,
+      id: 3,
       name: 'Bitcoin (BTC)',
       type: 'crypto',
       network: 'BTC',
       isBinance: false,
       address: 'bc1q9v8h2p5w4k6f7s8d9a0m1n2b3c4x5y6z7w8',
       instructions: 'Envoyez en BTC à cette adresse de portefeuille sécurisée.',
-      enabled: true
-    },
-    {
-      id: 3,
-      name: 'Orange Money',
-      type: 'mobile_money',
-      network: 'Orange',
-      isBinance: false,
-      address: '+237 690 123 456',
-      instructions: 'Effectuez le transfert vers ce numéro de dépôt officiel.',
       enabled: true
     }
   ],
