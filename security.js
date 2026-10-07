@@ -52,9 +52,10 @@
 
   Security.isSessionValid = function(session) {
     if (!session || typeof session !== 'object') return false;
-    if (!session.token || typeof session.token !== 'string' || session.token.length < 32) return false;
-    if (!session.expiresAt || typeof session.expiresAt !== 'number') return false;
-    if (Date.now() > session.expiresAt) return false;
+    if (!session.userId) return false;
+    if (session.expiresAt && typeof session.expiresAt === 'number') {
+      if (Date.now() > session.expiresAt) return false;
+    }
     return true;
   };
 

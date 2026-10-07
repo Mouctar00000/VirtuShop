@@ -29,6 +29,108 @@ var DB = {
   }
 };
 
+// ========== ÉTAT CENTRALISÉ ET RÉACTIF D'AUTHENTIFICATION (SINGLE SOURCE OF TRUTH) ==========
+var AuthState = {
+  _session: null,
+  _user: null,
+  _subscribers: [],
+
+  subscribe: function(fn) {
+    if (typeof fn === 'function') {
+      this._subscribers.push(fn);
+      try { fn(this.getSession(), this.getUser()); } catch (e) { console.error(e); }
+    }
+  },
+
+  notify: function() {
+    var s = this.getSession();
+    var u = this.getUser();
+    this._subscribers.forEach(function(fn) {
+      try { fn(s, u); } catch (e) { console.error('[AuthState notify]', e); }
+    });
+  },
+
+  getSession: function() {
+    if (!this._session) {
+      this._session = DB.get('session');
+      if (this._session && typeof Security !== 'undefined') {
+        if (!Security.isSessionValid(this._session)) {
+          if (this._session.userId && !this._session.expiresAt) {
+            this._session.expiresAt = Date.now() + (2 * 60 * 60 * 1000);
+            DB.set('session', this._session);
+          } else if (this._session.expiresAt && Date.now() > this._session.expiresAt) {
+            DB.del('session');
+            this._session = null;
+          }
+        }
+      }
+    }
+    return this._session;
+  },
+
+  getUser: function() {
+    var s = this.getSession();
+    if (!s || !s.userId) return null;
+    var users = DB.get('users', []);
+    var u = users.find(function(x) {
+      return x && (x.id === s.userId || (s.email && x.email && x.email.toLowerCase() === s.email.toLowerCase()));
+    });
+    if (!u) {
+      u = { id: s.userId, name: s.name, email: s.email, role: s.role || 'client', balance: s.balance || 0 };
+    }
+    this._user = u;
+    return u;
+  },
+
+  isAuthenticated: function() {
+    var s = this.getSession();
+    return !!(s && s.userId);
+  },
+
+  setAuthenticatedSession: function(session, user, source) {
+    if (!session || !session.userId) return;
+
+    if (!session.expiresAt) {
+      session.expiresAt = Date.now() + (2 * 60 * 60 * 1000);
+    }
+    if (!session.token) {
+      session.token = (typeof Security !== 'undefined') ? Security.generateSecureToken(32) : ('tok_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10));
+    }
+
+    this._session = session;
+    DB.set('session', session);
+
+    if (user) {
+      this._user = user;
+      var users = DB.get('users', []);
+      var idx = users.findIndex(function(u) {
+        return u && (u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()));
+      });
+      if (idx !== -1) {
+        users[idx] = Object.assign({}, users[idx], user);
+      } else {
+        users.push(user);
+      }
+      DB.set('users', users);
+    }
+
+    console.log('[AuthState] Session établie avec succès (' + (source || 'direct') + ') pour :', session.email);
+
+    this.notify();
+    routeUserExperience();
+    updateNavbar();
+  },
+
+  clearSession: function() {
+    this._session = null;
+    this._user = null;
+    DB.del('session');
+    this.notify();
+    routeUserExperience();
+    updateNavbar();
+  }
+};
+
 var ADMIN_SALT = 'getvirtu_sec_salt_2026';
 var ADMIN_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Salted SHA-256
 var ADMIN_LEGACY_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256
@@ -177,44 +279,23 @@ function getMinRecharge() {
 
 // ========== GESTION DU SOLDE CLIENT ==========
 function getCurrentUser() {
-  var s = DB.get('session');
-  if (!s || !s.userId) return null;
-  if (typeof Security !== 'undefined' && !Security.isSessionValid(s)) {
-    DB.del('session'); // Purge de session expirée ou contrefaite
-    return null;
-  }
-  var users = DB.get('users', []);
-  var found = users.find(function(u) { 
-    return u && (u.id === s.userId || (s.email && u.email && u.email.toLowerCase() === s.email.toLowerCase())); 
-  });
-  if (!found) {
-    // Si la session est active mais l'utilisateur pas encore synchronisé en local
-    found = {
-      id: s.userId,
-      email: s.email || '',
-      name: s.name || 'Client',
-      role: s.role || 'client',
-      balance: typeof s.balance === 'number' ? s.balance : 0
-    };
-    users.push(found);
-    DB.set('users', users);
-  }
-  return found;
+  return AuthState.getUser();
 }
 
 function getUserBalance() {
-  var u = getCurrentUser();
+  var u = AuthState.getUser();
   return u && typeof u.balance === 'number' ? u.balance : 0;
 }
 
 function updateUserBalance(newBalance) {
-  var s = DB.get('session');
+  var s = AuthState.getSession();
   if (!s || !s.userId) return false;
   var users = DB.get('users', []);
-  var u = users.find(function(x) { return x.id === s.userId; });
+  var u = users.find(function(x) { return x && x.id === s.userId; });
   if (u) {
     u.balance = Math.max(0, newBalance);
     DB.set('users', users);
+    if (AuthState._user) AuthState._user.balance = u.balance;
     updateNavbar();
     return true;
   }
@@ -223,30 +304,21 @@ function updateUserBalance(newBalance) {
 
 // Synchronisation du solde et de la session en direct avec le serveur
 async function syncUserSessionAndBalance() {
-  var s = DB.get('session');
+  var s = AuthState.getSession();
   if (!s || !s.userId) return;
   try {
     var token = s.token || '';
     var res = await fetch('/api/auth/me', {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
     });
     if (res.ok) {
       var data = await res.json();
       if (data && data.user) {
-        var users = DB.get('users', []);
-        var uIdx = users.findIndex(function(u) { return u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase()); });
-        if (uIdx !== -1) {
-          users[uIdx] = Object.assign({}, users[uIdx], data.user);
-        } else {
-          users.push(data.user);
-        }
-        DB.set('users', users);
-        if (typeof data.user.balance === 'number' && s.balance !== data.user.balance) {
-          s.balance = data.user.balance;
-          DB.set('session', s);
-        }
-        updateNavbar();
+        AuthState.setAuthenticatedSession(data.session || s, data.user, 'server_sync');
       }
+    } else if (res.status === 401) {
+      console.warn('[Auth] Session révoquée côté serveur.');
+      AuthState.clearSession();
     }
   } catch (e) {}
 }
@@ -258,25 +330,31 @@ function formatFcfa(usdAmount) {
 
 // ========== ROUTAGE & PARCOURS UTILISATEUR ==========
 function routeUserExperience() {
-  var session = DB.get('session');
-  if (session && typeof Security !== 'undefined' && !Security.isSessionValid(session)) {
-    DB.del('session');
-    session = null;
-  }
+  var session = AuthState.getSession();
+  var isAuth = !!(session && session.userId);
+
   var landingView = document.getElementById('landing-view');
   var connectedView = document.getElementById('connected-view');
   var navPublic = document.getElementById('nav-public-links');
   var navConnected = document.getElementById('nav-connected-links');
+
+  // Synchronisation immédiate des liens de navigation principale
+  if (navPublic && navConnected) {
+    if (isAuth) {
+      navPublic.classList.add('hidden');
+      navConnected.classList.remove('hidden');
+    } else {
+      navPublic.classList.remove('hidden');
+      navConnected.classList.add('hidden');
+    }
+  }
 
   // Toujours rendre les composants du catalogue
   renderLandingShowcase();
   renderLandingCategories();
   renderLandingCatalog();
 
-  if (session && session.userId) {
-    if (navPublic) navPublic.classList.add('hidden');
-    if (navConnected) navConnected.classList.remove('hidden');
-
+  if (isAuth) {
     var nameEl = document.getElementById('connected-user-name');
     if (nameEl) nameEl.textContent = session.name || 'Client';
 
@@ -290,8 +368,6 @@ function routeUserExperience() {
     // Mode visiteur
     if (landingView) landingView.classList.remove('hidden');
     if (connectedView) connectedView.classList.add('hidden');
-    if (navPublic) navPublic.classList.remove('hidden');
-    if (navConnected) navConnected.classList.add('hidden');
   }
 
   updateNavbar();
@@ -299,7 +375,7 @@ function routeUserExperience() {
 }
 
 function showConnectedCatalog() {
-  var s = DB.get('session');
+  var s = AuthState.getSession();
   if (!s || !s.userId) { openAuthModal('login'); return; }
   routeUserExperience();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -312,18 +388,32 @@ function showPublicLanding() {
 }
 
 function handleLogoClick() {
-  var s = DB.get('session');
+  var s = AuthState.getSession();
   if (s && s.userId) showConnectedCatalog();
   else showPublicLanding();
 }
 
 // ========== BARRE DE NAVIGATION (SOLDE + PROFIL) ==========
 function updateNavbar() {
-  var session = DB.get('session');
+  var session = AuthState.getSession();
+  var isAuth = !!(session && session.userId);
   var container = document.getElementById('nav-user-actions');
+  var navPublic = document.getElementById('nav-public-links');
+  var navConnected = document.getElementById('nav-connected-links');
   if (!container) return;
 
-  if (session && session.userId) {
+  // Garantir la cohérence des liens de navigation
+  if (navPublic && navConnected) {
+    if (isAuth) {
+      navPublic.classList.add('hidden');
+      navConnected.classList.remove('hidden');
+    } else {
+      navPublic.classList.remove('hidden');
+      navConnected.classList.add('hidden');
+    }
+  }
+
+  if (isAuth) {
     var bal = getUserBalance();
 
     container.innerHTML = `
@@ -612,6 +702,64 @@ function selectPurchasePayMethod(m) {
   renderPurchaseModal();
 }
 
+// ========== COMPOSANT FINTECH : SÉLECTEUR DE CRYPTO EN CARTES MODERNES ==========
+var TRYBIT_SUPPORTED_CRYPTOS = [
+  { id: '', name: 'Choix multi-crypto automatique', sub: 'USDT, BTC, ETH, SOL, LTC, TON...', icon: '🌐', badge: '' },
+  { id: 'USDT_TRC20', name: 'USDT (Tron TRC20)', sub: 'Réseau TRON • Rapide & Frais minimes', icon: '🟢', badge: 'Recommandé' },
+  { id: 'USDT_BSC', name: 'USDT (BNB Smart Chain)', sub: 'BEP20 Network', icon: '🟡', badge: '' },
+  { id: 'USDT_SOL', name: 'USDT (Solana)', sub: 'Solana SPL Token', icon: '🟣', badge: '' },
+  { id: 'BTC', name: 'Bitcoin (BTC)', sub: 'Blockchain Bitcoin', icon: '₿', badge: '' },
+  { id: 'ETH', name: 'Ethereum (ETH)', sub: 'Réseau Ethereum ERC20', icon: '🔷', badge: '' },
+  { id: 'SOL', name: 'Solana (SOL)', sub: 'Réseau Solana SPL', icon: '⚡', badge: '' },
+  { id: 'LTC', name: 'Litecoin (LTC)', sub: 'Réseau Litecoin', icon: '🪙', badge: '' },
+  { id: 'TON', name: 'The Open Network (TON)', sub: 'Réseau Telegram TON', icon: '💎', badge: '' }
+];
+
+function renderCryptoCardsHtml(containerId, inputId, selectedId) {
+  selectedId = selectedId || '';
+  return `
+    <div class="crypto-cards-container" id="${containerId}">
+      ${TRYBIT_SUPPORTED_CRYPTOS.map(function(c) {
+        var isSel = (c.id === selectedId);
+        return `
+          <div class="crypto-card-item ${isSel ? 'active' : ''}" data-crypto-id="${c.id}" onclick="selectTrybitCrypto('${c.id}', '${containerId}', '${inputId}')">
+            <div class="crypto-card-left">
+              <div class="crypto-card-icon">${c.icon}</div>
+              <div class="crypto-card-text">
+                <div class="crypto-card-name-row">
+                  <span class="crypto-card-name">${escapeHtml(c.name)}</span>
+                  ${c.badge ? `<span class="crypto-card-badge">${escapeHtml(c.badge)}</span>` : ''}
+                </div>
+                <span class="crypto-card-sub">${escapeHtml(c.sub)}</span>
+              </div>
+            </div>
+            <div class="crypto-card-indicator">
+              <span class="crypto-card-radio-circle"></span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <input type="hidden" id="${inputId}" value="${selectedId}">
+  `;
+}
+
+window.selectTrybitCrypto = function(cryptoId, containerId, inputId) {
+  var input = document.getElementById(inputId);
+  if (input) input.value = cryptoId;
+  var container = document.getElementById(containerId);
+  if (container) {
+    var items = container.querySelectorAll('.crypto-card-item');
+    items.forEach(function(item) {
+      if (item.getAttribute('data-crypto-id') === cryptoId) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+};
+
 function renderPurchaseModal() {
   var container = document.getElementById('pay-dynamic-content');
   if (!container || !selectedPayProd) return;
@@ -780,15 +928,8 @@ function renderPurchaseModal() {
     ${currentPurchasePayMethod === 'crypto' ? `
       <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px;">
         <div class="field" style="margin-bottom: 10px;">
-          <label for="purchase-crypto-select" style="font-size: 12px; font-weight: 700;">Crypto préférée sur Trybit :</label>
-          <select id="purchase-crypto-select" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 13px;">
-            <option value="">Sélection libre sur le checkout Trybit (USDT, BTC, ETH, SOL...)</option>
-            <option value="USDT">USDT (Tether USD - TRC20 / Polygon / Arbitrum / BSC)</option>
-            <option value="BTC">BTC (Bitcoin)</option>
-            <option value="ETH">ETH (Ethereum)</option>
-            <option value="SOL">SOL (Solana)</option>
-            <option value="LTC">LTC (Litecoin)</option>
-          </select>
+          <label style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: block;">Sélectionnez votre devise crypto :</label>
+          ${renderCryptoCardsHtml('purchase-crypto-cards-grid', 'purchase-crypto-select', '')}
         </div>
         <div class="optional-contact-box" style="margin-bottom: 0;">
           <label for="purchase-contact-input"><span>📱 Email ou WhatsApp de confirmation :</span></label>
@@ -1879,22 +2020,6 @@ function renderTrybitDepositContent(container) {
   var amountInput = document.getElementById('deposit-amount-input');
   var amount = parseFloat(amountInput ? amountInput.value : 0) || 10;
 
-  var cryptos = [
-    { id: '', name: 'Choix libre sur la page Trybit (USDT, BTC, ETH, SOL, LTC...)', icon: '🌐' },
-    { id: 'USDT_TRC20', name: 'USDT (Tron TRC20 - Recommandé)', icon: '🟢' },
-    { id: 'USDT_BSC', name: 'USDT (BNB Smart Chain BEP20)', icon: '🟡' },
-    { id: 'USDT_SOL', name: 'USDT (Solana)', icon: '🟣' },
-    { id: 'BTC', name: 'Bitcoin (BTC)', icon: '₿' },
-    { id: 'ETH', name: 'Ethereum (ETH)', icon: '🔷' },
-    { id: 'SOL', name: 'Solana (SOL)', icon: '⚡' },
-    { id: 'LTC', name: 'Litecoin (LTC)', icon: '🪙' },
-    { id: 'TON', name: 'The Open Network (TON)', icon: '💎' }
-  ];
-
-  var cryptoOptionsHtml = cryptos.map(function(c) {
-    return `<option value="${c.id}">${c.icon} ${escapeHtml(c.name)}</option>`;
-  }).join('');
-
   container.innerHTML = `
     <div class="trybit-deposit-card" style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px; margin-bottom: 12px; box-shadow: var(--shadow-sm);">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
@@ -1914,10 +2039,8 @@ function renderTrybitDepositContent(container) {
       </p>
 
       <div class="field" style="margin-bottom: 12px;">
-        <label for="trybit-crypto-select" style="font-size: 12px; font-weight: 600;">Cryptomonnaie préférée (Optionnel)</label>
-        <select id="trybit-crypto-select" style="width: 100%; padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-primary); color: var(--text-primary); font-size: 13px;">
-          ${cryptoOptionsHtml}
-        </select>
+        <label style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: block;">Sélectionnez votre devise crypto :</label>
+        ${renderCryptoCardsHtml('trybit-deposit-crypto-cards-grid', 'trybit-crypto-select', '')}
       </div>
 
       <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: var(--emerald-600); display: flex; align-items: center; gap: 8px;">
@@ -2597,20 +2720,11 @@ async function handleGoogleCredentialResponse(response) {
 }
 
 function applyAuthenticatedSession(data) {
-  DB.set('session', data.session);
-
-  var users = DB.get('users', []);
-  var uIdx = users.findIndex(function(u) { return u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase()); });
-  if (uIdx !== -1) {
-    users[uIdx] = { ...users[uIdx], ...data.user };
-  } else {
-    users.push(data.user);
-  }
-  DB.set('users', users);
+  if (!data || !data.session) return;
+  AuthState.setAuthenticatedSession(data.session, data.user, 'google');
 
   closeAuthModal();
-  routeUserExperience();
-  showToast(`Connecté avec Google : ${data.user.name} ! 👋`, 'success');
+  showToast(`Connecté avec succès : ${data.user.name} ! 👋`, 'success');
   if (window.location.hash !== '#catalog') {
     try { history.pushState(null, '', '#catalog'); } catch (e) {}
   }
@@ -2652,19 +2766,25 @@ async function handleLoginSubmit(e) {
 
     if (res.ok && (data.success || data.session)) {
       if (typeof Security !== 'undefined') Security.resetRateLimit('client_login');
-      DB.set('session', data.session);
 
-      if (data.user.role === 'admin') {
+      if (data.user && data.user.role === 'admin') {
+        DB.set('session', data.session);
         showToast('Connexion administrateur réussie ! 🔒', 'success');
         setTimeout(function() { window.location.href = 'admin.html'; }, 350);
-      } else {
-        showToast('Bienvenue ' + data.user.name + ' ! 👋', 'success');
-        closeAuthModal();
-        showConnectedCatalog();
-        if (pendingPurchaseProductId) {
-          var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-          startProductPurchase(pId);
-        }
+        return;
+      }
+
+      AuthState.setAuthenticatedSession(data.session, data.user, 'password');
+      showToast('Bienvenue ' + data.user.name + ' ! 👋', 'success');
+      closeAuthModal();
+
+      if (window.location.hash !== '#catalog') {
+        try { history.pushState(null, '', '#catalog'); } catch (e) {}
+      }
+
+      if (pendingPurchaseProductId) {
+        var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+        startProductPurchase(pId);
       }
       return;
     } else if (res.status === 400 || res.status === 401 || res.status === 429) {
@@ -2736,14 +2856,17 @@ async function handleLoginSubmit(e) {
 
   if (typeof Security !== 'undefined') {
     Security.resetRateLimit('client_login');
-    DB.set('session', Security.createSession(matchedUser, matchedUser.role || 'client'));
-  } else {
-    DB.set('session', { userId: matchedUser.id, role: matchedUser.role || 'client', name: matchedUser.name, email: matchedUser.email });
   }
+  var sessionObj = (typeof Security !== 'undefined')
+    ? Security.createSession(matchedUser, matchedUser.role || 'client')
+    : { userId: matchedUser.id, role: matchedUser.role || 'client', name: matchedUser.name, email: matchedUser.email };
 
+  AuthState.setAuthenticatedSession(sessionObj, matchedUser, 'password_local');
   showToast('Bienvenue ' + matchedUser.name + ' ! 👋', 'success');
   closeAuthModal();
-  showConnectedCatalog();
+  if (window.location.hash !== '#catalog') {
+    try { history.pushState(null, '', '#catalog'); } catch (e) {}
+  }
   if (pendingPurchaseProductId) {
     var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
     startProductPurchase(pId);
@@ -2810,15 +2933,13 @@ async function handleRegisterSubmit(e) {
     var data = await res.json();
 
     if (res.ok && (data.success || data.session)) {
-      DB.set('session', data.session);
-
-      var users = DB.get('users', []);
-      users.push(data.user);
-      DB.set('users', users);
-
+      AuthState.setAuthenticatedSession(data.session, data.user, 'register');
       showToast(`Compte créé avec succès ! Bienvenue ${data.user.name} ⚡`, 'success');
       closeAuthModal();
-      showConnectedCatalog();
+
+      if (window.location.hash !== '#catalog') {
+        try { history.pushState(null, '', '#catalog'); } catch (e) {}
+      }
 
       if (pendingPurchaseProductId) {
         var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
@@ -2867,15 +2988,17 @@ async function handleRegisterSubmit(e) {
   users.push(newUser);
   DB.set('users', users);
 
-  if (typeof Security !== 'undefined') {
-    DB.set('session', Security.createSession(newUser, 'client'));
-  } else {
-    DB.set('session', { userId: newUser.id, role: 'client', name: newUser.name, email: newUser.email });
-  }
+  var sessionObj = (typeof Security !== 'undefined')
+    ? Security.createSession(newUser, 'client')
+    : { userId: newUser.id, role: 'client', name: newUser.name, email: newUser.email };
 
+  AuthState.setAuthenticatedSession(sessionObj, newUser, 'register_local');
   showToast(`Compte créé avec succès ! Bienvenue ${newUser.name} ⚡`, 'success');
   closeAuthModal();
-  showConnectedCatalog();
+
+  if (window.location.hash !== '#catalog') {
+    try { history.pushState(null, '', '#catalog'); } catch (e) {}
+  }
 
   if (pendingPurchaseProductId) {
     var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
@@ -2883,10 +3006,22 @@ async function handleRegisterSubmit(e) {
   }
 }
 
-function handleLogout() {
-  DB.del('session');
+async function handleLogout() {
+  var s = AuthState.getSession();
+  if (s && s.token) {
+    try {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + s.token }
+      });
+    } catch (e) {}
+  }
+  AuthState.clearSession();
   showToast('Déconnecté avec succès.', 'success');
-  routeUserExperience();
+  if (window.location.hash === '#catalog') {
+    try { history.pushState(null, '', '#hero'); } catch (e) {}
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function toggleFaq(btn) {
@@ -2937,18 +3072,31 @@ window.addEventListener('focus', function() {
 });
 
 setInterval(function() {
-  var s = DB.get('session');
+  var s = AuthState.getSession();
   if (s && s.userId) syncUserSessionAndBalance();
 }, 15000);
 
-document.addEventListener('DOMContentLoaded', function() {
+function startApp() {
   console.log('[GetVirtu] Initialisation client (Production)...');
   try {
     initDB();
+
+    // Nettoyage fluide du paramètre URL après retour Google OAuth
+    if (window.location.search && window.location.search.includes('auth_success=google')) {
+      try { history.replaceState(null, '', window.location.pathname + '#catalog'); } catch (e) {}
+    }
+
+    // Routage immédiat et synchrone
     routeUserExperience();
     initGoogleIdentity();
     syncUserSessionAndBalance();
   } catch (e) {
-    console.error(e);
+    console.error('[GetVirtu startApp]', e);
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}

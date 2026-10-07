@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GetVirtu 🔒 Administration</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
+  <link rel="stylesheet" href="style.css?v=20261007_mobile_fintech_v5">
   <script src="security.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
@@ -195,32 +198,63 @@
     /* RESPONSIVE ADMINISTRATEUR MOBILE */
     @media (max-width: 768px) {
       .admin-header {
-        padding: 8px 12px;
+        height: 52px;
+        padding: 0 14px;
       }
       .admin-brand {
-        gap: 8px;
+        gap: 6px;
+      }
+      .admin-brand .brand-icon-box {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 13px !important;
+        border-radius: 7px !important;
       }
       .admin-brand strong {
-        font-size: 13.5px;
+        font-size: 14px;
       }
       .admin-header-actions {
         gap: 6px;
       }
       .btn-admin-shop-compact {
-        padding: 4px 8px !important;
-        font-size: 11.5px !important;
+        width: 28px !important;
+        height: 28px !important;
         min-height: 28px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
       }
-      .btn-admin-logout-compact {
-        padding: 4px 8px !important;
-        font-size: 11.5px !important;
-        min-height: 28px !important;
+      .shop-btn-text {
+        display: none !important;
       }
       .admin-user-chip {
-        padding: 3px 6px;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+      }
+      .admin-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 10px;
       }
       .admin-user-email {
-        display: none;
+        display: none !important;
+      }
+      .btn-admin-logout-compact {
+        width: 28px !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 50% !important;
+        font-size: 13px !important;
+      }
+      .admin-logout-text {
+        display: none !important;
       }
       .admin-hero-hub {
         padding: 16px 14px 12px;
@@ -243,14 +277,64 @@
         padding: 16px 12px;
       }
       .admin-stats-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
       }
       .admin-stat-card {
-        padding: 12px;
+        padding: 16px;
       }
       .admin-stat-val {
-        font-size: 20px;
+        font-size: 24px;
+      }
+      .admin-period-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin: 12px 0 16px;
+      }
+      .admin-period-tabs {
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        display: flex;
+        gap: 6px;
+        padding: 4px;
+      }
+      .admin-period-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .admin-period-tab {
+        flex: 1 0 auto;
+        min-width: 65px;
+        text-align: center;
+        white-space: nowrap;
+        padding: 6px 12px;
+        font-size: 11.5px;
+      }
+      .admin-nav-tabs-bar {
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        display: flex;
+        gap: 6px;
+        padding: 4px 6px;
+      }
+      .admin-nav-tabs-bar::-webkit-scrollbar {
+        display: none;
+      }
+      .admin-nav-tab-btn {
+        flex-shrink: 0;
+        white-space: nowrap;
+        padding: 6px 12px;
+        font-size: 12px;
+      }
+      .charts-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
       }
       .admin-table th, .admin-table td {
         padding: 10px 8px;
@@ -594,7 +678,8 @@
           <span class="admin-user-email">admin@getvirtu.shop</span>
         </div>
         <button type="button" class="btn-secondary btn-admin-logout-compact" style="color: var(--rose-600);" onclick="adminLogout()" title="Déconnexion">
-          <span>Déconnexion</span>
+          <span>🚪</span>
+          <span class="admin-logout-text">Déconnexion</span>
         </button>
       </div>
     </header>

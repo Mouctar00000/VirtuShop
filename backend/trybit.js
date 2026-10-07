@@ -29,8 +29,8 @@ try {
 } catch (e) {}
 
 // Configuration officielle Trybit (Credentials serveur uniquement via variables d'environnement)
-const TRYBIT_API_KEY = process.env.TRYBIT_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1dWlkIjoiTVRJek5ERXciLCJ0eXBlIjoicHJvamVjdCIsInYiOiI3NmJkNWVmMTM5NDk4OTQzNzMzNTQ3ZWE3ZTg2NjQxM2Y4YWUyZDk3Y2FhYzdlYTAxYjQzMTM3YTAzMTVlNjM5IiwiZXhwIjo4ODE5MTI3NjM2OX0.GUYrHVBXTFsTt4qXEWIXSiWqSYIW3gGqarOphwR5CNc';
-const TRYBIT_SHOP_ID = process.env.TRYBIT_SHOP_ID || '6ctRBPrfEzWVjdNT';
+const TRYBIT_API_KEY = process.env.TRYBIT_API_KEY || '';
+const TRYBIT_SHOP_ID = process.env.TRYBIT_SHOP_ID || '';
 const TRYBIT_API_BASE = 'https://api.trybit.com/v2';
 
 class TrybitService {
