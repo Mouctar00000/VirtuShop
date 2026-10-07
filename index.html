@@ -556,8 +556,8 @@
       <!-- FORMULAIRE DE CONNEXION -->
       <form id="modal-login-form" onsubmit="handleLoginSubmit(event)">
         <div class="field">
-          <label for="login-email">Adresse e-mail</label>
-          <input type="email" id="login-email" required placeholder="nom@exemple.com" autocomplete="username">
+          <label for="login-email">Adresse e-mail ou Nom d'utilisateur</label>
+          <input type="text" id="login-email" required placeholder="nom@exemple.com ou pseudonyme" autocomplete="username">
         </div>
         <div class="field">
           <label for="login-password">Mot de passe</label>
@@ -570,8 +570,12 @@
       <!-- FORMULAIRE D'INSCRIPTION PRODUCTION -->
       <form id="modal-register-form" class="hidden" onsubmit="handleRegisterSubmit(event)">
         <div class="field">
-          <label for="reg-name">Nom complet ou pseudonyme</label>
+          <label for="reg-name">Nom complet</label>
           <input type="text" id="reg-name" required placeholder="Ex: Jean Martin" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="reg-username">Nom d'utilisateur</label>
+          <input type="text" id="reg-username" required placeholder="Ex: jeanmartin26" autocomplete="username">
         </div>
         <div class="field">
           <label for="reg-email">Adresse e-mail</label>
@@ -585,45 +589,9 @@
           <label for="reg-password-confirm">Confirmer le mot de passe</label>
           <input type="password" id="reg-password-confirm" required minlength="8" placeholder="••••••••" autocomplete="new-password">
         </div>
-        <button type="submit" class="btn-primary" id="btn-register-submit" style="width: 100%; margin-top: 8px;">Créer mon compte ⚡</button>
+        <button type="submit" class="btn-primary" id="btn-register-submit" style="width: 100%; margin-top: 8px;">Créer mon compte avec e-mail ⚡</button>
         <p id="reg-error-msg" class="error-text hidden"></p>
       </form>
-    </div>
-  </div>
-
-  <!-- ==================== MODAL INFORMATION GOOGLE OAUTH ==================== -->
-  <div id="google-config-modal" class="auth-overlay">
-    <div class="google-modal-card" style="max-width: 440px;">
-      <button type="button" class="modal-close-btn" onclick="closeGoogleConfigModal()">✕</button>
-      <div class="google-modal-header" style="text-align: center;">
-        <div class="google-brand-row" style="justify-content: center;">
-          <svg width="24" height="24" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-          </svg>
-          <span style="font-size: 20px; font-weight: 700; color: #1f2937;">Google</span>
-        </div>
-        <h3 class="google-modal-title">Connexion avec Google</h3>
-        <p class="google-modal-subtitle" id="google-config-status-msg">
-          Initialisation du flux officiel Google Identity Services...
-        </p>
-      </div>
-
-      <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 14px; margin-bottom: 16px; font-size: 12.5px; color: #475569; line-height: 1.5;">
-        <span style="font-weight: 700; color: #1e293b;">⚡ Authentification Haute Sécurité</span><br>
-        Vous pouvez vous inscrire et vous connecter immédiatement par e-mail et mot de passe, ou associer votre compte Google officiel en un clic dès que l'identifiant client est actif.
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button type="button" class="btn-primary" style="width: 100%;" onclick="closeGoogleConfigModal(); switchAuthTab('register');">
-          Créer un compte avec mon e-mail ⚡
-        </button>
-        <button type="button" class="btn-secondary" style="width: 100%;" onclick="closeGoogleConfigModal()">
-          Fermer
-        </button>
-      </div>
     </div>
   </div>
 

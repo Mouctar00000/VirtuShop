@@ -120,12 +120,23 @@ function initDB() {
   if (!DB.get('recharges')) DB.set('recharges', []);
   if (!DB.get('min_recharge')) DB.set('min_recharge', 5);
 
-  // Méthodes de paiement prêtes pour la production
+  // Méthodes de paiement prêtes pour la production (SasPay Mobile Money & Crypto)
   var methods = DB.get('payment_methods');
-  if (!methods || !Array.isArray(methods) || methods.length === 0) {
+  var hasSasPay = Array.isArray(methods) && methods.some(function(m) { return m && (m.type === 'mobile_money' || m.id === 'saspay-mobile-money'); });
+  if (!methods || !Array.isArray(methods) || methods.length === 0 || !hasSasPay) {
     DB.set('payment_methods', [
       {
         id: 1,
+        name: "Mobile Money (Wave, Orange, MTN, Moov)",
+        type: "mobile_money",
+        network: "all",
+        isBinance: false,
+        address: "Passerelle SasPay Officielle",
+        instructions: "Paiement direct sécurisé : validation automatique par Wave, Orange Money ou notification USSD push instantanée sur votre smartphone.",
+        enabled: true
+      },
+      {
+        id: 2,
         name: "USDT (Binance / TRC20)",
         type: "crypto",
         network: "TRC20",
@@ -136,7 +147,7 @@ function initDB() {
         enabled: true
       },
       {
-        id: 2,
+        id: 3,
         name: "Bitcoin (BTC)",
         type: "crypto",
         network: "BTC",
@@ -144,17 +155,6 @@ function initDB() {
         address: "bc1q9v8h2p5w4k6f7s8d9a0m1n2b3c4x5y6z7w8",
         qrCode: generateQrSvg("Bitcoin BTC"),
         instructions: "Envoyez en BTC à cette adresse de portefeuille.",
-        enabled: true
-      },
-      {
-        id: 3,
-        name: "Orange Money",
-        type: "mobile_money",
-        network: "",
-        isBinance: false,
-        address: "+237 690 123 456",
-        qrCode: null,
-        instructions: "Effectuez un dépôt direct vers ce numéro Orange Money (Nom : GetVirtu Services).",
         enabled: true
       }
     ]);
@@ -806,13 +806,149 @@ function openDepositModal(suggestedAmount) {
   document.getElementById('modal-deposit').classList.add('active');
 }
 
-function closeDepositModal() {
-  document.getElementById('modal-deposit').classList.remove('active');
-  currentDepositProofBase64 = null;
+var selectedMomoCountry = 'CI';
+var selectedMomoNetwork = 'wave_ci';
+var momoPollingTimer = null;
+
+var MOMO_COUNTRIES = [
+  {
+    code: 'CI',
+    name: "Côte d'Ivoire 🇨🇮",
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+225',
+    networks: [
+      { id: 'wave_ci', name: 'Wave', icon: '🌊' },
+      { id: 'orange_ci', name: 'Orange Money', icon: '🍊' },
+      { id: 'mtn_ci', name: 'MTN MoMo', icon: '🟡' },
+      { id: 'moov_ci', name: 'Moov Money', icon: '🔵' }
+    ]
+  },
+  {
+    code: 'CM',
+    name: 'Cameroun 🇨🇲',
+    currency: 'XAF',
+    rate: 620,
+    prefix: '+237',
+    networks: [
+      { id: 'orange_cm', name: 'Orange Money', icon: '🍊' },
+      { id: 'mtn_cm', name: 'MTN MoMo', icon: '🟡' }
+    ]
+  },
+  {
+    code: 'SN',
+    name: 'Sénégal 🇸🇳',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+221',
+    networks: [
+      { id: 'wave_sn', name: 'Wave', icon: '🌊' },
+      { id: 'orange_sn', name: 'Orange Money', icon: '🍊' },
+      { id: 'freemoney_sn', name: 'Free Money', icon: '🟢' }
+    ]
+  },
+  {
+    code: 'BJ',
+    name: 'Bénin 🇧🇯',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+229',
+    networks: [
+      { id: 'mtn_bj', name: 'MTN MoMo', icon: '🟡' },
+      { id: 'moov_bj', name: 'Moov Money', icon: '🔵' },
+      { id: 'celtiis_bj', name: 'Celtiis', icon: '🟣' }
+    ]
+  },
+  {
+    code: 'BF',
+    name: 'Burkina Faso 🇧🇫',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+226',
+    networks: [
+      { id: 'orange_bf', name: 'Orange Money', icon: '🍊' },
+      { id: 'moov_bf', name: 'Moov Money', icon: '🔵' }
+    ]
+  },
+  {
+    code: 'TG',
+    name: 'Togo 🇹🇬',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+228',
+    networks: [
+      { id: 'moov_tg', name: 'Moov Money', icon: '🔵' },
+      { id: 'togocel', name: 'TMoney / Mixx', icon: '🟡' }
+    ]
+  },
+  {
+    code: 'GN',
+    name: 'Guinée 🇬🇳',
+    currency: 'GNF',
+    rate: 8600,
+    prefix: '+224',
+    networks: [
+      { id: 'mtn_gn', name: 'MTN MoMo', icon: '🟡' }
+    ]
+  },
+  {
+    code: 'ALL',
+    name: 'Tous Pays (Passerelle SasPay) 🌍',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '',
+    networks: [
+      { id: 'checkout_hosted', name: 'SasPay Hosted Checkout', icon: '⚡' }
+    ]
+  }
+];
+
+function getSelectedMomoCountry() {
+  return MOMO_COUNTRIES.find(function(c) { return c.code === selectedMomoCountry; }) || MOMO_COUNTRIES[0];
+}
+
+function onMomoCountryChange(code) {
+  selectedMomoCountry = code;
+  var c = getSelectedMomoCountry();
+  if (c && c.networks && c.networks.length > 0) {
+    selectedMomoNetwork = c.networks[0].id;
+  }
+  renderDepositMethodContent();
+}
+
+function onSelectMomoNetwork(netId) {
+  selectedMomoNetwork = netId;
+  var btns = document.querySelectorAll('.momo-network-btn');
+  btns.forEach(function(b) {
+    if (b.getAttribute('data-net') === netId) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  var c = getSelectedMomoCountry();
+  var net = c.networks.find(function(n) { return n.id === netId; });
+  var submitBtn = document.getElementById('btn-submit-momo');
+  if (submitBtn && net) {
+    submitBtn.innerHTML = `Payer avec ${net.icon} ${escapeHtml(net.name)} ⚡`;
+  }
 }
 
 function updateDepositCalculation() {
-  // Calcul simplifié en $
+  var country = getSelectedMomoCountry();
+  var amountInput = document.getElementById('deposit-amount-input');
+  var amount = parseFloat(amountInput ? amountInput.value : 0) || 0;
+  var localEl = document.getElementById('momo-calc-local');
+  if (localEl && country) {
+    var localAmount = Math.round(amount * country.rate);
+    localEl.textContent = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
+  }
+}
+
+function closeDepositModal() {
+  document.getElementById('modal-deposit').classList.remove('active');
+  currentDepositProofBase64 = null;
+  if (momoPollingTimer) {
+    clearInterval(momoPollingTimer);
+    momoPollingTimer = null;
+  }
 }
 
 function openSupportModal(channel) {
@@ -857,12 +993,17 @@ function renderDepositMethodContent() {
     return;
   }
 
+  // Si Mobile Money : rendu dédié SasPay
+  if (m.type === 'mobile_money' || m.id === 'saspay-mobile-money' || m.id === 1) {
+    renderSasPayDepositContent(container);
+    return;
+  }
+
   var isCrypto = m.type === 'crypto';
   var isBinance = m.isBinance || (m.name && m.name.toLowerCase().indexOf('binance') !== -1) || (m.instructions && m.instructions.toLowerCase().indexOf('binance') !== -1);
   var networkTag = m.network ? `<span class="network-badge">Réseau : ${escapeHtml(m.network)}</span>` : '';
 
   var qrHtml = '';
-  // QR Code affiché uniquement pour les paiements crypto (JAMAIS pour Orange Money)
   if (isCrypto && m.qrCode) {
     var qrCaption = isBinance ? "Scanner avec l'application Binance" : "Scanner avec votre portefeuille crypto";
     qrHtml = `
@@ -873,7 +1014,7 @@ function renderDepositMethodContent() {
     `;
   }
 
-  var addressLabel = isCrypto ? 'Adresse du portefeuille' : 'Numéro Orange Money / Mobile';
+  var addressLabel = isCrypto ? 'Adresse du portefeuille' : 'Numéro de compte / Tél';
 
   container.innerHTML = `
     ${networkTag ? `<div style="text-align: center; margin-bottom: 8px;">${networkTag}</div>` : ''}
@@ -890,14 +1031,13 @@ function renderDepositMethodContent() {
       </div>
     </div>
 
-    <!-- Consignes et instructions configurées par l'administrateur -->
     <div class="method-instructions-box">
       <span style="font-size: 14px;">ℹ️</span>
       <p style="margin: 0; font-size: 12.5px; line-height: 1.45;">${escapeHtml(m.instructions || 'Effectuez votre transfert puis joignez votre preuve ci-dessous.')}</p>
     </div>
 
     <div class="field" style="margin-top: 14px;">
-      <label style="font-weight: 700; color: var(--primary-600);">📸 Capture d'écran ou Reçu du paiement</label>
+      <label style="font-weight: 700; color: var(--primary-600);">📸 Capture d'écran ou Reçu du transfert</label>
       <div class="proof-dropzone-compact" onclick="document.getElementById('deposit-proof-file-input').click()">
         <input type="file" id="deposit-proof-file-input" accept="image/*" class="hidden" onchange="handleDepositProofSelected(event)">
         <div id="dep-prompt-text" class="${currentDepositProofBase64 ? 'hidden' : ''}">
@@ -913,6 +1053,87 @@ function renderDepositMethodContent() {
 
     <button type="button" class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="submitDepositRequest()">
       Valider la Recharge de Solde ⚡
+    </button>
+  `;
+}
+
+function renderSasPayDepositContent(container) {
+  var country = getSelectedMomoCountry();
+  var amountInput = document.getElementById('deposit-amount-input');
+  var amount = parseFloat(amountInput ? amountInput.value : 0) || 10;
+  var localAmount = Math.round(amount * country.rate);
+  var formattedLocal = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
+
+  var countryOptionsHtml = MOMO_COUNTRIES.map(function(c) {
+    return `<option value="${c.code}" ${c.code === selectedMomoCountry ? 'selected' : ''}>${c.name}</option>`;
+  }).join('');
+
+  var networksHtml = country.networks.map(function(net) {
+    var isActive = net.id === selectedMomoNetwork ? 'active' : '';
+    return `
+      <div class="momo-network-btn ${isActive}" data-net="${net.id}" onclick="onSelectMomoNetwork('${net.id}')">
+        <span class="momo-network-icon">${net.icon}</span>
+        <span class="momo-network-title">${escapeHtml(net.name)}</span>
+      </div>
+    `;
+  }).join('');
+
+  var currentNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || country.networks[0];
+  var isHosted = selectedMomoNetwork === 'checkout_hosted';
+
+  var phoneFieldHtml = isHosted ? '' : `
+    <div class="field" style="margin-top: 10px;">
+      <label style="font-weight: 700; font-size: 13px;">Numéro Mobile Money (${country.name})</label>
+      <div class="phone-input-group">
+        <span class="phone-prefix">${country.prefix}</span>
+        <input type="tel" id="momo-phone-input" placeholder="Ex: 0701020304" autocomplete="tel">
+      </div>
+      <p style="font-size: 11px; color: var(--text-muted); margin: 3px 0 0 0;">
+        Notification de débit automatique ou invite USSD push envoyée sur ce numéro.
+      </p>
+    </div>
+  `;
+
+  container.innerHTML = `
+    <div class="momo-country-wrapper">
+      <label style="font-weight: 700; font-size: 13px; margin-bottom: 5px; display: block;">1. Choisissez votre Pays</label>
+      <select id="momo-country-select" class="momo-select" onchange="onMomoCountryChange(this.value)">
+        ${countryOptionsHtml}
+      </select>
+    </div>
+
+    <div class="field" style="margin-bottom: 10px;">
+      <label style="font-weight: 700; font-size: 13px; margin-bottom: 5px; display: block;">2. Choisissez votre Opérateur</label>
+      <div class="momo-networks-grid">
+        ${networksHtml}
+      </div>
+    </div>
+
+    <div class="momo-convert-card">
+      <div class="momo-convert-left">
+        <span style="font-size: 20px;">💱</span>
+        <div>
+          <div class="momo-convert-label">Montant débité (Devise locale)</div>
+          <div class="momo-convert-value" id="momo-calc-local">${formattedLocal}</div>
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <span class="momo-badge-live">Taux SasPay direct</span>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">1 USD = ${country.rate} ${country.currency}</div>
+      </div>
+    </div>
+
+    ${phoneFieldHtml}
+
+    <div class="method-instructions-box" style="margin-top: 10px;">
+      <span style="font-size: 14px;">🔒</span>
+      <p style="margin: 0; font-size: 12px; line-height: 1.45;">
+        Passerelle officielle SasPay : votre solde est automatiquement crédité dès réception de la confirmation bancaire ou mobile.
+      </p>
+    </div>
+
+    <button type="button" class="btn-primary" id="btn-submit-momo" style="width: 100%; margin-top: 12px;" onclick="submitSasPayDeposit()">
+      Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
     </button>
   `;
 }
@@ -949,6 +1170,248 @@ async function handleDepositProofSelected(event) {
     showToast('Capture enregistrée !', 'success');
   };
   reader.readAsDataURL(file);
+}
+
+async function submitSasPayDeposit() {
+  var u = getCurrentUser();
+  if (!u) {
+    openAuthModal('login', 'Veuillez vous connecter pour recharger votre solde.');
+    return;
+  }
+
+  var amountInput = document.getElementById('deposit-amount-input');
+  var amount = parseFloat(amountInput ? amountInput.value : 0) || 0;
+  var min = getMinRecharge();
+
+  if (amount < min) {
+    showToast(`Montant inférieur au minimum requis ($${min.toFixed(2)} USD).`, 'error');
+    if (amountInput) amountInput.focus();
+    return;
+  }
+
+  var country = getSelectedMomoCountry();
+  var phoneInput = document.getElementById('momo-phone-input');
+  var rawPhone = phoneInput ? phoneInput.value.trim() : '';
+
+  if (selectedMomoNetwork !== 'checkout_hosted') {
+    if (!rawPhone || rawPhone.length < 6) {
+      showToast('Veuillez renseigner un numéro de téléphone valide.', 'error');
+      if (phoneInput) phoneInput.focus();
+      return;
+    }
+  }
+
+  var fullPhone = rawPhone;
+  if (rawPhone && !rawPhone.startsWith('+') && country.prefix) {
+    var clean = rawPhone.replace(/^0+/, '');
+    var prefixDigits = country.prefix.replace('+', '');
+    if (!clean.startsWith(prefixDigits)) {
+      fullPhone = country.prefix + clean;
+    } else {
+      fullPhone = '+' + clean;
+    }
+  }
+
+  var submitBtn = document.getElementById('btn-submit-momo');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = 'Initialisation sécurisée SasPay... ⚡';
+  }
+
+  var session = DB.get('session');
+  var token = session ? session.token : null;
+
+  try {
+    var resp = await fetch('/api/payments/saspay/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+      },
+      body: JSON.stringify({
+        userId: u.id,
+        amount: amount,
+        country: selectedMomoCountry,
+        network: selectedMomoNetwork,
+        phone: fullPhone,
+        customerName: u.name,
+        customerEmail: u.email,
+        returnUrl: window.location.origin
+      })
+    });
+
+    var data = await resp.json();
+
+    if (!resp.ok || !data.success) {
+      throw new Error(data.error || 'Erreur lors de l\'initialisation du paiement SasPay.');
+    }
+
+    if (data.checkoutUrl) {
+      window.open(data.checkoutUrl, '_blank');
+    }
+
+    var localAmount = Math.round(amount * country.rate);
+    var formattedLocal = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
+    var container = document.getElementById('deposit-dynamic-content');
+
+    if (container) {
+      container.innerHTML = `
+        <div class="deposit-active-flow">
+          <div class="pulse-spinner"></div>
+          <div class="pulse-indicator">● En attente de confirmation</div>
+          <h3 style="font-size: 16px; margin: 0 0 6px 0; color: var(--text-primary);">Paiement SasPay Initié ⚡</h3>
+          <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px 0; line-height: 1.45;">
+            ${escapeHtml(data.instructions || 'Validez le prélèvement sur votre téléphone ou sur la page de paiement ouverte.')}
+          </p>
+
+          <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px; text-align: left; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: var(--text-secondary);">Montant crédité :</span>
+              <strong style="color: var(--emerald-600); font-size: 13px;">+$${amount.toFixed(2)} USD</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: var(--text-secondary);">Débit local :</span>
+              <strong>${formattedLocal}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: var(--text-secondary);">Opérateur :</span>
+              <span>${escapeHtml(selectedMomoNetwork.toUpperCase())}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Réf. Transaction :</span>
+              <code style="font-size: 11px; background: #f1f5f9; padding: 1px 4px; border-radius: 3px;">${escapeHtml(data.transactionId)}</code>
+            </div>
+          </div>
+
+          ${data.checkoutUrl ? `
+            <a href="${data.checkoutUrl}" target="_blank" class="btn-primary" style="display: block; text-decoration: none; margin-bottom: 8px; text-align: center;">
+              Ouvrir le paiement ↗
+            </a>
+          ` : ''}
+
+          <button type="button" class="btn-secondary" onclick="checkSasPayStatusManual('${data.transactionId}', '${data.providerTxId || ''}', ${amount})" style="width: 100%;">
+            Vérifier maintenant 🔄
+          </button>
+        </div>
+      `;
+    }
+
+    startSasPayPolling(data.transactionId, data.providerTxId, amount);
+
+  } catch (err) {
+    showToast(err.message || 'Impossible d\'initier le paiement.', 'error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      var cNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || country.networks[0];
+      submitBtn.innerHTML = `Payer avec ${cNet.icon} ${escapeHtml(cNet.name)} ⚡`;
+    }
+  }
+}
+
+function startSasPayPolling(txId, providerTxId, amount) {
+  if (momoPollingTimer) clearInterval(momoPollingTimer);
+  var attempts = 0;
+  var maxAttempts = 50;
+
+  momoPollingTimer = setInterval(async function() {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(momoPollingTimer);
+      momoPollingTimer = null;
+      return;
+    }
+
+    try {
+      var query = `transactionId=${encodeURIComponent(txId)}`;
+      if (providerTxId) query += `&providerTxId=${encodeURIComponent(providerTxId)}`;
+      var resp = await fetch(`/api/payments/saspay/verify?${query}`);
+      var result = await resp.json();
+
+      if (resp.ok && result.status === 'SUCCESS') {
+        clearInterval(momoPollingTimer);
+        momoPollingTimer = null;
+        onSasPayPaymentConfirmed(txId, amount, result.newBalance);
+      } else if (result.status === 'FAILED' || result.status === 'EXPIRED') {
+        clearInterval(momoPollingTimer);
+        momoPollingTimer = null;
+        showToast('Paiement non abouti ou expiré.', 'error');
+      }
+    } catch (e) {}
+  }, 3500);
+}
+
+async function checkSasPayStatusManual(txId, providerTxId, amount) {
+  try {
+    showToast('Vérification auprès de SasPay...', 'info');
+    var query = `transactionId=${encodeURIComponent(txId)}`;
+    if (providerTxId) query += `&providerTxId=${encodeURIComponent(providerTxId)}`;
+    var resp = await fetch(`/api/payments/saspay/verify?${query}`);
+    var result = await resp.json();
+
+    if (resp.ok && result.status === 'SUCCESS') {
+      if (momoPollingTimer) clearInterval(momoPollingTimer);
+      momoPollingTimer = null;
+      onSasPayPaymentConfirmed(txId, amount, result.newBalance);
+    } else {
+      showToast(result.message || 'Paiement en cours de traitement par votre opérateur.', 'info');
+    }
+  } catch (err) {
+    showToast('Erreur lors de la vérification : ' + err.message, 'error');
+  }
+}
+
+function onSasPayPaymentConfirmed(txId, amount, newBalance) {
+  var session = DB.get('session');
+  if (session) {
+    if (typeof newBalance === 'number') {
+      session.balance = newBalance;
+    } else {
+      session.balance = (session.balance || 0) + amount;
+    }
+    DB.set('session', session);
+  }
+
+  var users = DB.get('users', []);
+  var u = users.find(function(user) { return user.id === (session ? session.userId : null); });
+  if (u) {
+    if (typeof newBalance === 'number') {
+      u.balance = newBalance;
+    } else {
+      u.balance = (u.balance || 0) + amount;
+    }
+    DB.set('users', users);
+  }
+
+  updateNavbar();
+  renderConnectedCatalog();
+  renderLandingCatalog();
+
+  var container = document.getElementById('deposit-dynamic-content');
+  if (container) {
+    container.innerHTML = `
+      <div class="deposit-active-flow" style="border-color: #86efac; background: #f0fdf4;">
+        <div style="font-size: 42px; margin-bottom: 8px;">🎉</div>
+        <h3 style="font-size: 17px; margin: 0 0 6px 0; color: #166534;">Paiement Validé avec Succès !</h3>
+        <p style="font-size: 13px; color: #15803d; margin: 0 0 16px 0;">
+          Votre solde a été crédité de <strong>+$${amount.toFixed(2)} USD</strong>.
+        </p>
+        <button type="button" class="btn-primary" onclick="closeDepositModal()" style="width: 100%;">
+          Parfait, Continuer mes achats ⚡
+        </button>
+      </div>
+    `;
+  }
+
+  showToast(`🎉 Félicitations ! Solde crédité de +$${amount.toFixed(2)} USD.`, 'success');
+
+  if (pendingPurchaseProductId) {
+    setTimeout(function() {
+      closeDepositModal();
+      var prodId = pendingPurchaseProductId;
+      pendingPurchaseProductId = null;
+      startProductPurchase(prodId);
+    }, 1200);
+  }
 }
 
 async function submitDepositRequest() {
@@ -1274,9 +1737,7 @@ function handleGoogleAuthTrigger() {
   if (configuredGoogleClientId && window.google && window.google.accounts && window.google.accounts.id) {
     window.google.accounts.id.prompt();
   } else {
-    // Affiche la modale informative si Google Client ID n'est pas encore renseigné dans les variables d'environnement
-    var modal = document.getElementById('google-config-modal');
-    if (modal) modal.classList.add('active');
+    showToast('Connexion Google prête. Vous pouvez aussi vous inscrire ou vous connecter par e-mail ou pseudo.', 'info');
   }
 }
 
@@ -1330,7 +1791,7 @@ async function handleGoogleCredentialResponse(response) {
   }
 }
 
-// 1. CONNEXION AVEC EMAIL ET MOT DE PASSE
+// 1. CONNEXION AVEC EMAIL OU NOM D'UTILISATEUR ET MOT DE PASSE
 async function handleLoginSubmit(e) {
   e.preventDefault();
   var email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -1354,7 +1815,7 @@ async function handleLoginSubmit(e) {
     var res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, password: pass })
+      body: JSON.stringify({ identifier: email, email: email, password: pass })
     });
     var data = await res.json();
 
@@ -1376,7 +1837,7 @@ async function handleLoginSubmit(e) {
       }
       return;
     } else if (res.status === 400 || res.status === 401 || res.status === 429) {
-      err.textContent = data.error || 'Adresse e-mail ou mot de passe incorrect.';
+      err.textContent = data.error || 'Adresse e-mail, nom d\'utilisateur ou mot de passe incorrect.';
       err.style.color = 'var(--rose-500)';
       err.classList.remove('hidden');
       return;
@@ -1411,7 +1872,9 @@ async function handleLoginSubmit(e) {
   for (var i = 0; i < users.length; i++) {
     var u = users[i];
     if (!u) continue;
-    var matchEmail = (u.email && u.email.toLowerCase() === email) || (u.name && u.name.toLowerCase() === email);
+    var matchEmail = (u.email && u.email.toLowerCase() === email) ||
+                     (u.username && u.username.toLowerCase() === email) ||
+                     (u.name && u.name.toLowerCase() === email);
     if (!matchEmail) continue;
 
     var passMatch = false;
@@ -1431,9 +1894,9 @@ async function handleLoginSubmit(e) {
     if (typeof Security !== 'undefined') {
       Security.recordFailedAttempt('client_login', 5 * 60 * 1000);
       var rlAfter = Security.checkRateLimit('client_login', 5, 5 * 60 * 1000);
-      err.textContent = 'Adresse e-mail ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '');
+      err.textContent = 'Adresse e-mail, identifiant ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '');
     } else {
-      err.textContent = 'Adresse e-mail ou mot de passe incorrect.';
+      err.textContent = 'Adresse e-mail, identifiant ou mot de passe incorrect.';
     }
     err.style.color = 'var(--rose-500)';
     err.classList.remove('hidden');
@@ -1460,6 +1923,8 @@ async function handleLoginSubmit(e) {
 async function handleRegisterSubmit(e) {
   e.preventDefault();
   var name = document.getElementById('reg-name').value.trim();
+  var usernameInput = document.getElementById('reg-username');
+  var username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
   var email = document.getElementById('reg-email').value.trim().toLowerCase();
   var pass = document.getElementById('reg-password').value;
   var passConfirm = document.getElementById('reg-password-confirm').value;
@@ -1470,6 +1935,16 @@ async function handleRegisterSubmit(e) {
   var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     err.textContent = 'Veuillez saisir une adresse e-mail valide.';
+    err.classList.remove('hidden'); return;
+  }
+
+  if (username && username.length < 3) {
+    err.textContent = 'Le nom d\'utilisateur doit comporter au moins 3 caractères.';
+    err.classList.remove('hidden'); return;
+  }
+
+  if (username && !/^[a-zA-Z0-9_]+$/.test(username)) {
+    err.textContent = 'Le nom d\'utilisateur ne peut contenir que des lettres, chiffres et tirets bas (_).';
     err.classList.remove('hidden'); return;
   }
 
@@ -1495,6 +1970,7 @@ async function handleRegisterSubmit(e) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: name,
+        username: username,
         email: email,
         password: pass,
         confirmPassword: passConfirm
@@ -1533,6 +2009,10 @@ async function handleRegisterSubmit(e) {
     err.textContent = 'Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter.';
     err.classList.remove('hidden'); return;
   }
+  if (username && users.some(function(u) { return u.username && u.username.toLowerCase() === username; })) {
+    err.textContent = 'Ce nom d\'utilisateur est déjà pris. Veuillez en choisir un autre.';
+    err.classList.remove('hidden'); return;
+  }
 
   var passwordHash = typeof Security !== 'undefined'
     ? await Security.hashPassword(pass, ADMIN_SALT)
@@ -1544,6 +2024,7 @@ async function handleRegisterSubmit(e) {
   var newUser = {
     id: 'user-' + Date.now(),
     name: safeName,
+    username: username || email.split('@')[0],
     email: email,
     password_hash: passwordHash,
     role: 'client',

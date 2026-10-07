@@ -1,28 +1,518 @@
 /**
  * GetVirtu Production Payment & Transaction Service (backend/payments.js)
- * Architecture de paiement robuste avec modèle de transaction, idempotence,
- * validation côté serveur et support de webhooks sécurisés.
+ * Intégration officielle de l'API SasPay (Mobile Money en direct en Afrique de l'Ouest & Centrale)
+ * Documentation officielle : https://docs.saspay.me/
+ * Base URL : https://api.saspay.me/api/v1
  */
 
 const crypto = require('crypto');
+const https = require('https');
+const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 
-// Variables d'environnement pour les prestataires de paiement (sécurisées côté serveur)
-const CRYPTO_API_KEY = process.env.CRYPTO_API_KEY || '';
-const CRYPTO_SECRET = process.env.CRYPTO_SECRET || '';
-const CRYPTO_WEBHOOK_SECRET = process.env.CRYPTO_WEBHOOK_SECRET || '';
-const MOBILE_MONEY_API_KEY = process.env.MOBILE_MONEY_API_KEY || '';
-const MOBILE_MONEY_SECRET = process.env.MOBILE_MONEY_SECRET || '';
+// Chargement sécurisé des variables d'environnement locales si présentes
+try {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    envContent.split('\n').forEach(line => {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let val = (match[2] || '').trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) process.env[key] = val;
+      }
+    });
+  }
+} catch (e) {}
+
+// Configuration officielle SasPay (Credentials serveur uniquement via variables d'environnement)
+const SASPAY_API_KEY = process.env.SASPAY_API_KEY || '';
+const SASPAY_BASE_URL = process.env.SASPAY_BASE_URL || 'https://api.saspay.me/api/v1';
+const SASPAY_WEBHOOK_SECRET = process.env.SASPAY_WEBHOOK_SECRET || '';
+
+// Taux de change indicatif pour la conversion USD -> FCFA (Zone Franc UEMOA / CEMAC)
+const USD_TO_XOF_RATE = 620; // 1 USD = 620 XOF / XAF
+const USD_TO_GNF_RATE = 8600; // 1 USD = 8600 GNF
 
 class PaymentService {
   /**
-   * 1. CRÉATION D'UNE DEMANDE DE RECHARGE / DÉPÔT
-   * Crée une transaction en statut "pending" dans la base de données.
+   * Envoi d'une requête HTTP sécurisée vers l'API SasPay
+   */
+  requestSasPay(endpoint, method = 'GET', body = null, headers = {}) {
+    return new Promise((resolve, reject) => {
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+      const cleanBase = SASPAY_BASE_URL.endsWith('/') ? SASPAY_BASE_URL : SASPAY_BASE_URL + '/';
+      const url = new URL(cleanEndpoint, cleanBase);
+      const postData = body ? JSON.stringify(body) : null;
+
+      const reqHeaders = {
+        'Authorization': `Bearer ${SASPAY_API_KEY}`,
+        'Content-Type': 'application/json',
+        ...headers
+      };
+
+      if (postData) {
+        reqHeaders['Content-Length'] = Buffer.byteLength(postData);
+      }
+
+      const req = https.request(url, {
+        method,
+        headers: reqHeaders,
+        timeout: 25000 // Timeout 25s selon recommandations SasPay
+      }, (res) => {
+        let raw = '';
+        res.on('data', chunk => raw += chunk);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(raw);
+            resolve({
+              status: res.statusCode,
+              ok: res.statusCode >= 200 && res.statusCode < 300,
+              data: parsed
+            });
+          } catch (e) {
+            resolve({
+              status: res.statusCode,
+              ok: res.statusCode >= 200 && res.statusCode < 300,
+              raw
+            });
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        reject(new Error('Erreur de communication avec SasPay: ' + err.message));
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Délai d\'attente dépassé avec SasPay (Timeout).'));
+      });
+
+      if (postData) {
+        req.write(postData);
+      }
+      req.end();
+    });
+  }
+
+  /**
+   * 1. INITIATION D'UN PAIEMENT MOBILE MONEY RÉEL VIA SASPAY
+   * Crée une transaction en statut STRICT 'pending' dans la base de données.
    * Le solde du client n'est JAMAIS crédité à cette étape.
+   */
+  async createSasPayDeposit({ userId, amountUsd, country, network, phone, customerName, customerEmail, returnUrl }) {
+    if (!userId) throw new Error('Utilisateur non authentifié.');
+
+    const user = db.getUserById(userId);
+    if (!user) throw new Error('Compte utilisateur introuvable.');
+
+    const parsedUsd = parseFloat(amountUsd);
+    const minRecharge = db.data.settings?.min_recharge || 5.0;
+
+    if (isNaN(parsedUsd) || parsedUsd < minRecharge) {
+      throw new Error(`Le montant minimum de recharge est de ${minRecharge.toFixed(2)} USD.`);
+    }
+
+    if (!SASPAY_API_KEY) {
+      throw new Error('Clé API SasPay non configurée sur le serveur.');
+    }
+
+    // Déterminer la devise et le montant local selon le pays
+    const countryCode = (country || 'CI').toUpperCase();
+    let currency = 'XOF';
+    let localRate = USD_TO_XOF_RATE;
+
+    if (countryCode === 'CM' || countryCode === 'CG' || countryCode === 'GA') {
+      currency = 'XAF';
+      localRate = USD_TO_XOF_RATE;
+    } else if (countryCode === 'GN') {
+      currency = 'GNF';
+      localRate = USD_TO_GNF_RATE;
+    } else if (network === 'card' || network === 'crypto') {
+      currency = 'USD';
+      localRate = 1;
+    }
+
+    // Calcul du montant décimal formatté (règle SasPay : chaîne décimale stricte "2500.00")
+    const calculatedLocalAmount = Math.round(parsedUsd * localRate);
+    const formattedAmount = calculatedLocalAmount.toFixed(2);
+
+    // Formatage et validation du téléphone (ex: +225..., +237...)
+    let cleanPhone = (phone || '').replace(/\s+/g, '');
+    if (cleanPhone && !cleanPhone.startsWith('+')) {
+      const prefixes = { CI: '+225', CM: '+237', BJ: '+229', SN: '+221', BF: '+226', TG: '+228', GN: '+224', ML: '+223' };
+      const pfx = prefixes[countryCode] || '+225';
+      if (!cleanPhone.startsWith(pfx.replace('+', ''))) {
+        cleanPhone = pfx + cleanPhone;
+      } else {
+        cleanPhone = '+' + cleanPhone;
+      }
+    }
+
+    const txId = 'TXN-SP-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+    const idempotencyKey = crypto.randomUUID();
+
+    // Enregistrement initial dans la base locale en statut 'pending'
+    const transaction = db.createTransaction({
+      id: txId,
+      userId: user.id,
+      amount: Math.round(parsedUsd * 100) / 100, // Montant USD à créditer après succès réel
+      currency: 'USD',
+      paymentMethod: `Mobile Money (${network || countryCode})`,
+      provider: 'saspay',
+      providerTxId: null,
+      status: 'pending', // Strictement pending
+      idempotencyKey: idempotencyKey,
+      metadata: {
+        localAmount: formattedAmount,
+        localCurrency: currency,
+        country: countryCode,
+        network: network || 'direct',
+        phone: cleanPhone,
+        customerName: customerName || user.name,
+        customerEmail: customerEmail || user.email
+      }
+    });
+
+    console.log(`[SasPay] Nouvelle transaction initiée : ${txId} (${parsedUsd} USD -> ${formattedAmount} ${currency}) par ${user.email}`);
+
+    // Appel à l'API SasPay
+    try {
+      let saspayResult = null;
+
+      if (!network || network === 'checkout_hosted') {
+        // Option A : Création d'une session de checkout hébergée SasPay
+        const sessionPayload = {
+          amount: formattedAmount,
+          currency: currency,
+          description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD - ${user.email}`,
+          country: countryCode,
+          customer_email: customerEmail || user.email,
+          customer_name: customerName || user.name,
+          customer_phone: cleanPhone || '',
+          return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
+          metadata: {
+            internalTxId: txId,
+            userId: user.id,
+            amountUsd: parsedUsd.toFixed(2)
+          }
+        };
+
+        const res = await this.requestSasPay('/checkout-sessions/', 'POST', sessionPayload);
+        if (!res.ok || !res.data?.success) {
+          const errMsg = res.data?.error?.message || res.data?.message || 'Échec de création de la session SasPay.';
+          db.updateTransaction(txId, { status: 'failed', failureReason: errMsg });
+          throw new Error(errMsg);
+        }
+
+        saspayResult = res.data.data;
+        db.updateTransaction(txId, { providerTxId: saspayResult.id });
+
+        return {
+          success: true,
+          transactionId: txId,
+          providerTxId: saspayResult.id,
+          status: 'pending',
+          checkoutUrl: saspayResult.checkout_url,
+          mode: 'checkout',
+          amountUsd: parsedUsd,
+          localAmount: formattedAmount,
+          currency: currency,
+          instructions: 'Redirection vers la page de paiement sécurisée Mobile Money...'
+        };
+      } else {
+        // Option B : Softpay direct (push sur téléphone ou lien direct opérateur comme Wave)
+        const nameParts = (customerName || user.name || 'Client GetVirtu').trim().split(' ');
+        const firstName = nameParts[0] || 'Client';
+        const lastName = nameParts.slice(1).join(' ') || 'GetVirtu';
+
+        const softpayPayload = {
+          amount: formattedAmount,
+          currency: currency,
+          country: countryCode,
+          network: network,
+          customer: {
+            email: customerEmail || user.email,
+            first_name: firstName,
+            last_name: lastName,
+            phone: cleanPhone || '+2250700000000'
+          },
+          description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD`,
+          return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
+          metadata: {
+            internalTxId: txId,
+            userId: user.id,
+            amountUsd: parsedUsd.toFixed(2)
+          }
+        };
+
+        const res = await this.requestSasPay('/payments/softpay/', 'POST', softpayPayload, {
+          'Idempotency-Key': idempotencyKey
+        });
+
+        if (!res.ok || !res.data?.success) {
+          const errMsg = res.data?.error?.message || res.data?.message || 'Erreur lors de l\'initiation Mobile Money.';
+          db.updateTransaction(txId, { status: 'failed', failureReason: errMsg });
+          throw new Error(errMsg);
+        }
+
+        saspayResult = res.data.data;
+        db.updateTransaction(txId, { providerTxId: saspayResult.id });
+
+        return {
+          success: true,
+          transactionId: txId,
+          providerTxId: saspayResult.id,
+          status: 'pending',
+          checkoutUrl: saspayResult.checkout_url || null,
+          instructions: saspayResult.instructions || ['Demande de paiement envoyée sur votre téléphone. Veuillez valider le prompt avec votre code secret.'],
+          mode: saspayResult.checkout_url ? 'redirect' : 'push',
+          amountUsd: parsedUsd,
+          localAmount: formattedAmount,
+          currency: currency
+        };
+      }
+    } catch (err) {
+      console.error('[SasPay Error]', err.message);
+      db.updateTransaction(txId, { status: 'failed', failureReason: err.message });
+      throw err;
+    }
+  }
+
+  /**
+   * 2. VÉRIFICATION OFFICIELLE EN TEMPS RÉEL DU STATUT DU PAIEMENT (GET /payments/{id}/verify/)
+   * Conforme aux règles d'or SasPay :
+   * - Ne crédite le compte que si le statut officiel est 'SUCCESS'.
+   * - Idempotent : protège contre tout double crédit.
+   */
+  async verifySasPayPayment({ transactionId, providerTxId }) {
+    let tx = null;
+    if (transactionId) tx = db.getTransactionById(transactionId);
+    if (!tx && providerTxId) tx = db.getTransactionByProviderTxId(providerTxId);
+
+    if (!tx) {
+      throw new Error('Transaction introuvable dans la base de données.');
+    }
+
+    const effectiveProviderTxId = providerTxId || tx.providerTxId;
+    if (!effectiveProviderTxId) {
+      return { success: false, status: tx.status, message: 'Identifiant SasPay manquant.' };
+    }
+
+    // Protection Idempotence : si la transaction a déjà été validée avec succès
+    const user = db.getUserById(tx.userId);
+    if (tx.status === 'completed') {
+      return {
+        success: true,
+        status: 'completed',
+        alreadyCompleted: true,
+        transaction: tx,
+        newBalance: user ? user.balance : 0
+      };
+    }
+
+    if (tx.status === 'failed' || tx.status === 'cancelled') {
+      return {
+        success: false,
+        status: tx.status,
+        message: tx.failureReason || 'Cette transaction a été annulée ou a échoué.'
+      };
+    }
+
+    // Appel de vérification officielle auprès de l'API SasPay
+    try {
+      const verifyRes = await this.requestSasPay(`/payments/${effectiveProviderTxId}/verify/`, 'GET');
+
+      if (!verifyRes.ok) {
+        // Tentative de vérification par statut de session de checkout si c'était une session
+        const sessionRes = await this.requestSasPay(`/checkout-sessions/${effectiveProviderTxId}/status/`, 'GET');
+        if (sessionRes.ok && sessionRes.data?.success) {
+          const sData = sessionRes.data.data;
+          if (sData.transaction_id) {
+            // S'il y a une transaction associée, la vérifier
+            return await this.verifySasPayPayment({ transactionId: tx.id, providerTxId: sData.transaction_id });
+          }
+        }
+        return { success: true, status: 'pending', message: 'Vérification en cours auprès de l\'opérateur...' };
+      }
+
+      const pData = verifyRes.data?.data || verifyRes.data;
+      const officialStatus = (pData?.status || '').toUpperCase();
+
+      console.log(`[SasPay Verify] Statut officiel pour ${tx.id} (${effectiveProviderTxId}) : ${officialStatus}`);
+
+      if (officialStatus === 'SUCCESS') {
+        // CRÉDIT ATOMIQUE SÉCURISÉ DU SOLDE UTILISATEUR
+        // Revérification anti-race condition
+        const freshTx = db.getTransactionById(tx.id);
+        if (freshTx && freshTx.status === 'completed') {
+          return { success: true, status: 'completed', newBalance: user.balance, transaction: freshTx };
+        }
+
+        const creditAmount = tx.amount; // Montant en USD
+        const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
+
+        db.updateUser(user.id, { balance: newBalance });
+
+        const completedTx = db.updateTransaction(tx.id, {
+          status: 'completed',
+          providerTxId: effectiveProviderTxId,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        // Mise à jour de l'historique de recharge du client
+        var recharges = db.data.recharges || [];
+        var rIdx = recharges.findIndex(r => r.id === tx.id);
+        if (rIdx !== -1) {
+          recharges[rIdx].status = 'Validé';
+          db.persist();
+        }
+
+        console.log(`[SasPay Confirmation] Transaction ${tx.id} confirmée avec succès. Solde de ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
+
+        return {
+          success: true,
+          status: 'completed',
+          newBalance: newBalance,
+          creditedAmount: creditAmount,
+          transaction: completedTx,
+          message: 'Paiement confirmé avec succès ! Votre solde a été crédité.'
+        };
+      } else if (officialStatus === 'FAILED' || officialStatus === 'CANCELLED' || officialStatus === 'EXPIRED') {
+        // Marquage de la transaction comme échouée
+        const failedTx = db.updateTransaction(tx.id, {
+          status: 'failed',
+          failureReason: pData?.message || `Paiement rejeté par l'opérateur (Statut: ${officialStatus}).`,
+          updatedAt: new Date().toISOString()
+        });
+        return {
+          success: false,
+          status: 'failed',
+          message: failedTx.failureReason,
+          transaction: failedTx
+        };
+      } else {
+        // Toujours en attente (PENDING / PROCESSING)
+        return {
+          success: true,
+          status: 'pending',
+          message: 'En attente de validation sur votre téléphone portable.'
+        };
+      }
+    } catch (err) {
+      console.warn('[SasPay Verify Warning]', err.message);
+      return { success: true, status: 'pending', message: 'Vérification en cours...' };
+    }
+  }
+
+  /**
+   * 3. GESTION DU WEBHOOK OFFICIEL SASPAY
+   * Format documenté : https://docs.saspay.me/api-reference/webhooks
+   * Headers : X-Webhook-Signature, X-Webhook-Timestamp, X-Webhook-Event
+   * Vérification de signature HMAC SHA-256 avec tolérance d'horloge de 300 secondes.
+   */
+  async handleWebhook({ headers = {}, rawBody, payload }) {
+    console.log('[SasPay Webhook] Réception notification webhook...');
+
+    const signature = headers['x-webhook-signature'] || headers['X-Webhook-Signature'];
+    const timestamp = headers['x-webhook-timestamp'] || headers['X-Webhook-Timestamp'];
+    const eventType = headers['x-webhook-event'] || headers['X-Webhook-Event'] || payload?.event;
+
+    // 1. Contrôle de signature cryptographique (si secret configuré)
+    if (SASPAY_WEBHOOK_SECRET) {
+      if (!signature || !timestamp) {
+        throw new Error('Headers de signature webhook manquants.');
+      }
+
+      // Contrôle de l'âge du webhook (tolérance de 300 secondes)
+      const now = Math.floor(Date.now() / 1000);
+      if (Math.abs(now - Number(timestamp)) > 300) {
+        throw new Error('Horodatage du webhook hors tolérance (> 300s).');
+      }
+
+      // Calcul de la signature HMAC SHA-256 sur timestamp.rawBody
+      const bodyToSign = typeof rawBody === 'string' ? rawBody : JSON.stringify(payload);
+      const expectedSignature = crypto
+        .createHmac('sha256', SASPAY_WEBHOOK_SECRET)
+        .update(`${timestamp}.${bodyToSign}`)
+        .digest('hex');
+
+      const sigBuffer = Buffer.from(signature);
+      const expBuffer = Buffer.from(expectedSignature);
+
+      if (sigBuffer.length !== expBuffer.length || !crypto.timingSafeEqual(sigBuffer, expBuffer)) {
+        throw new Error('Signature du webhook SasPay invalide.');
+      }
+    }
+
+    // 2. Traitement de l'événement
+    const eventData = payload?.data || {};
+    const saspayId = eventData.id;
+    const ref = eventData.reference;
+    const internalTxId = eventData.metadata?.internalTxId;
+
+    if (!saspayId && !internalTxId && !ref) {
+      return { success: false, message: 'Identifiant de transaction introuvable dans le webhook.' };
+    }
+
+    // Recherche de la transaction locale
+    let tx = null;
+    if (internalTxId) tx = db.getTransactionById(internalTxId);
+    if (!tx && saspayId) tx = db.getTransactionByProviderTxId(saspayId);
+    if (!tx && ref) {
+      tx = db.data.transactions.find(t => t.id === ref || t.providerTxId === ref);
+    }
+
+    if (!tx) {
+      console.warn(`[SasPay Webhook] Transaction non répertoriée pour saspayId: ${saspayId}`);
+      return { success: true, message: 'Transaction non locale reçue.' };
+    }
+
+    if (eventType === 'transaction.success' || eventData.status === 'SUCCESS') {
+      // Protection d'idempotence : ne créditer qu'une seule fois
+      if (tx.status === 'completed') {
+        console.log(`[SasPay Webhook] Transaction ${tx.id} déjà complétée (Idempotence).`);
+        return { success: true, message: 'Déjà traitée.' };
+      }
+
+      const user = db.getUserById(tx.userId);
+      if (!user) throw new Error('Utilisateur associé introuvable.');
+
+      const newBalance = Math.round(((user.balance || 0) + tx.amount) * 100) / 100;
+      db.updateUser(user.id, { balance: newBalance });
+
+      db.updateTransaction(tx.id, {
+        status: 'completed',
+        providerTxId: saspayId || tx.providerTxId,
+        completedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      console.log(`[SasPay Webhook] Transaction ${tx.id} validée. Utilisateur ${user.email} crédité de +${tx.amount} USD. Nouveau solde : ${newBalance} USD.`);
+      return { success: true, message: 'Transaction complétée avec succès.' };
+    } else if (eventType === 'transaction.failed' || eventData.status === 'FAILED') {
+      db.updateTransaction(tx.id, {
+        status: 'failed',
+        failureReason: eventData.message || 'Paiement échoué via webhook.'
+      });
+      return { success: true, message: 'Transaction marquée comme échouée.' };
+    }
+
+    return { success: true, message: 'Événement traité.' };
+  }
+
+  /**
+   * 4. MÉTHODES DE PAIEMENT & CRYPTO (CONSERVATION DU SYSTÈME EXISTANT)
    */
   async createDepositRequest({ userId, amount, currency = 'USD', paymentMethodId, proofImage }) {
     if (!userId) throw new Error('Utilisateur non authentifié.');
-
     const user = db.getUserById(userId);
     if (!user) throw new Error('Compte utilisateur introuvable.');
 
@@ -51,12 +541,10 @@ class PaymentService {
       paymentMethod: method.name,
       provider: method.type || 'crypto',
       providerTxId: null,
-      status: 'pending', // Commence STRICTEMENT en statut pending
+      status: 'pending', // Début strict en pending
       idempotencyKey: idempotencyKey,
       proofImage: proofImage || null
     });
-
-    console.log(`[Paiement] Nouvelle transaction initiée : ${transaction.id} par ${user.email} (${transaction.amount} ${transaction.currency})`);
 
     return {
       success: true,
@@ -70,33 +558,18 @@ class PaymentService {
     };
   }
 
-  /**
-   * 2. VÉRIFICATION ET VALIDATION DU PAIEMENT (SERVEUR / ADMIN)
-   * Protégé contre la double comptabilisation (Idempotence).
-   */
   async verifyAndCompleteTransaction({ transactionId, providerTxId, failureReason = null, isApproval = true }) {
     const transaction = db.getTransactionById(transactionId);
-    if (!transaction) {
-      throw new Error('Transaction introuvable.');
-    }
+    if (!transaction) throw new Error('Transaction introuvable.');
 
-    // PROTECTION IDEMPOTENCE : Si déjà traitée, ne rien faire de nouveau
     if (transaction.status === 'completed') {
-      console.warn(`[Paiement] Transaction ${transactionId} déjà validée. Aucune action répétée.`);
       return { success: true, alreadyProcessed: true, transaction };
     }
 
-    if (transaction.status === 'failed' || transaction.status === 'cancelled') {
-      throw new Error(`Cette transaction a déjà été marquée comme ${transaction.status}.`);
-    }
-
     const user = db.getUserById(transaction.userId);
-    if (!user) {
-      throw new Error('Utilisateur associé introuvable.');
-    }
+    if (!user) throw new Error('Utilisateur associé introuvable.');
 
     if (!isApproval) {
-      // Rejet de la transaction
       const updated = db.updateTransaction(transactionId, {
         status: 'failed',
         failureReason: failureReason || 'Paiement rejeté lors de la vérification.',
@@ -105,7 +578,6 @@ class PaymentService {
       return { success: true, transaction: updated };
     }
 
-    // Validation effective : Crédit atomique du solde utilisateur
     const newBalance = Math.round(((user.balance || 0) + transaction.amount) * 100) / 100;
     db.updateUser(user.id, { balance: newBalance });
 
@@ -115,74 +587,10 @@ class PaymentService {
       completedAt: new Date().toISOString()
     });
 
-    console.log(`[Paiement] Transaction ${transactionId} confirmée. Solde de ${user.email} crédité de +${transaction.amount} USD. Nouveau solde: ${newBalance} USD`);
-
-    return {
-      success: true,
-      transaction: completedTx,
-      newBalance
-    };
+    return { success: true, transaction: completedTx, newBalance };
   }
 
-  /**
-   * 3. GESTION DES WEBHOOKS PRESTATAIRES (Crypto / Mobile Money)
-   * Vérifie la signature cryptographique et empêche les doublons.
-   */
-  async handleWebhook({ provider, rawBody, signature, payload }) {
-    console.log(`[Paiement Webhook] Réception callback ${provider}...`);
-
-    // 1. Vérification de la signature cryptographique (si webhook secret configuré)
-    if (CRYPTO_WEBHOOK_SECRET) {
-      const computedSig = crypto.createHmac('sha256', CRYPTO_WEBHOOK_SECRET).update(rawBody || JSON.stringify(payload)).digest('hex');
-      if (signature && signature !== computedSig) {
-        throw new Error('Signature du webhook invalide.');
-      }
-    }
-
-    const txId = payload.transactionId || payload.custom_id || payload.order_id;
-    const providerTxId = payload.providerTxId || payload.txn_id || payload.payment_id;
-    const status = (payload.status || '').toLowerCase();
-
-    if (!txId) {
-      throw new Error('Identifiant de transaction manquant dans le payload webhook.');
-    }
-
-    // 2. Vérification idempotente
-    const existing = db.getTransactionById(txId);
-    if (!existing) {
-      throw new Error(`Transaction ${txId} non trouvée.`);
-    }
-
-    if (existing.status === 'completed') {
-      return { status: 'already_completed', transactionId: txId };
-    }
-
-    // 3. Traitement selon le statut du prestataire
-    if (status === 'success' || status === 'completed' || status === 'paid' || status === 'confirmed') {
-      return await this.verifyAndCompleteTransaction({
-        transactionId: txId,
-        providerTxId: providerTxId,
-        isApproval: true
-      });
-    } else if (status === 'failed' || status === 'expired' || status === 'cancelled') {
-      return await this.verifyAndCompleteTransaction({
-        transactionId: txId,
-        providerTxId: providerTxId,
-        failureReason: `Échec signalé par le prestataire (${status})`,
-        isApproval: false
-      });
-    }
-
-    // Statut intermédiaire (ex: processing)
-    db.updateTransaction(txId, { status: 'processing', providerTxId });
-    return { status: 'processing', transactionId: txId };
-  }
-
-  /**
-   * 4. HISTORIQUE DES TRANSACTIONS D'UN CLIENT
-   */
   getUserTransactions(userId) {
-    if (!userId) return [];
     return db.getTransactions({ userId });
   }
 }

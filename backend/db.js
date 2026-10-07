@@ -131,18 +131,36 @@ class Database {
     return this.data.users.find(u => u.email && u.email.toLowerCase() === clean) || null;
   }
 
+  getUserByUsername(username) {
+    if (!username) return null;
+    const clean = username.trim().toLowerCase();
+    return this.data.users.find(u => u.username && u.username.toLowerCase() === clean) || null;
+  }
+
+  getUserByIdentifier(identifier) {
+    if (!identifier) return null;
+    const clean = identifier.trim().toLowerCase();
+    return this.data.users.find(u => 
+      (u.email && u.email.toLowerCase() === clean) || 
+      (u.username && u.username.toLowerCase() === clean)
+    ) || null;
+  }
+
   getUserByGoogleId(googleId) {
     if (!googleId) return null;
     return this.data.users.find(u => u.google_id === googleId) || null;
   }
 
-  createUser({ email, password_hash, name, profile_picture, google_id, auth_provider, email_verified, role }) {
+  createUser({ email, password_hash, name, username, profile_picture, google_id, auth_provider, email_verified, role }) {
     const now = new Date().toISOString();
+    const cleanEmail = email.trim().toLowerCase();
+    const fallbackUsername = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') || ('user_' + Math.random().toString(36).substring(2, 6));
     const newUser = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      email: email.trim().toLowerCase(),
+      email: cleanEmail,
+      username: (username || fallbackUsername).trim().toLowerCase(),
       password_hash: password_hash || null,
-      name: (name || email.split('@')[0]).trim(),
+      name: (name || cleanEmail.split('@')[0]).trim(),
       profile_picture: profile_picture || null,
       google_id: google_id || null,
       auth_provider: auth_provider || (google_id ? 'google' : 'email'),

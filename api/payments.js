@@ -1,5 +1,6 @@
 /**
  * Vercel Serverless Function: /api/payments
+ * Point d'entrée pour les opérations de paiement et de rechargement.
  */
 
 const paymentService = require('../backend/payments');
@@ -7,16 +8,19 @@ const authService = require('../backend/auth');
 const db = require('../backend/db');
 
 module.exports = async function handler(req, res) {
+  // CORS & Security Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-signature');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Webhook-Signature, X-Webhook-Timestamp, X-Webhook-Event');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const urlParts = (req.url || '').split('?')[0].split('/').filter(Boolean);
-  const action = urlParts[urlParts.length - 1];
+  const rawUrl = req.url || '';
+  const urlParts = rawUrl.split('?')[0].split('/').filter(Boolean);
+  const action = urlParts[urlParts.length - 1]; // ex: 'create', 'verify', 'webhook', 'methods', 'deposit'
+  const isSasPayRoute = rawUrl.includes('/saspay');
 
   try {
     let body = req.body;
@@ -31,7 +35,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ methods });
     }
 
-    // 2. Historique des transactions de l'utilisateur authentifié
+    // 2. Historique des transactions de l'utilisateur
     if (req.method === 'GET' && action === 'transactions') {
       const authHeader = req.headers.authorization || '';
       const token = authHeader.replace(/^Bearer\s+/i, '');
@@ -43,13 +47,53 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ transactions });
     }
 
+    // 3. Vérification du statut d'une transaction SasPay (GET ou POST)
+    if (isSasPayRoute && action === 'verify') {
+      const parsedUrl = new URL(rawUrl, 'http://localhost');
+      const transactionId = parsedUrl.searchParams.get('transactionId') || parsedUrl.searchParams.get('txId') || body.transactionId || body.txId;
+      const providerTxId = parsedUrl.searchParams.get('providerTxId') || parsedUrl.searchParams.get('id') || body.providerTxId;
+
+      if (!transactionId && !providerTxId) {
+        return res.status(400).json({ error: 'transactionId ou providerTxId requis.' });
+      }
+
+      const result = await paymentService.verifySasPayPayment({ transactionId, providerTxId });
+      return res.status(200).json(result);
+    }
+
     if (req.method === 'POST') {
-      // 3. Initier une demande de recharge (statut pending obligatoire)
+      // 4. Initiation d'un paiement Mobile Money réel via SasPay
+      if (isSasPayRoute && (action === 'create' || action === 'initiate' || action === 'deposit')) {
+        const authHeader = req.headers.authorization || '';
+        const token = authHeader.replace(/^Bearer\s+/i, '');
+        const verified = authService.verifySession(token);
+        const effectiveUserId = (verified && verified.user) ? verified.user.id : body.userId;
+
+        if (!effectiveUserId) {
+          return res.status(401).json({ error: 'Veuillez vous connecter pour initier une recharge.' });
+        }
+
+        const result = await paymentService.createSasPayDeposit({
+          userId: effectiveUserId,
+          amountUsd: body.amount,
+          country: body.country,
+          network: body.network,
+          phone: body.phone,
+          customerName: body.customerName,
+          customerEmail: body.customerEmail,
+          returnUrl: body.returnUrl
+        });
+
+        return res.status(201).json(result);
+      }
+
+      // 5. Initiation d'une recharge manuelle / crypto (TRC20, BTC)
       if (action === 'deposit') {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.replace(/^Bearer\s+/i, '');
         const verified = authService.verifySession(token);
         const effectiveUserId = (verified && verified.user) ? verified.user.id : body.userId;
+
         if (!effectiveUserId) {
           return res.status(401).json({ error: 'Veuillez vous connecter pour initier une recharge.' });
         }
@@ -65,14 +109,14 @@ module.exports = async function handler(req, res) {
         return res.status(201).json(result);
       }
 
-      // 4. Vérification d'une transaction (réservée à l'administrateur ou webhook sécurisé)
-      if (action === 'verify') {
+      // 6. Vérification manuelle administrateur
+      if (action === 'verify' && !isSasPayRoute) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.replace(/^Bearer\s+/i, '');
         const verified = authService.verifySession(token);
 
         if (!verified || verified.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur pour la vérification.' });
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur pour la validation manuelle.' });
         }
 
         const result = await paymentService.verifyAndCompleteTransaction({
@@ -85,15 +129,12 @@ module.exports = async function handler(req, res) {
         return res.status(200).json(result);
       }
 
-      // 5. Réception webhook prestataire de paiement (Crypto / Mobile Money)
+      // 7. Webhook officiel SasPay et autres prestataires
       if (action === 'webhook') {
-        const signature = req.headers['x-webhook-signature'] || req.headers['x-signature'];
-        const provider = req.headers['x-provider'] || body.provider || 'generic';
-
         const result = await paymentService.handleWebhook({
-          provider,
-          payload: body,
-          signature
+          headers: req.headers,
+          rawBody: req.rawBody,
+          payload: body
         });
 
         return res.status(200).json(result);

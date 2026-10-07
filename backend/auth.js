@@ -114,7 +114,7 @@ class AuthService {
   }
 
   // 4. INSCRIPTION EMAIL + MOT DE PASSE
-  async register({ email, password, confirmPassword, name }) {
+  async register({ email, password, confirmPassword, name, username }) {
     if (!email || typeof email !== 'string') {
       throw new Error('Adresse e-mail requise.');
     }
@@ -122,6 +122,22 @@ class AuthService {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       throw new Error('Format d\'adresse e-mail invalide.');
+    }
+
+    // Validation du nom d'utilisateur (si fourni)
+    let cleanUsername = null;
+    if (username && typeof username === 'string' && username.trim().length > 0) {
+      cleanUsername = username.trim().toLowerCase();
+      if (cleanUsername.length < 3) {
+        throw new Error('Le nom d\'utilisateur doit comporter au moins 3 caractères.');
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
+        throw new Error('Le nom d\'utilisateur ne peut contenir que des lettres, chiffres et tirets bas (_).');
+      }
+      const existingUserByUsername = db.getUserByUsername(cleanUsername);
+      if (existingUserByUsername) {
+        throw new Error('Ce nom d\'utilisateur est déjà utilisé par un autre compte.');
+      }
     }
 
     if (!password || typeof password !== 'string' || password.length < 8) {
@@ -146,8 +162,9 @@ class AuthService {
     const password_hash = this.hashPassword(password);
     const user = db.createUser({
       email: cleanEmail,
+      username: cleanUsername,
       password_hash,
-      name: name || cleanEmail.split('@')[0],
+      name: name || cleanUsername || cleanEmail.split('@')[0],
       auth_provider: 'email',
       email_verified: false,
       role: 'client'
@@ -157,29 +174,29 @@ class AuthService {
     return { user: this.sanitizeUser(user), session };
   }
 
-  // 5. CONNEXION EMAIL + MOT DE PASSE
-  async login({ email, password, ip }) {
-    if (!email || !password) {
-      throw new Error('Identifiant et mot de passe requis.');
+  // 5. CONNEXION EMAIL + MOT DE PASSE (ou NOM D'UTILISATEUR)
+  async login({ email, identifier, password, ip }) {
+    const loginTarget = (identifier || email || '').trim().toLowerCase();
+    if (!loginTarget || !password) {
+      throw new Error('Identifiant (e-mail ou nom d\'utilisateur) et mot de passe requis.');
     }
-    const cleanEmail = email.trim().toLowerCase();
-    const rateLimitKey = `${cleanEmail}_${ip || 'local'}`;
+    const rateLimitKey = `${loginTarget}_${ip || 'local'}`;
 
     const rl = this.checkRateLimit(rateLimitKey);
     if (!rl.allowed) {
       throw new Error(`Trop de tentatives infructueuses. Veuillez patienter ${rl.waitSeconds} secondes.`);
     }
 
-    const user = db.getUserByEmail(cleanEmail);
+    const user = db.getUserByIdentifier(loginTarget);
     if (!user || !user.password_hash) {
       this.recordFailedLogin(rateLimitKey);
-      throw new Error('Adresse e-mail ou mot de passe incorrect.');
+      throw new Error('Identifiant ou mot de passe incorrect.');
     }
 
     const isValid = this.verifyPassword(password, user.password_hash);
     if (!isValid) {
       this.recordFailedLogin(rateLimitKey);
-      throw new Error('Adresse e-mail ou mot de passe incorrect.');
+      throw new Error('Identifiant ou mot de passe incorrect.');
     }
 
     this.resetRateLimit(rateLimitKey);

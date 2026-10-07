@@ -36,7 +36,7 @@ const SECURITY_HEADERS = {
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src https://accounts.google.com; connect-src 'self' https://accounts.google.com; base-uri 'self'; object-src 'none';"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src https://accounts.google.com https://checkout.saspay.me https://pay.wave.com; connect-src 'self' https://accounts.google.com https://api.saspay.me https://checkout.saspay.me; base-uri 'self'; object-src 'none';"
 };
 
 const server = http.createServer((req, res) => {
@@ -72,6 +72,7 @@ const server = http.createServer((req, res) => {
     let bodyData = '';
     req.on('data', chunk => { bodyData += chunk; });
     req.on('end', async () => {
+      req.rawBody = bodyData;
       try {
         req.body = bodyData ? JSON.parse(bodyData) : {};
       } catch (e) {
