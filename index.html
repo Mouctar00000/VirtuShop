@@ -100,7 +100,7 @@
           </p>
 
           <div class="hero-actions">
-            <a href="#catalog" class="btn-primary hero-btn" id="hero-cta-catalog">
+            <a href="#catalog" class="btn-primary hero-btn btn-cta-shimmer" id="hero-cta-catalog">
               <span>Explorer le Catalogue</span>
               <span>⚡</span>
             </a>
@@ -333,20 +333,20 @@
   <main id="connected-view" class="hidden">
     <div class="container direct-catalog-wrapper">
       <div class="catalog-welcome-banner">
-        <div>
+        <div class="catalog-welcome-info">
           <span class="pill-badge" style="margin-bottom: 8px;">
             <span class="pulse-dot"></span>
             <span>Espace Client</span>
           </span>
-          <h1 style="font-size: 22px; font-weight: 800; color: var(--text-primary);">
+          <h1 style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin: 6px 0;">
             Bonjour <span id="connected-user-name" class="text-gradient">Client</span>, découvrez le catalogue
           </h1>
           <p style="color: var(--text-secondary); font-size: 13.5px; margin-top: 4px;">
             Commandez vos comptes et services instantanément en 1 clic avec votre solde.
           </p>
         </div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-          <button type="button" class="btn-primary btn-sm" onclick="openDepositModal()">
+        <div class="catalog-welcome-actions">
+          <button type="button" class="btn-primary btn-sm btn-cta-shimmer" onclick="openDepositModal()">
             <span>💳 Recharger mon solde</span>
           </button>
           <button type="button" class="btn-secondary btn-sm" onclick="openOrdersModal()">
@@ -454,7 +454,7 @@
             <p style="font-size: 13.5px; color: rgba(255,255,255,0.9); line-height: 1.5; margin-bottom: 16px; max-width: 620px;">
               Vous gérez une équipe ou recherchez des lots de comptes sur mesure (Gmail vieillis, abonnements premium en volume, tokens vérifiés) ? Notre équipe dédiée prépare vos commandes spéciales avec une tarification dégressive préférentielle.
             </p>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div class="vip-actions-row">
               <button type="button" class="btn-vip-contact" onclick="openSupportModal('telegram')">
                 <span>💬 Assistance Telegram Dédiée</span>
               </button>
@@ -476,16 +476,16 @@
 
       <!-- ==================== SECTION 4 : TRANSPARENCE & ÉTAT DU SYSTÈME EN DIRECT ==================== -->
       <div class="client-system-status-bar">
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="status-title-group">
           <span class="status-indicator-dot online"></span>
           <span style="font-size: 12.5px; font-weight: 700; color: var(--emerald-700);">Tous les systèmes opérationnels</span>
         </div>
         <div class="status-meta-group">
-          <span>Livraison automatisée : <strong>Active 24/7</strong></span>
-          <span>•</span>
-          <span>Confirmation du paiement : <strong>Instantanée ⚡</strong></span>
-          <span>•</span>
-          <span>Sécurité : <strong>Chiffrement TLS 1.3</strong></span>
+          <span class="status-item">Livraison automatisée : <strong>Active 24/7</strong></span>
+          <span class="status-sep">•</span>
+          <span class="status-item">Délai moyen de confirmation : <strong>~ 3 minutes</strong></span>
+          <span class="status-sep">•</span>
+          <span class="status-item">Sécurité : <strong>Chiffrement TLS 1.3</strong></span>
         </div>
       </div>
     </div>

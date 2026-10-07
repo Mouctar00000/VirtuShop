@@ -886,9 +886,12 @@ function renderPurchaseModal() {
             <span>Reste après paiement : <strong>$${(userBal - total).toFixed(2)}</strong></span>
           </div>
         ` : `
-          <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: var(--radius-sm); padding: 9px 12px; font-size: 12px; color: var(--rose-600); display: flex; align-items: center; justify-content: space-between;">
-            <span>⚠️ Solde insuffisant (Il vous manque $${diff})</span>
-            <a href="javascript:void(0)" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})" style="color: var(--primary-600); font-weight: 700; text-decoration: underline;">+ Recharger</a>
+          <div class="insufficient-balance-alert">
+            <span class="insufficient-balance-text">⚠️ Solde insuffisant (Il vous manque $${diff})</span>
+            <button type="button" class="btn-quick-recharge" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
+              <span>+ Recharger</span>
+              <span class="recharge-badge-spark">⚡</span>
+            </button>
           </div>
         `}
       </div>
@@ -905,8 +908,9 @@ function renderPurchaseModal() {
           Payer maintenant avec mon Solde ⚡ ($${total.toFixed(2)})
         </button>
       ` : `
-        <button type="button" class="btn-pay-now" style="background: var(--primary-600);" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
-          + Recharger mon solde pour payer ($${Math.max(5, Math.ceil(parseFloat(diff))).toFixed(2)} min.)
+        <button type="button" class="btn-pay-now btn-cta-shimmer" style="background: linear-gradient(135deg, var(--primary-600), #1d4ed8);" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
+          <span>+ Recharger mon solde pour payer ($${Math.max(5, Math.ceil(parseFloat(diff))).toFixed(2)} min.)</span>
+          <span style="margin-left: 6px;">⚡</span>
         </button>
       `}
     ` : ''}

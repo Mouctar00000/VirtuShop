@@ -1932,14 +1932,21 @@ button {
 
 .footer-bottom {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 20px;
+  justify-content: center;
+  text-align: center;
+  padding-top: 24px;
   border-top: 1px solid var(--border-subtle);
   font-size: 12px;
   color: var(--text-muted);
-  flex-wrap: wrap;
   gap: 12px;
+}
+
+.footer-copy {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 .footer-discreet-admin {
@@ -1958,9 +1965,11 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 8px;
   width: 100%;
-  margin: 10px 0 6px;
+  margin: 6px 0 10px;
 }
 
 .footer-payments-label {
@@ -1968,29 +1977,32 @@ button {
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  text-align: center;
 }
 
 .footer-payments-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
   margin: 0 auto;
 }
 
 .footer-pay-card {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   padding: 8px 12px;
+  min-height: 42px;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
-  font-size: 12px;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -2008,6 +2020,7 @@ button {
 .footer-pay-icon {
   font-size: 14px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 @media (max-width: 640px) {
@@ -2018,27 +2031,20 @@ button {
   }
 
   .footer-pay-card {
-    padding: 7px 4px;
-    font-size: 10.5px;
-    gap: 4px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 3px;
+    min-height: 52px;
+    font-size: 10px;
+    line-height: 1.2;
+    white-space: normal;
     border-radius: 8px;
   }
 
   .footer-pay-icon {
-    font-size: 12px;
-  }
-}
-
-@media (max-width: 360px) {
-  .footer-payments-grid {
-    grid-template-columns: 1fr;
-    gap: 6px;
-    max-width: 220px;
-  }
-  .footer-pay-card {
-    padding: 6px 10px;
-    font-size: 11px;
-    justify-content: center;
+    font-size: 14px;
   }
 }
 
@@ -3974,6 +3980,269 @@ html, body {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* ==================== BOUTONS INTERACTIFS & ANIMATIONS CALL TO ACTION ==================== */
+
+/* 1. Alerte de solde insuffisant et bouton d'action rapide stylé */
+.insufficient-balance-alert {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.insufficient-balance-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rose-600);
+}
+
+.btn-quick-recharge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, var(--primary-600), #1d4ed8);
+  color: #ffffff !important;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.btn-quick-recharge:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+}
+
+.btn-quick-recharge:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.recharge-badge-spark {
+  display: inline-block;
+  animation: sparkPulse 2s infinite ease-in-out;
+}
+
+@keyframes sparkPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3) rotate(8deg); }
+}
+
+/* 2. Effet Visuel Incitatif Flash / Shimmer / Pulse (Balayage lumineux régulier) */
+@keyframes sweepShimmer {
+  0% {
+    transform: translateX(-150%) skewX(-25deg);
+  }
+  30%, 100% {
+    transform: translateX(250%) skewX(-25deg);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35), 0 0 0 0 rgba(37, 99, 235, 0.35);
+  }
+  50% {
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.55), 0 0 0 5px rgba(37, 99, 235, 0);
+  }
+}
+
+.btn-cta-shimmer {
+  position: relative !important;
+  overflow: hidden !important;
+  animation: glowPulse 3.2s infinite ease-in-out;
+}
+
+.btn-cta-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-150%) skewX(-25deg);
+  animation: sweepShimmer 3.2s infinite ease-in-out;
+  pointer-events: none;
+}
+
+/* ==================== ADAPTATIONS RESPONSIVES AVANCÉES (PETITS ÉCRANS & 360-390px) ==================== */
+
+/* Bannière d'accueil Espace Client */
+.direct-catalog-wrapper {
+  padding-top: 20px;
+  padding-bottom: 48px;
+}
+
+.catalog-welcome-banner {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.catalog-welcome-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.catalog-welcome-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.vip-actions-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  /* Bannière Bienvenue */
+  .catalog-welcome-banner {
+    padding: 18px 16px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+  }
+  .catalog-welcome-info {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .catalog-welcome-info h1 {
+    font-size: 19px !important;
+    text-align: center !important;
+    line-height: 1.3 !important;
+    word-break: break-word;
+  }
+  .catalog-welcome-info p {
+    text-align: center !important;
+    font-size: 13px !important;
+  }
+  .catalog-welcome-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .catalog-welcome-actions button {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 38px !important;
+    font-size: 12.5px !important;
+  }
+
+  /* Carte VIP */
+  .client-vip-card {
+    padding: 20px 16px !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 16px !important;
+  }
+  .client-vip-content {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .client-vip-content h3 {
+    font-size: 17px !important;
+    text-align: center !important;
+    line-height: 1.3 !important;
+  }
+  .client-vip-content p {
+    text-align: center !important;
+    font-size: 12.5px !important;
+    line-height: 1.5 !important;
+  }
+  .vip-actions-row {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .btn-vip-contact {
+    width: 100% !important;
+    justify-content: center !important;
+    font-size: 12.5px !important;
+    padding: 9px 14px !important;
+  }
+  .client-vip-badge-box {
+    width: 100% !important;
+    max-width: 260px !important;
+    margin: 4px auto 0 !important;
+    padding: 12px 16px !important;
+  }
+
+  /* Barre d'état du système */
+  .client-system-status-bar {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 10px !important;
+    padding: 14px !important;
+  }
+  .status-title-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .status-meta-group {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 5px !important;
+  }
+  .status-sep {
+    display: none !important;
+  }
+  .status-item {
+    font-size: 11.5px !important;
+    text-align: center !important;
+  }
+
+  /* Grille Avantages & Guides */
+  .client-perks-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .client-guides-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
 }
 
 
