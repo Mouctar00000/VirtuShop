@@ -180,6 +180,27 @@ function getReliableProductSvg(category, text, color) {
   }
 }
 
+// Nettoyeur et extracteur d'URL d'image fiable (supprime les balises HTML accidentelles type <img class=...>)
+function sanitizeProductImage(img, fallbackCategory, fallbackName) {
+  if (!img || typeof img !== 'string') {
+    return getReliableProductSvg(fallbackCategory, fallbackName, 'blue');
+  }
+  img = img.trim();
+  if (img.includes('<img')) {
+    var match = img.match(/src=["']([^"']+)["']/i);
+    if (match && match[1]) {
+      img = match[1].trim();
+    } else {
+      return getReliableProductSvg(fallbackCategory, fallbackName, 'blue');
+    }
+  }
+  img = img.replace(/^["']+|["']+$/g, '').trim();
+  if (!img || img.startsWith('<') || img.length < 5) {
+    return getReliableProductSvg(fallbackCategory, fallbackName, 'blue');
+  }
+  return escapeHtml(img);
+}
+
 // QR Code SVG Helper
 function generateQrSvg(label) {
   var encoded = encodeURIComponent(label);
@@ -221,6 +242,22 @@ function initDB() {
   if (!DB.get('orders')) DB.set('orders', []);
   if (!DB.get('recharges')) DB.set('recharges', []);
   if (!DB.get('min_recharge')) DB.set('min_recharge', 5);
+
+  // Nettoyage automatique des images corrompues dans les produits existants
+  var currentProds = DB.get('products', []);
+  if (Array.isArray(currentProds) && currentProds.length > 0) {
+    var prodsModified = false;
+    currentProds.forEach(function(p) {
+      if (p && typeof p.image === 'string' && (p.image.includes('<img') || p.image.includes('class=') || p.image.includes('"') || p.image.includes("'"))) {
+        p.image = sanitizeProductImage(p.image, p.category, p.name);
+        prodsModified = true;
+      }
+    });
+    if (prodsModified) {
+      DB.set('products', currentProds);
+      console.log('[Init] Images des produits nettoyées avec succès.');
+    }
+  }
 
   // Méthodes de paiement officielles de production (SasPay Mobile Money & Trybit Crypto Automatique)
   DB.set('payment_methods', [
@@ -430,9 +467,9 @@ function updateNavbar() {
         <span>Mes commandes</span>
       </button>
 
-      <!-- Profil Utilisateur & Menu Déroulant -->
+      <!-- Profil Utilisateur & Menu Déroulant (Sans Scrollbar, Pleine Hauteur) -->
       <div class="user-profile-wrapper">
-        <button type="button" class="btn-user-profile" onclick="toggleUserDropdown()" aria-label="Menu profil">
+        <button type="button" class="btn-user-profile" onclick="toggleUserDropdown(event)" aria-label="Menu profil">
           <span class="user-avatar-circle">${escapeHtml(session.name.charAt(0).toUpperCase())}</span>
           <span>${escapeHtml(session.name)}</span>
           <span style="font-size: 10px; color: var(--text-muted);">▾</span>
@@ -465,7 +502,8 @@ function updateNavbar() {
   }
 }
 
-function toggleUserDropdown() {
+function toggleUserDropdown(event) {
+  if (event) event.stopPropagation();
   var menu = document.getElementById('user-dropdown');
   if (menu) menu.classList.toggle('active');
 }
@@ -474,8 +512,10 @@ function toggleUserDropdown() {
 document.addEventListener('click', function(e) {
   var wrapper = document.querySelector('.user-profile-wrapper');
   var menu = document.getElementById('user-dropdown');
-  if (menu && wrapper && !wrapper.contains(e.target)) {
-    menu.classList.remove('active');
+  if (menu && menu.classList.contains('active')) {
+    if (!wrapper || !wrapper.contains(e.target)) {
+      menu.classList.remove('active');
+    }
   }
 });
 
@@ -501,11 +541,12 @@ function renderLandingShowcase() {
   var html = '';
   topProds.forEach(function(p) {
     var oos = p.stock <= 0;
+    var safeImg = sanitizeProductImage(p.image, p.category, p.name);
     html += `
       <div class="showcase-item">
         <div class="showcase-item-info">
-          <img src="${p.image}" class="showcase-thumb" alt="${escapeHtml(p.name)}">
-          <div style="min-width: 0;">
+          <img src="${safeImg}" class="showcase-thumb" alt="${escapeHtml(p.name)}">
+          <div style="min-width: 0; flex: 1; overflow: hidden;">
             <h4 class="showcase-title">${escapeHtml(p.name)}</h4>
             <span class="showcase-stock-badge ${oos ? 'oos' : ''}">${oos ? '● Rupture' : '● ' + p.stock + ' en stock'}</span>
           </div>
@@ -612,12 +653,12 @@ function renderProductCardsInto(container, prods) {
   var html = '';
   prods.forEach(function(prod) {
     var oos = prod.stock <= 0;
-    var fallbackSvg = getReliableProductSvg(prod.category, prod.name, 'blue');
+    var safeImg = sanitizeProductImage(prod.image, prod.category, prod.name);
 
     html += `
       <div class="product-card${oos ? ' oos' : ''}">
         <div class="product-image-box">
-          <img src="${prod.image}" class="product-img" alt="${escapeHtml(prod.name)}">
+          <img src="${safeImg}" class="product-img" alt="${escapeHtml(prod.name)}">
           <div class="product-badge-overlay">⚡ Vérifié</div>
         </div>
 
@@ -814,7 +855,7 @@ function renderPurchaseModal() {
 
     <!-- 1. Récapitulatif du produit sélectionné -->
     <div class="purchase-header">
-      <img src="${selectedPayProd.image}" class="purchase-prod-thumb" alt="${escapeHtml(selectedPayProd.name)}">
+      <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb" alt="${escapeHtml(selectedPayProd.name)}">
       <div class="purchase-prod-info">
         <span class="purchase-prod-cat">${escapeHtml(selectedPayProd.category)}</span>
         <h3 class="purchase-prod-title">${escapeHtml(selectedPayProd.name)}</h3>
@@ -3098,14 +3139,14 @@ function showToast(msg, type) {
   t.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-text">${escapeHtml(msg)}</span>`;
   t.className = 'toast-' + (type || 'info');
   t.style.display = 'flex';
-  t.style.animation = 'toastFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+  t.style.animation = 'toastCenterIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards';
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function() {
-    t.style.animation = 'toastFadeOut 0.25s ease forwards';
+    t.style.animation = 'toastCenterOut 0.22s ease forwards';
     setTimeout(function() {
       t.style.display = 'none';
       t.style.animation = '';
-    }, 240);
+    }, 220);
   }, 3200);
 }
 

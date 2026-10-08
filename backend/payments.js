@@ -516,8 +516,19 @@ class PaymentService {
         return { success: true, message: 'Déjà traitée.' };
       }
 
-      const user = db.getUserById(tx.userId);
-      if (!user) throw new Error('Utilisateur associé introuvable.');
+      let user = db.getUserById(tx.userId);
+      if (!user && tx.userEmail) {
+        user = db.getUserByEmail(tx.userEmail);
+      }
+      if (!user) {
+        user = db.createUser({
+          id: tx.userId || `user-${Date.now()}`,
+          email: tx.userEmail || tx.metadata?.customerEmail || `client_${tx.id}@getvirtu.shop`,
+          name: tx.metadata?.customerName || 'Client GetVirtu',
+          role: 'client',
+          balance: 0.00
+        });
+      }
 
       const newBalance = Math.round(((user.balance || 0) + tx.amount) * 100) / 100;
       db.updateUser(user.id, { balance: newBalance });
@@ -608,8 +619,19 @@ class PaymentService {
       return { success: true, alreadyProcessed: true, transaction };
     }
 
-    const user = db.getUserById(transaction.userId);
-    if (!user) throw new Error('Utilisateur associé introuvable.');
+    let user = db.getUserById(transaction.userId);
+    if (!user && transaction.metadata?.customerEmail) {
+      user = db.getUserByEmail(transaction.metadata.customerEmail);
+    }
+    if (!user) {
+      user = db.createUser({
+        id: transaction.userId || `user-${Date.now()}`,
+        email: transaction.metadata?.customerEmail || `client_${transaction.id}@getvirtu.shop`,
+        name: transaction.metadata?.customerName || 'Client GetVirtu',
+        role: 'client',
+        balance: 0.00
+      });
+    }
 
     if (!isApproval) {
       const updated = db.updateTransaction(transactionId, {
