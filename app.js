@@ -1161,11 +1161,11 @@ async function startPurchaseTrybitPayment(total, qty) {
         ...(token ? { 'Authorization': 'Bearer ' + token } : {})
       },
       body: JSON.stringify({
-        userId: u.id,
+        userId: u.id || (session ? session.userId : 'usr_client'),
         amount: total,
         cryptocurrency: selectedCrypto || null,
-        customerEmail: safeEmail || null,
-        customerName: (u.role === 'admin' ? 'Client GetVirtu' : u.name),
+        customerEmail: safeEmail || (u.email && !u.email.toLowerCase().includes('admin@') ? u.email : null),
+        customerName: (u.role === 'admin' ? 'Client GetVirtu' : (u.name || 'Client')),
         returnUrl: window.location.origin + '/#catalog?order_crypto=success'
       })
     });
@@ -2134,11 +2134,11 @@ async function submitTrybitDeposit() {
         ...(token ? { 'Authorization': 'Bearer ' + token } : {})
       },
       body: JSON.stringify({
-        userId: u.id,
+        userId: u.id || (session ? session.userId : 'usr_client'),
         amount: amount,
         cryptocurrency: selectedCrypto || null,
-        customerEmail: getActiveCustomerEmail() || null,
-        customerName: (u.role === 'admin' ? 'Client GetVirtu' : u.name),
+        customerEmail: getActiveCustomerEmail() || (u.email && !u.email.toLowerCase().includes('admin@') ? u.email : null),
+        customerName: (u.role === 'admin' ? 'Client GetVirtu' : (u.name || 'Client')),
         returnUrl: window.location.origin + '/#catalog?payment=success'
       })
     });
@@ -3094,11 +3094,19 @@ function renderFooterBadges() {
 function showToast(msg, type) {
   var t = document.getElementById('toast');
   if (!t) return;
-  t.textContent = msg;
-  t.style.borderColor = type === 'success' ? 'var(--emerald-400)' : (type === 'error' ? 'var(--rose-500)' : 'var(--gold-500)');
-  t.style.display = 'block';
+  var icon = type === 'success' ? '✓' : (type === 'error' ? '⚠️' : 'ℹ️');
+  t.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-text">${escapeHtml(msg)}</span>`;
+  t.className = 'toast-' + (type || 'info');
+  t.style.display = 'flex';
+  t.style.animation = 'toastFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards';
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() { t.style.display = 'none'; }, 3200);
+  toastTimer = setTimeout(function() {
+    t.style.animation = 'toastFadeOut 0.25s ease forwards';
+    setTimeout(function() {
+      t.style.display = 'none';
+      t.style.animation = '';
+    }, 240);
+  }, 3200);
 }
 
 function escapeHtml(str) {

@@ -307,13 +307,21 @@ button {
   top: calc(100% + 8px);
   right: 0;
   width: 230px;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  scrollbar-width: none !important;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-modal);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12), 0 1px 3px rgba(15, 23, 42, 0.04);
   padding: 8px;
-  z-index: 200;
+  z-index: 1000;
   animation: dropdownIn 0.18s ease-out;
+}
+
+.user-dropdown-menu::-webkit-scrollbar {
+  display: none !important;
 }
 
 @keyframes dropdownIn {
@@ -2048,28 +2056,64 @@ button {
   }
 }
 
-/* ==================== TOAST & ALERTS ==================== */
+/* ==================== TOAST & ALERTS (POPUP MODERNE CENTRÉE EN HAUT) ==================== */
 #toast {
   display: none;
   position: fixed;
-  bottom: 28px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
   color: #ffffff;
-  padding: 11px 24px;
+  padding: 12px 22px;
   border-radius: var(--radius-full);
-  z-index: 2000;
+  z-index: 99999;
   font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  animation: toastIn 0.2s ease-out;
+  font-weight: 700;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  align-items: center;
+  gap: 8px;
+  max-width: 90vw;
+  text-align: center;
+  pointer-events: none;
 }
 
-@keyframes toastIn {
-  from { transform: translate(-50%, 10px); opacity: 0; }
-  to { transform: translate(-50%, 0); opacity: 1; }
+#toast.toast-success {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(6, 78, 59, 0.94);
+}
+
+#toast.toast-error {
+  border-color: rgba(248, 113, 113, 0.6);
+  background: rgba(136, 19, 55, 0.95);
+}
+
+#toast.toast-info {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(15, 23, 42, 0.94);
+}
+
+.toast-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.toast-text {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+@keyframes toastFadeIn {
+  from { opacity: 0; transform: translate(-50%, -18px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+@keyframes toastFadeOut {
+  from { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -12px) scale(0.96); }
 }
 
 #err {
@@ -3466,46 +3510,50 @@ html, body {
   .hero-actions {
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     width: 100%;
-    max-width: 320px;
+    max-width: 290px;
     margin: 0 auto 20px auto;
-    gap: 9px;
+    gap: 10px;
   }
   .hero-actions .hero-btn {
     width: 100% !important;
-    max-width: 280px !important;
+    max-width: 100% !important;
     min-width: 0 !important;
-    min-height: 40px !important;
-    padding: 9px 16px !important;
+    min-height: 42px !important;
+    padding: 10px 16px !important;
     font-size: 13px !important;
-    justify-content: center;
-    text-align: center;
+    justify-content: center !important;
+    text-align: center !important;
+    border-radius: var(--radius-full) !important;
   }
 
   .hero-trust-row {
     max-width: 320px;
   }
 
-  /* Modale d'authentification & Bottom Sheet */
+  /* Modale moderne compacte & centrée (90%-92% largeur, bords arrondis) */
   .modal-backdrop, .auth-overlay {
-    padding: 0;
-    align-items: flex-end;
+    padding: 16px 12px !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
   .modal-window, .auth-card, .google-modal-card {
-    width: 100% !important;
-    max-width: 100% !important;
-    border-radius: 18px 18px 0 0 !important;
-    max-height: 90vh !important;
+    width: 92% !important;
+    max-width: 430px !important;
+    margin: auto !important;
+    border-radius: 20px !important;
+    max-height: 88vh !important;
     overflow-y: auto !important;
-    padding: 20px 16px 24px !important;
-    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.15) !important;
+    padding: 18px 16px 20px !important;
+    box-shadow: 0 16px 45px rgba(15, 23, 42, 0.28) !important;
   }
   .modal-close-btn, .auth-close {
     top: 12px;
     right: 12px;
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
   }
 
   .btn-google {
@@ -3598,19 +3646,23 @@ html, body {
   }
 
   .hero-title {
-    font-size: 21px !important;
-    line-height: 1.25 !important;
-    word-break: break-word !important;
-    overflow-wrap: break-word !important;
+    font-size: 20px !important;
+    line-height: 1.28 !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
     text-align: center !important;
-    padding: 0 4px !important;
+    max-width: 330px !important;
+    margin: 8px auto 12px auto !important;
+    padding: 0 2px !important;
   }
   .hero-desc {
     font-size: 12.5px !important;
     line-height: 1.45 !important;
-    margin-bottom: 16px !important;
+    margin: 0 auto 16px auto !important;
     text-align: center !important;
-    padding: 0 4px !important;
+    max-width: 310px !important;
+    padding: 0 2px !important;
   }
 
   .hero-actions .hero-btn {
@@ -4069,24 +4121,24 @@ html, body {
   0% {
     transform: translateX(-150%) skewX(-25deg);
   }
-  30%, 100% {
+  25%, 100% {
     transform: translateX(250%) skewX(-25deg);
   }
 }
 
 @keyframes glowPulse {
   0%, 100% {
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35), 0 0 0 0 rgba(37, 99, 235, 0.35);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35), 0 0 0 0 rgba(37, 99, 235, 0.4);
   }
   50% {
-    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.55), 0 0 0 5px rgba(37, 99, 235, 0);
+    box-shadow: 0 6px 22px rgba(37, 99, 235, 0.6), 0 0 0 6px rgba(37, 99, 235, 0);
   }
 }
 
 .btn-cta-shimmer {
   position: relative !important;
   overflow: hidden !important;
-  animation: glowPulse 3.2s infinite ease-in-out;
+  animation: glowPulse 2.8s infinite ease-in-out !important;
 }
 
 .btn-cta-shimmer::after {
@@ -4094,17 +4146,18 @@ html, body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 60%;
+  width: 50%;
   height: 100%;
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0.55) 50%,
     rgba(255, 255, 255, 0) 100%
-  );
+  ) !important;
   transform: translateX(-150%) skewX(-25deg);
-  animation: sweepShimmer 3.2s infinite ease-in-out;
+  animation: sweepShimmer 2.8s infinite ease-in-out !important;
   pointer-events: none;
+  z-index: 2;
 }
 
 /* ==================== ADAPTATIONS RESPONSIVES AVANCÉES (PETITS ÉCRANS & 360-390px) ==================== */

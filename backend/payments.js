@@ -547,8 +547,16 @@ class PaymentService {
    */
   async createDepositRequest({ userId, amount, currency = 'USD', paymentMethodId, proofImage }) {
     if (!userId) throw new Error('Utilisateur non authentifié.');
-    const user = db.getUserById(userId);
-    if (!user) throw new Error('Compte utilisateur introuvable.');
+    let user = db.getUserById(userId);
+    if (!user) {
+      user = db.createUser({
+        id: userId,
+        email: `client_${userId}@getvirtu.shop`,
+        name: 'Client GetVirtu',
+        role: 'client',
+        balance: 0.00
+      });
+    }
 
     const parsedAmount = parseFloat(amount);
     const minRecharge = db.data.settings?.min_recharge || 5.0;
@@ -636,7 +644,19 @@ class PaymentService {
   async createTrybitDeposit({ userId, amountUsd, customerEmail, customerName, cryptocurrency, returnUrl }) {
     if (!userId) throw new Error('Utilisateur non authentifié.');
     let user = db.getUserById(userId);
-    if (!user) throw new Error('Compte utilisateur introuvable.');
+    if (!user && customerEmail) {
+      user = db.getUserByEmail(customerEmail);
+    }
+    if (!user) {
+      // Auto-provision user in db if missing in serverless instance
+      user = db.createUser({
+        id: userId,
+        email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail : `client_${userId}@getvirtu.shop`,
+        name: customerName || 'Client GetVirtu',
+        role: 'client',
+        balance: 0.00
+      });
+    }
 
     const parsedUsd = parseFloat(amountUsd);
     const minRecharge = db.data.settings?.min_recharge || 5.0;

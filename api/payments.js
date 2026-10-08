@@ -82,7 +82,7 @@ module.exports = async function handler(req, res) {
         const authHeader = req.headers.authorization || '';
         const token = authHeader.replace(/^Bearer\s+/i, '');
         const verified = authService.verifySession(token);
-        const effectiveUserId = (verified && verified.user) ? verified.user.id : body.userId;
+        const effectiveUserId = (verified && verified.user) ? verified.user.id : (body.userId || (body.user && body.user.id));
 
         if (!effectiveUserId) {
           return res.status(401).json({ error: 'Veuillez vous connecter pour initier une recharge.' });
