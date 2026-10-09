@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=20261008_v15_compact_vip_release">
+  <link rel="stylesheet" href="style.css?v=20261009_v19_final_full_features">
   <script src="security.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
@@ -796,13 +796,19 @@
     .status-indicator-pill {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      font-size: 11.5px;
+      justify-content: center;
+      gap: 4px;
+      font-size: 11px;
       font-weight: 600;
-      padding: 4px 10px;
-      border-radius: var(--radius-full);
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 5px;
       cursor: pointer;
       user-select: none;
+      white-space: nowrap !important;
+      line-height: 1;
+      box-sizing: border-box;
+      text-decoration: none;
     }
 
     .status-indicator-pill.online {
@@ -1023,10 +1029,10 @@
       </div>
 
       <div class="admin-header-actions">
-        <a href="index.html" class="btn-secondary btn-admin-shop-compact" target="_blank" title="Ouvrir la boutique client">
+        <button type="button" class="btn-secondary btn-admin-shop-compact" onclick="switchToShop()" title="Basculer directement vers la boutique (connecté en client)">
           <span>👁️</span>
           <span class="shop-btn-text">Boutique</span>
-        </a>
+        </button>
         <div class="admin-profile-wrapper" id="admin-profile-wrapper">
           <button type="button" class="admin-user-chip" id="admin-user-chip" onclick="toggleAdminDropdown(event)" aria-haspopup="true" aria-expanded="false" title="Menu profil administrateur">
             <span class="admin-avatar">AD</span>
@@ -1039,10 +1045,10 @@
               <div style="font-size: 11.5px; color: var(--text-muted); word-break: break-all;">admin@getvirtu.shop</div>
               <div style="margin-top: 6px;"><span class="admin-status-badge">● Connecté (SuperAdmin)</span></div>
             </div>
-            <a href="index.html" class="admin-dropdown-item" target="_blank">
+            <button type="button" class="admin-dropdown-item" onclick="switchToShop()">
               <span>🛍️</span>
-              <span>Voir la boutique</span>
-            </a>
+              <span>Basculer vers la boutique</span>
+            </button>
             <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('products'); toggleAdminDropdown(event);">
               <span>📦</span>
               <span>Catalogue Produits</span>
@@ -1321,14 +1327,15 @@
       <section id="tab-content-stats" class="admin-tab-pane hidden">
         <div class="admin-period-bar">
           <div>
-            <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">Tableau de Bord des Ventes</h2>
-            <p style="color: var(--text-secondary); font-size: 12.5px; margin: 0;">Statistiques en temps réel et performances.</p>
+            <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">Tableau de Bord des Ventes & Visites</h2>
+            <p style="color: var(--text-secondary); font-size: 12.5px; margin: 0;">Performances en direct, commandes réelles et traçabilité des visiteurs.</p>
           </div>
           <div class="admin-period-tabs">
-            <button type="button" class="admin-period-tab active" id="tab-period-day" onclick="changePeriod('day')">Jour (7j)</button>
-            <button type="button" class="admin-period-tab" id="tab-period-week" onclick="changePeriod('week')">Semaine</button>
+            <button type="button" class="admin-period-tab" id="tab-period-day" onclick="changePeriod('day')">Jour</button>
+            <button type="button" class="admin-period-tab active" id="tab-period-week" onclick="changePeriod('week')">Semaine</button>
             <button type="button" class="admin-period-tab" id="tab-period-month" onclick="changePeriod('month')">Mois</button>
             <button type="button" class="admin-period-tab" id="tab-period-year" onclick="changePeriod('year')">Année</button>
+            <button type="button" class="admin-period-tab" id="tab-period-all" onclick="changePeriod('all')">Tout</button>
           </div>
         </div>
 
@@ -1348,6 +1355,11 @@
           <div class="admin-stat-card">
             <span class="text-muted" style="font-size: 12px; font-weight: 600;">Panier Moyen</span>
             <div class="admin-stat-val" id="stat-avg-cart">0.00 $</div>
+          </div>
+          <div class="admin-stat-card">
+            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Nombre de Visiteurs</span>
+            <div class="admin-stat-val" id="stat-visitors-count" style="color: var(--primary-600);">0</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="stat-visitors-sub">0 unique</div>
           </div>
         </div>
 
@@ -1703,6 +1715,60 @@
           </button>
         </div>
       </form>
+  <!-- ==================== MODAL AJUSTEMENT MANUEL DU SOLDE CLIENT ==================== -->
+  <div id="admin-adjust-balance-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 480px;">
+      <button type="button" class="modal-close-btn" onclick="closeBalanceModal()">✕</button>
+      <h2 class="modal-title" id="adjust-balance-title">Ajuster le Solde Client</h2>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 16px;">
+        Contrôle administrateur direct : créditez, réglez ou déduisez le solde de ce compte en dollars ($ USD).
+      </p>
+
+      <form id="admin-adjust-balance-form" onsubmit="submitBalanceAdjustment(event)">
+        <input type="hidden" id="adjust-balance-user-id">
+
+        <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div id="adjust-balance-user-name" style="font-weight: 700; font-size: 14px; color: var(--text-primary);">Client</div>
+            <div id="adjust-balance-user-email" style="font-size: 11.5px; color: var(--text-muted);">client@exemple.com</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Solde Actuel</div>
+            <strong id="adjust-balance-current-val" style="font-size: 17px; color: var(--primary-600);">$0.00</strong>
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom: 12px;">
+          <label for="adjust-balance-mode">Action sur le solde</label>
+          <select id="adjust-balance-mode" onchange="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 13px; font-weight: 600;">
+            <option value="add">➕ Ajouter au solde (+ $)</option>
+            <option value="set">⚙️ Définir le montant exact du solde ($)</option>
+            <option value="deduct">➖ Déduire du solde (- $)</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin-bottom: 12px;">
+          <label for="adjust-balance-amount">Montant ($ USD)</label>
+          <input type="number" id="adjust-balance-amount" step="0.01" min="0.01" required placeholder="Ex: 20.00" oninput="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 14px; font-weight: 700;">
+        </div>
+
+        <div class="field" style="margin-bottom: 14px;">
+          <label for="adjust-balance-reason">Motif de l'ajustement (consigné dans l'historique)</label>
+          <input type="text" id="adjust-balance-reason" required placeholder="Ex: Recharge manuelle vérifiée, Geste commercial, Régularisation..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12.5px;">
+        </div>
+
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; font-weight: 600; color: #1e40af;">Nouveau Solde Calculé :</span>
+          <strong id="adjust-balance-preview-val" style="font-size: 16px; color: var(--emerald-600);">$0.00</strong>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="btn-secondary" onclick="closeBalanceModal()">Annuler</button>
+          <button type="submit" class="btn-primary" style="background: var(--emerald-600); border-color: var(--emerald-600);">
+            <span>✓ Confirmer l'Ajustement ⚡</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1825,18 +1891,27 @@
       var isValid = s && s.role === 'admin' && (typeof Security !== 'undefined' ? Security.isSessionValid(s) : true);
 
       if (!isValid) {
-        if (s) {
-          DB.del('admin_session');
-          if (s.role === 'admin') DB.del('session');
-        }
         if (loginScreen) loginScreen.classList.remove('hidden');
         if (dashboard) dashboard.classList.add('hidden');
         return false;
       } else {
+        // Garder synchronisé pour pouvoir basculer sur la boutique en 1 clic sans déconnexion
+        DB.set('admin_session', s);
+        DB.set('session', s);
         if (loginScreen) loginScreen.classList.add('hidden');
         if (dashboard) dashboard.classList.remove('hidden');
         return true;
       }
+    }
+
+    // Basculement instantané vers la boutique publique en tant que client (Prompt 9)
+    function switchToShop() {
+      var s = DB.get('admin_session') || DB.get('session');
+      if (s) {
+        DB.set('session', s);
+        DB.set('admin_session', s);
+      }
+      window.location.href = 'index.html';
     }
 
     async function handleAdminDirectLogin(e) {
@@ -1870,7 +1945,7 @@
         if (apiRes.ok && apiData && apiData.session && apiData.user && apiData.user.role === 'admin') {
           if (typeof Security !== 'undefined') Security.resetRateLimit('admin_login');
           DB.set('admin_session', apiData.session);
-          DB.del('session'); // Purge store session to prevent admin email from auto-filling customer checkouts
+          DB.set('session', apiData.session); // Conserver synchronisé pour bascule boutique
           var users = DB.get('users', []);
           var uIdx = users.findIndex(function(u) { return u.id === apiData.user.id || (u.email && u.email.toLowerCase() === apiData.user.email.toLowerCase()); });
           if (uIdx !== -1) users[uIdx] = Object.assign({}, users[uIdx], apiData.user);
@@ -1939,7 +2014,7 @@
           sessObj = { userId: authenticatedUser.id || 'admin-001', role: 'admin', name: authenticatedUser.name || 'Admin', email: authenticatedUser.email };
         }
         DB.set('admin_session', sessObj);
-        DB.del('session'); // Purge store session to prevent admin email from auto-filling customer checkouts
+        DB.set('session', sessObj); // Conserver synchronisé pour bascule boutique
         showToast('Connexion réussie ! Bienvenue dans l\'administration 🔒', 'success');
         checkAdminAuth();
         switchAdminTab('products');
@@ -1965,17 +2040,24 @@
       DB.del('session');
       checkAdminAuth();
       showToast('Déconnexion effectuée.', 'info');
+      window.location.reload();
     }
 
     function changePeriod(period) {
-      currentPeriod = period;
+      currentPeriod = period || 'week';
       document.querySelectorAll('.admin-period-tab').forEach(function(btn) { btn.classList.remove('active'); });
       var activeTab = document.getElementById('tab-period-' + period);
       if (activeTab) activeTab.classList.add('active');
 
       var indRev = document.getElementById('chart-period-indicator-rev');
       var indVol = document.getElementById('chart-period-indicator-vol');
-      var labelMap = { day: '7 derniers jours', week: '14 derniers jours', month: '30 derniers jours', year: '12 derniers mois' };
+      var labelMap = {
+        day: "Aujourd'hui",
+        week: '7 derniers jours',
+        month: '30 derniers jours',
+        year: '12 derniers mois',
+        all: 'Tout l\'historique'
+      };
       if (indRev) indRev.textContent = labelMap[period] || period;
       if (indVol) indVol.textContent = labelMap[period] || period;
 
@@ -1988,15 +2070,23 @@
       var prods = DB.get('products', []);
       var users = DB.get('users', []);
       var recharges = DB.get('recharges', []);
+      var visitorLogs = DB.get('visitor_logs', []);
 
       var now = Date.now();
-      var periodDays = 7;
-      if (currentPeriod === 'day') periodDays = 7;
-      else if (currentPeriod === 'week') periodDays = 14;
-      else if (currentPeriod === 'month') periodDays = 30;
-      else if (currentPeriod === 'year') periodDays = 365;
-
-      var periodCutoff = now - (periodDays * 24 * 60 * 60 * 1000);
+      var periodCutoff = 0;
+      if (currentPeriod === 'day') {
+        var todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        periodCutoff = todayStart.getTime();
+      } else if (currentPeriod === 'week') {
+        periodCutoff = now - (7 * 24 * 60 * 60 * 1000);
+      } else if (currentPeriod === 'month') {
+        periodCutoff = now - (30 * 24 * 60 * 60 * 1000);
+      } else if (currentPeriod === 'year') {
+        periodCutoff = now - (365 * 24 * 60 * 60 * 1000);
+      } else { // 'all'
+        periodCutoff = 0;
+      }
 
       var periodOrders = orders.filter(function(o) {
         if (!o.date) return true;
@@ -2013,6 +2103,15 @@
       var avgCart = totalUnits > 0 ? totalRev / totalUnits : 0;
       var pendingOrders = orders.filter(function(o) { return o.status === 'En attente'; }).length;
       var pendingRecharges = recharges.filter(function(r) { return r.status === 'En attente'; }).length;
+
+      // Calcul des Visiteurs réels pour la période
+      var periodVisitors = visitorLogs.filter(function(v) {
+        if (!v.date) return true;
+        var vt = new Date(v.date).getTime();
+        return isNaN(vt) || vt >= periodCutoff;
+      });
+      var totalVisitorsCount = periodVisitors.length;
+      var uniqueVisitorsCount = (new Set(periodVisitors.map(function(v) { return v.vid; }))).size;
 
       // Badges de notification en temps réel
       var bRech = document.getElementById('badge-nav-recharges');
@@ -2037,9 +2136,13 @@
       if (statOrd) statOrd.textContent = periodOrders.length;
       var statCart = document.getElementById('stat-avg-cart');
       if (statCart) statCart.textContent = '$' + avgCart.toFixed(2);
+      var statVis = document.getElementById('stat-visitors-count');
+      if (statVis) statVis.textContent = totalVisitorsCount;
+      var statVisSub = document.getElementById('stat-visitors-sub');
+      if (statVisSub) statVisSub.textContent = uniqueVisitorsCount + ' visiteur' + (uniqueVisitorsCount > 1 ? 's uniques' : ' unique');
 
       // Micro-animation de pulsation sur les métriques mises à jour
-      ['stat-revenue', 'stat-units-sold', 'stat-orders-count', 'stat-avg-cart'].forEach(function(id) {
+      ['stat-revenue', 'stat-units-sold', 'stat-orders-count', 'stat-avg-cart', 'stat-visitors-count'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
           el.classList.remove('pulse-stat');
@@ -3042,7 +3145,7 @@
       document.getElementById('admin-proof-lightbox').classList.remove('active');
     }
 
-    // ========== 4. TABLE DES UTILISATEURS & SOLDES ==========
+    // ========== 4. TABLE DES UTILISATEURS & GESTION DES SOLDES (PROMPT 6) ==========
     function renderUsersTable(users) {
       var tbody = document.getElementById('admin-users-tbody');
       if (!tbody) return;
@@ -3056,12 +3159,13 @@
             <td><strong>${escapeHtml(u.name)}</strong></td>
             <td><span style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(u.email)}</span></td>
             <td><span class="status-indicator-pill ${isAdmin ? 'online' : 'offline'}">${isAdmin ? 'Administrateur' : 'Client'}</span></td>
-            <td><strong style="color: var(--primary-600); font-size: 15px;">${bal.toFixed(2)} $</strong></td>
+            <td><strong style="color: var(--primary-600); font-size: 15px;">$${bal.toFixed(2)}</strong></td>
             <td>
-              <div style="display: flex; gap: 4px;">
-                <button type="button" class="btn-secondary btn-sm" onclick="creditUserBalance('${u.id}', 10)">+10 $</button>
-                <button type="button" class="btn-secondary btn-sm" onclick="creditUserBalance('${u.id}', 50)">+50 $</button>
-                <button type="button" class="btn-secondary btn-sm" onclick="customCreditPrompt('${u.id}')">Ajuster...</button>
+              <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="btn-secondary btn-sm" onclick="quickCreditUser('${u.id}', 10)" title="Créditer +10 $ immédiatement">+10 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickCreditUser('${u.id}', 20)" title="Créditer +20 $ immédiatement">+20 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickCreditUser('${u.id}', 50)" title="Créditer +50 $ immédiatement">+50 $</button>
+                <button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="openBalanceModal('${u.id}')" title="Définir un solde sur mesure, ajouter ou déduire">⚙️ Ajuster</button>
               </div>
             </td>
           </tr>
@@ -3071,30 +3175,198 @@
       tbody.innerHTML = html || '<tr><td colspan="5" style="text-align: center; padding: 20px;">Aucun utilisateur.</td></tr>';
     }
 
-    function creditUserBalance(userId, amount) {
+    function quickCreditUser(userId, amount) {
       var users = DB.get('users', []);
-      var u = users.find(function(x) { return x.id === userId; });
-      if (u) {
-        u.balance = (u.balance || 0) + amount;
-        DB.set('users', users);
-        renderDashboard();
-        showToast(`Solde de ${u.name} crédité de +${amount} $.`, 'success');
+      var u = users.find(function(x) { return x.id === userId || (x.email && x.email === userId); });
+      if (!u) return;
+
+      var oldBal = parseFloat(u.balance) || 0;
+      var newBal = Math.round((oldBal + amount) * 100) / 100;
+      u.balance = newBal;
+      DB.set('users', users);
+
+      // Consigner dans les transactions avec mention explicite du crédit manuel administrateur
+      var txs = DB.get('transactions', []);
+      var newTx = {
+        id: 'TXN-ADJUST-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+        userId: u.id,
+        userEmail: u.email,
+        userName: u.name,
+        amount: amount,
+        currency: 'USD',
+        paymentMethod: 'Ajustement Administrateur',
+        provider: 'admin_manual',
+        status: 'completed',
+        type: 'credit_manuel_admin',
+        notes: `Crédit rapide manuel par l'administrateur (+${amount} $) - Nouveau solde: $${newBal.toFixed(2)}`,
+        balanceBefore: oldBal,
+        balanceAfter: newBal,
+        date: new Date().toISOString()
+      };
+      txs.unshift(newTx);
+      DB.set('transactions', txs);
+
+      // Synchroniser la session active si l'utilisateur modifié est l'utilisateur connecté
+      var curSess = DB.get('session');
+      if (curSess && (curSess.userId === u.id || curSess.email === u.email)) {
+        curSess.balance = newBal;
+        DB.set('session', curSess);
       }
+
+      // Synchronisation backend distante
+      var adminSess = DB.get('admin_session');
+      if (adminSess && adminSess.token) {
+        fetch('/api/data/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + adminSess.token
+          },
+          body: JSON.stringify({
+            userId: u.id,
+            amount: amount,
+            action: 'add',
+            reason: `Crédit rapide administrateur (+${amount} $)`
+          })
+        }).catch(function() {});
+      }
+
+      renderDashboard();
+      showToast(`Solde de ${u.name} crédité de +${amount} $ (Nouveau solde : $${newBal.toFixed(2)}).`, 'success');
     }
 
-    function customCreditPrompt(userId) {
-      var val = prompt('Entrez le nouveau montant de solde pour ce client ($ USD) :');
-      if (val === null) return;
-      var num = parseFloat(val);
-      if (isNaN(num) || num < 0) { alert('Montant invalide.'); return; }
+    var selectedBalanceUser = null;
+
+    function openBalanceModal(userId) {
       var users = DB.get('users', []);
-      var u = users.find(function(x) { return x.id === userId; });
-      if (u) {
-        u.balance = num;
-        DB.set('users', users);
-        renderDashboard();
-        showToast(`Solde de ${u.name} mis à jour à ${num.toFixed(2)} $.`, 'success');
+      var u = users.find(function(x) { return x.id === userId || (x.email && x.email === userId); });
+      if (!u) return;
+
+      selectedBalanceUser = u;
+      document.getElementById('adjust-balance-user-id').value = u.id;
+      document.getElementById('adjust-balance-user-name').textContent = u.name;
+      document.getElementById('adjust-balance-user-email').textContent = u.email;
+      document.getElementById('adjust-balance-current-val').textContent = '$' + (u.balance || 0).toFixed(2);
+      document.getElementById('adjust-balance-mode').value = 'add';
+      document.getElementById('adjust-balance-amount').value = '';
+      document.getElementById('adjust-balance-reason').value = '';
+      updateCalculatedNewBalance();
+
+      var modal = document.getElementById('admin-adjust-balance-modal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeBalanceModal() {
+      var modal = document.getElementById('admin-adjust-balance-modal');
+      if (modal) modal.classList.remove('active');
+      selectedBalanceUser = null;
+    }
+
+    function updateCalculatedNewBalance() {
+      if (!selectedBalanceUser) return;
+      var curBal = parseFloat(selectedBalanceUser.balance) || 0;
+      var mode = document.getElementById('adjust-balance-mode').value;
+      var inputAmt = parseFloat(document.getElementById('adjust-balance-amount').value) || 0;
+      var calculated = curBal;
+
+      if (mode === 'add') {
+        calculated = curBal + inputAmt;
+      } else if (mode === 'deduct') {
+        calculated = Math.max(0, curBal - inputAmt);
+      } else if (mode === 'set') {
+        calculated = Math.max(0, inputAmt);
       }
+
+      var previewEl = document.getElementById('adjust-balance-preview-val');
+      if (previewEl) previewEl.textContent = '$' + calculated.toFixed(2);
+    }
+
+    function submitBalanceAdjustment(e) {
+      if (e) e.preventDefault();
+      if (!selectedBalanceUser) return;
+
+      var mode = document.getElementById('adjust-balance-mode').value;
+      var inputVal = parseFloat(document.getElementById('adjust-balance-amount').value);
+      var reason = document.getElementById('adjust-balance-reason').value.trim();
+
+      if (isNaN(inputVal) || inputVal < 0) {
+        showToast('Veuillez saisir un montant valide.', 'error');
+        return;
+      }
+
+      var users = DB.get('users', []);
+      var u = users.find(function(x) { return x.id === selectedBalanceUser.id; });
+      if (!u) return;
+
+      var oldBal = parseFloat(u.balance) || 0;
+      var newBal = oldBal;
+      var actionDesc = '';
+
+      if (mode === 'add') {
+        newBal = oldBal + inputVal;
+        actionDesc = `Crédit manuel (+${inputVal.toFixed(2)} $)`;
+      } else if (mode === 'deduct') {
+        newBal = Math.max(0, oldBal - inputVal);
+        actionDesc = `Débit manuel (-${inputVal.toFixed(2)} $)`;
+      } else if (mode === 'set') {
+        newBal = Math.max(0, inputVal);
+        actionDesc = `Ajustement du solde à ${inputVal.toFixed(2)} $`;
+      }
+      newBal = Math.round(newBal * 100) / 100;
+      var diff = Math.round((newBal - oldBal) * 100) / 100;
+
+      u.balance = newBal;
+      DB.set('users', users);
+
+      // Consignation détaillée dans l'historique des transactions
+      var txs = DB.get('transactions', []);
+      var newTx = {
+        id: 'TXN-ADJUST-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+        userId: u.id,
+        userEmail: u.email,
+        userName: u.name,
+        amount: Math.abs(diff),
+        currency: 'USD',
+        paymentMethod: 'Ajustement Administrateur',
+        provider: 'admin_manual',
+        status: 'completed',
+        type: diff >= 0 ? 'credit_manuel_admin' : 'debit_manuel_admin',
+        notes: `${actionDesc} par l'administrateur. Motif : ${reason}`,
+        balanceBefore: oldBal,
+        balanceAfter: newBal,
+        date: new Date().toISOString()
+      };
+      txs.unshift(newTx);
+      DB.set('transactions', txs);
+
+      // Synchroniser la session active si l'utilisateur modifié est l'utilisateur connecté
+      var curSess = DB.get('session');
+      if (curSess && (curSess.userId === u.id || curSess.email === u.email)) {
+        curSess.balance = newBal;
+        DB.set('session', curSess);
+      }
+
+      // Synchronisation backend distante
+      var adminSess = DB.get('admin_session');
+      if (adminSess && adminSess.token) {
+        fetch('/api/data/users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + adminSess.token
+          },
+          body: JSON.stringify({
+            userId: u.id,
+            amount: inputVal,
+            action: mode,
+            reason: reason
+          })
+        }).catch(function() {});
+      }
+
+      closeBalanceModal();
+      renderDashboard();
+      showToast(`Solde de ${u.name} mis à jour : $${newBal.toFixed(2)} (${reason}).`, 'success');
     }
 
     // ========== 5. TABLE DES MOYENS DE PAIEMENT ==========
@@ -3401,23 +3673,28 @@
       var completed = (orders || []).filter(function(o) { return o.status === 'Complété' || o.status === 'Livré'; });
 
       if (period === 'day') {
+        for (var h = 0; h < 24; h += 2) {
+          labels.push((h < 10 ? '0' : '') + h + 'h');
+          var slotOrders = completed.filter(function(o) {
+            if (!o.date) return false;
+            var od = new Date(o.date);
+            var today = new Date();
+            var isSameDay = od.getDate() === today.getDate() && od.getMonth() === today.getMonth() && od.getFullYear() === today.getFullYear();
+            if (!isSameDay) return false;
+            var hour = od.getHours();
+            return hour >= h && hour < h + 2;
+          });
+          var dayRev = slotOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+          var dayVol = slotOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+          revs.push(Math.round(dayRev * 100) / 100);
+          vols.push(dayVol);
+        }
+      } else if (period === 'week') {
         var days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
         for (var i = 6; i >= 0; i--) {
           var d = new Date();
           d.setDate(now.getDate() - i);
           labels.push(days[d.getDay()]);
-          var dStr = d.toISOString().split('T')[0];
-          var dayOrders = completed.filter(function(o) { return o.date && o.date.startsWith(dStr); });
-          var dayRev = dayOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
-          var dayVol = dayOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
-          revs.push(Math.round(dayRev * 100) / 100);
-          vols.push(dayVol);
-        }
-      } else if (period === 'week') {
-        for (var i = 13; i >= 0; i--) {
-          var d = new Date();
-          d.setDate(now.getDate() - i);
-          labels.push((d.getDate() < 10 ? '0' : '') + d.getDate() + '/' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1));
           var dStr = d.toISOString().split('T')[0];
           var dayOrders = completed.filter(function(o) { return o.date && o.date.startsWith(dStr); });
           var dayRev = dayOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
@@ -3442,7 +3719,7 @@
           revs.push(Math.round(chunkRev * 100) / 100);
           vols.push(chunkVol);
         }
-      } else if (period === 'year') {
+      } else { // 'year' or 'all'
         var monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
         var curMonth = now.getMonth();
         for (var m = 11; m >= 0; m--) {

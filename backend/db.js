@@ -41,6 +41,7 @@ const INITIAL_DB = {
   transactions: [], // Zéro fausse transaction
   vault: {}, // Zéro faux identifiant
   tickets: [], // Messages du support client
+  visitor_logs: [], // Traçabilité des visites réelles et visiteurs uniques
   payment_methods: [
     {
       id: 1,
@@ -87,6 +88,7 @@ class Database {
           transactions: parsed.transactions || [],
           vault: parsed.vault || {},
           tickets: parsed.tickets || [],
+          visitor_logs: parsed.visitor_logs || [],
           payment_methods: parsed.payment_methods || INITIAL_DB.payment_methods,
           settings: parsed.settings || INITIAL_DB.settings
         };
@@ -199,6 +201,50 @@ class Database {
     return u;
   }
 
+  // Ajustement manuel du solde client par l'administrateur avec traçabilité stricte
+  adjustUserBalance(userId, { amount, action = 'add', reason = '', adminName = 'Administrateur' }) {
+    const u = this.getUserById(userId) || this.getUserByEmail(userId);
+    if (!u) throw new Error('Utilisateur introuvable.');
+
+    const oldBal = parseFloat(u.balance) || 0;
+    const numAmount = parseFloat(amount) || 0;
+    let newBal = oldBal;
+
+    if (action === 'set') {
+      newBal = Math.max(0, numAmount);
+    } else if (action === 'deduct') {
+      newBal = Math.max(0, oldBal - numAmount);
+    } else { // 'add' / 'credit'
+      newBal = oldBal + numAmount;
+    }
+    newBal = Math.round(newBal * 100) / 100;
+    const diff = Math.round((newBal - oldBal) * 100) / 100;
+
+    u.balance = newBal;
+    u.updated_at = new Date().toISOString();
+    this.persist();
+
+    // Consigner immédiatement l'ajustement manuel dans les transactions
+    const tx = this.createTransaction({
+      id: 'TXN-ADJUST-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+      userId: u.id,
+      userEmail: u.email,
+      userName: u.name,
+      amount: Math.abs(diff),
+      currency: 'USD',
+      paymentMethod: 'Ajustement Manuel Administrateur',
+      provider: 'admin_manual',
+      status: 'completed',
+      type: diff >= 0 ? 'credit_manuel_admin' : 'debit_manuel_admin',
+      failureReason: null,
+      notes: reason || `Ajustement manuel par ${adminName} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)} $)`,
+      balanceBefore: oldBal,
+      balanceAfter: newBal
+    });
+
+    return { user: u, transaction: tx, diff, oldBalance: oldBal, newBalance: newBal };
+  }
+
   // ========== MODÈLE PRODUITS ==========
   getProducts() {
     return this.data.products;
@@ -286,17 +332,23 @@ class Database {
     const newTx = {
       id: tx.id || 'TXN-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
       userId: tx.userId,
+      userEmail: tx.userEmail || null,
+      userName: tx.userName || null,
       amount: parseFloat(tx.amount) || 0,
       currency: tx.currency || 'USD',
+      type: tx.type || 'deposit',
       paymentMethod: tx.paymentMethod || 'Inconnu',
       provider: tx.provider || 'manual',
       providerTxId: tx.providerTxId || null,
       status: tx.status || 'pending', // 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired'
       idempotencyKey: tx.idempotencyKey || null,
       proofImage: tx.proofImage || null,
+      notes: tx.notes || null,
+      balanceBefore: tx.balanceBefore !== undefined ? tx.balanceBefore : null,
+      balanceAfter: tx.balanceAfter !== undefined ? tx.balanceAfter : null,
       createdAt: now,
       updatedAt: now,
-      completedAt: null,
+      completedAt: tx.status === 'completed' ? now : null,
       failureReason: null
     };
     this.data.transactions.unshift(newTx);
@@ -393,10 +445,76 @@ class Database {
     this.persist();
   }
 
-  // ========== STATISTIQUES RÉELLES DYNAMIQUES ==========
-  getLiveStatistics() {
+  // ========== TRACKING DES VISITEURS (PRODUCTION) ==========
+  trackVisitor({ vid, isNew, ip, userAgent }) {
+    if (!this.data.visitor_logs) this.data.visitor_logs = [];
+    const now = new Date();
+    const entry = {
+      id: 'vis_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      vid: vid || ('anon_' + Math.random().toString(36).substring(2, 10)),
+      isNew: !!isNew,
+      ip: ip || null,
+      userAgent: userAgent || null,
+      date: now.toISOString(),
+      timestamp: now.getTime()
+    };
+    this.data.visitor_logs.push(entry);
+    if (this.data.visitor_logs.length > 5000) {
+      this.data.visitor_logs = this.data.visitor_logs.slice(-5000);
+    }
+    this.persist();
+    return entry;
+  }
+
+  getVisitorStats(period = 'all') {
+    const logs = this.data.visitor_logs || [];
+    const now = new Date();
+    let cutoff = 0;
+
+    if (period === 'day') {
+      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    } else if (period === 'week') {
+      cutoff = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+    } else if (period === 'month') {
+      cutoff = now.getTime() - (30 * 24 * 60 * 60 * 1000);
+    } else if (period === 'year') {
+      cutoff = now.getTime() - (365 * 24 * 60 * 60 * 1000);
+    } else {
+      cutoff = 0;
+    }
+
+    const filtered = logs.filter(l => (l.timestamp || new Date(l.date).getTime()) >= cutoff);
+    const totalVisits = filtered.length;
+    const uniqueVids = new Set(filtered.map(l => l.vid)).size;
+
+    return { totalVisits, uniqueVisitors: uniqueVids };
+  }
+
+  // ========== STATISTIQUES RÉELLES DYNAMIQUES AVEC FILTRES DE TEMPS ==========
+  getLiveStatistics(period = 'all') {
     const orders = this.data.orders;
-    const completedOrders = orders.filter(o => o.status === 'Complété' || o.status === 'Livré');
+    const now = new Date();
+    let cutoff = 0;
+
+    if (period === 'day') {
+      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    } else if (period === 'week') {
+      cutoff = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+    } else if (period === 'month') {
+      cutoff = now.getTime() - (30 * 24 * 60 * 60 * 1000);
+    } else if (period === 'year') {
+      cutoff = now.getTime() - (365 * 24 * 60 * 60 * 1000);
+    } else {
+      cutoff = 0; // 'all'
+    }
+
+    const periodOrders = orders.filter(o => {
+      if (!o.date) return true;
+      const t = new Date(o.date).getTime();
+      return isNaN(t) || t >= cutoff;
+    });
+
+    const completedOrders = periodOrders.filter(o => o.status === 'Complété' || o.status === 'Livré');
     const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
     const totalUnitsSold = completedOrders.reduce((sum, o) => sum + (o.quantity || 1), 0);
     const avgCart = totalUnitsSold > 0 ? totalRevenue / totalUnitsSold : 0;
@@ -405,34 +523,75 @@ class Database {
     const pendingDeposits = this.data.transactions.filter(t => t.status === 'pending').length;
     const totalUsers = this.data.users.filter(u => u.role !== 'admin').length;
 
-    // Calcul dynamique des 7 derniers jours à partir des vraies commandes
-    const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-    const now = new Date();
-    const chartLabels = [];
-    const chartRevenue = [];
-    const chartVolume = [];
+    // Calcul visiteurs réels
+    const visitorStats = this.getVisitorStats(period);
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(now.getDate() - i);
-      const dayName = days[d.getDay()];
-      chartLabels.push(dayName);
+    // Séries chronologiques dynamiques
+    let chartLabels = [];
+    let chartRevenue = [];
+    let chartVolume = [];
 
-      const dStr = d.toISOString().split('T')[0];
-      const dayOrders = completedOrders.filter(o => o.date && o.date.startsWith(dStr));
-      const dayRev = dayOrders.reduce((s, o) => s + (o.amount || 0), 0);
-      const dayVol = dayOrders.reduce((s, o) => s + (o.quantity || 1), 0);
-
-      chartRevenue.push(Math.round(dayRev * 100) / 100);
-      chartVolume.push(dayVol);
+    if (period === 'day') {
+      for (let h = 0; h < 24; h += 2) {
+        chartLabels.push((h < 10 ? '0' : '') + h + 'h');
+        const slotOrders = completedOrders.filter(o => {
+          if (!o.date) return false;
+          const od = new Date(o.date);
+          const hour = od.getHours();
+          return hour >= h && hour < h + 2;
+        });
+        chartRevenue.push(Math.round(slotOrders.reduce((s, o) => s + (o.amount || 0), 0) * 100) / 100);
+        chartVolume.push(slotOrders.reduce((s, o) => s + (o.quantity || 1), 0));
+      }
+    } else if (period === 'week') {
+      const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        chartLabels.push(days[d.getDay()]);
+        const dStr = d.toISOString().split('T')[0];
+        const dayOrders = completedOrders.filter(o => o.date && o.date.startsWith(dStr));
+        chartRevenue.push(Math.round(dayOrders.reduce((s, o) => s + (o.amount || 0), 0) * 100) / 100);
+        chartVolume.push(dayOrders.reduce((s, o) => s + (o.quantity || 1), 0));
+      }
+    } else if (period === 'month') {
+      for (let i = 25; i >= 0; i -= 5) {
+        const d = new Date();
+        d.setDate(now.getDate() - i);
+        chartLabels.push((d.getDate() < 10 ? '0' : '') + d.getDate() + '/' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1));
+        const endD = new Date(d);
+        endD.setDate(d.getDate() + 5);
+        const chunkOrders = completedOrders.filter(o => {
+          if (!o.date) return false;
+          const od = new Date(o.date);
+          return od >= d && od < endD;
+        });
+        chartRevenue.push(Math.round(chunkOrders.reduce((s, o) => s + (o.amount || 0), 0) * 100) / 100);
+        chartVolume.push(chunkOrders.reduce((s, o) => s + (o.quantity || 1), 0));
+      }
+    } else {
+      const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+      const curMonth = now.getMonth();
+      for (let m = 11; m >= 0; m--) {
+        const targetDate = new Date(now.getFullYear(), curMonth - m, 1);
+        const mo = targetDate.getMonth();
+        chartLabels.push(monthNames[mo]);
+        const moPrefix = targetDate.getFullYear() + '-' + (mo + 1 < 10 ? '0' : '') + (mo + 1);
+        const moOrders = completedOrders.filter(o => o.date && o.date.startsWith(moPrefix));
+        chartRevenue.push(Math.round(moOrders.reduce((s, o) => s + (o.amount || 0), 0) * 100) / 100);
+        chartVolume.push(moOrders.reduce((s, o) => s + (o.quantity || 1), 0));
+      }
     }
 
     return {
+      period,
       totalUsers,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
-      totalOrders: orders.length,
+      totalOrders: periodOrders.length,
       totalUnitsSold,
       avgCart: Math.round(avgCart * 100) / 100,
+      totalVisitors: visitorStats.totalVisits,
+      uniqueVisitors: visitorStats.uniqueVisitors,
       pendingOrders,
       pendingDeposits,
       chartLabels,

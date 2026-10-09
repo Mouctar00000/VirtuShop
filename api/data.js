@@ -29,12 +29,13 @@ module.exports = async function handler(req, res) {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const auth = authService.verifySession(token);
 
-    // 1. STATISTIQUES RÉELLES DYNAMIQUES
+    // 1. STATISTIQUES RÉELLES DYNAMIQUES AVEC FILTRES
     if (req.method === 'GET' && resource === 'stats') {
       if (!auth || auth.user.role !== 'admin') {
         return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
       }
-      const stats = db.getLiveStatistics();
+      const period = req.query?.period || (req.url && req.url.includes('period=') ? req.url.split('period=')[1].split('&')[0] : 'all');
+      const stats = db.getLiveStatistics(period);
       return res.status(200).json(stats);
     }
 
@@ -189,6 +190,65 @@ module.exports = async function handler(req, res) {
         }
         const updated = db.updateTicket(body.id, { status: body.status || 'Résolu' });
         return res.status(200).json({ success: true, ticket: updated });
+      }
+    }
+
+    // 5. VISITEURS ET TRAÇABILITÉ DES VISITES
+    if (resource === 'visitors') {
+      if (req.method === 'POST') {
+        const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress;
+        const userAgent = req.headers['user-agent'] || '';
+        db.trackVisitor({ vid: body.vid, isNew: body.isNew, ip, userAgent });
+        return res.status(200).json({ success: true });
+      }
+      if (req.method === 'GET') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        const period = req.query?.period || (req.url && req.url.includes('period=') ? req.url.split('period=')[1].split('&')[0] : 'all');
+        const vStats = db.getVisitorStats(period);
+        return res.status(200).json(vStats);
+      }
+    }
+
+    // 6. UTILISATEURS & GESTION DES SOLDES CLIENTS
+    if (resource === 'users') {
+      if (req.method === 'GET') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        const users = db.getUsers().map(u => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          balance: u.balance || 0,
+          created_at: u.created_at
+        }));
+        const txs = db.getTransactions();
+        return res.status(200).json({ users, transactions: txs });
+      }
+
+      if (req.method === 'POST' || req.method === 'PUT') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Action réservée à l\'administrateur.' });
+        }
+        const userId = body.userId;
+        const amount = parseFloat(body.amount);
+        const action = body.action || 'add'; // 'add' | 'deduct' | 'set'
+        const reason = body.reason || 'Ajustement manuel par administrateur';
+        if (!userId || isNaN(amount)) {
+          return res.status(400).json({ error: 'Paramètres manquants ou invalides (userId, amount).' });
+        }
+
+        const resAdjust = db.adjustUserBalance(userId, {
+          amount,
+          action,
+          reason,
+          adminName: auth.user.name || 'Administrateur'
+        });
+
+        return res.status(200).json({ success: true, ...resAdjust });
       }
     }
 

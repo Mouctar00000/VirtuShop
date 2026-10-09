@@ -52,16 +52,21 @@ var AuthState = {
 
   getSession: function() {
     if (!this._session) {
-      this._session = DB.get('session');
+      // Auto-restauration de la session depuis session ou admin_session
+      this._session = DB.get('session') || DB.get('admin_session');
       if (this._session && typeof Security !== 'undefined') {
         if (!Security.isSessionValid(this._session)) {
-          if (this._session.userId && !this._session.expiresAt) {
-            this._session.expiresAt = Date.now() + (2 * 60 * 60 * 1000);
+          if (this._session.userId && (!this._session.expiresAt || Date.now() < this._session.expiresAt)) {
+            this._session.expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
             DB.set('session', this._session);
           } else if (this._session.expiresAt && Date.now() > this._session.expiresAt) {
             DB.del('session');
             this._session = null;
           }
+        } else {
+          // Rafraîchir automatiquement la persistance (sliding window 30 jours)
+          this._session.expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+          DB.set('session', this._session);
         }
       }
     }
@@ -91,7 +96,7 @@ var AuthState = {
     if (!session || !session.userId) return;
 
     if (!session.expiresAt) {
-      session.expiresAt = Date.now() + (2 * 60 * 60 * 1000);
+      session.expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000); // 30 jours de persistance
     }
     if (!session.token) {
       session.token = (typeof Security !== 'undefined') ? Security.generateSecureToken(32) : ('tok_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10));
@@ -99,6 +104,9 @@ var AuthState = {
 
     this._session = session;
     DB.set('session', session);
+    if (session.role === 'admin') {
+      DB.set('admin_session', session);
+    }
 
     if (user) {
       this._user = user;
@@ -125,6 +133,7 @@ var AuthState = {
     this._session = null;
     this._user = null;
     DB.del('session');
+    DB.del('admin_session');
     this.notify();
     routeUserExperience();
     updateNavbar();
@@ -481,8 +490,17 @@ function updateNavbar() {
 
   if (isAuth) {
     var bal = getUserBalance();
+    var isAdmin = session && (session.role === 'admin' || (DB.get('admin_session') && DB.get('admin_session').role === 'admin'));
 
     container.innerHTML = `
+      <!-- Bouton Bascule Espace Admin (Prompt 9) -->
+      ${isAdmin ? `
+        <button type="button" class="btn-secondary btn-sm btn-admin-toggle-btn btn-light-sweep" onclick="switchToAdmin()" title="Basculer vers le tableau de bord administrateur" style="color: #1d4ed8; font-weight: 700; background: #eff6ff; border: 1px solid #bfdbfe; margin-right: 4px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; padding: 4px 10px; border-radius: 6px;">
+          <span>⚡</span>
+          <span>Espace Admin</span>
+        </button>
+      ` : ''}
+
       <!-- Capsule Solde avec bouton + -->
       <div class="balance-pill" title="Votre solde disponible">
         <span class="balance-label">Solde :</span>
@@ -510,6 +528,11 @@ function updateNavbar() {
             <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(session.email)}</div>
             <div style="font-size: 11px; color: var(--primary-600); margin-top: 4px; font-weight: 700;">Solde : $${bal.toFixed(2)}</div>
           </div>
+          ${isAdmin ? `
+            <a href="javascript:void(0)" class="dropdown-item" onclick="switchToAdmin(); toggleUserDropdown();" style="color: #1d4ed8; font-weight: 700;">
+              <span>⚡</span> Tableau de bord Admin
+            </a>
+          ` : ''}
           <a href="javascript:void(0)" class="dropdown-item" onclick="openDepositModal(); toggleUserDropdown();">
             <span>💳</span> Recharger mon solde
           </a>
@@ -3362,6 +3385,9 @@ function startApp() {
       try { history.replaceState(null, '', window.location.pathname + '#catalog'); } catch (e) {}
     }
 
+    // Traçabilité des visites réelles (Prompt 8)
+    trackVisitor();
+
     // Routage immédiat et synchrone
     routeUserExperience();
     initGoogleIdentity();
@@ -3369,6 +3395,49 @@ function startApp() {
   } catch (e) {
     console.error('[GetVirtu startApp]', e);
   }
+}
+
+// Basculement instantané vers le tableau de bord administrateur (Prompt 9)
+function switchToAdmin() {
+  var s = AuthState.getSession() || DB.get('admin_session');
+  if (s) {
+    DB.set('admin_session', s);
+    DB.set('session', s);
+  }
+  window.location.href = 'admin.html';
+}
+
+// Traçabilité des visites réelles et visiteurs uniques
+function trackVisitor() {
+  try {
+    var vid = localStorage.getItem('gv_visitor_id');
+    var isNew = false;
+    if (!vid) {
+      vid = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      localStorage.setItem('gv_visitor_id', vid);
+      isNew = true;
+    }
+    var todayStr = new Date().toISOString().split('T')[0];
+    var lastVisit = localStorage.getItem('gv_last_visit_date');
+    if (lastVisit !== todayStr) {
+      localStorage.setItem('gv_last_visit_date', todayStr);
+      var visits = DB.get('visitor_logs', []);
+      visits.push({
+        id: 'vis_' + Date.now(),
+        vid: vid,
+        isNew: isNew,
+        date: new Date().toISOString()
+      });
+      if (visits.length > 3000) visits = visits.slice(-3000);
+      DB.set('visitor_logs', visits);
+
+      fetch('/api/data/visitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vid: vid, isNew: isNew })
+      }).catch(function() {});
+    }
+  } catch (e) {}
 }
 
 if (document.readyState === 'loading') {

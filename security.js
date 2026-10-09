@@ -33,7 +33,7 @@
     return Array.from(array).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
   };
 
-  Security.SESSION_DURATION_MS = 2 * 60 * 60 * 1000; // 2 heures de validité max
+  Security.SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours de validité persistante (fermeture d'onglet/navigateur préservée)
 
   Security.createSession = function(user, role) {
     var token = Security.generateSecureToken(32);
@@ -55,6 +55,10 @@
     if (!session.userId) return false;
     if (session.expiresAt && typeof session.expiresAt === 'number') {
       if (Date.now() > session.expiresAt) return false;
+      // Auto-rafraîchissement glissant de la session active (autoRefreshToken)
+      session.expiresAt = Date.now() + Security.SESSION_DURATION_MS;
+    } else {
+      session.expiresAt = Date.now() + Security.SESSION_DURATION_MS;
     }
     return true;
   };
