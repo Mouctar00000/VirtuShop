@@ -592,6 +592,15 @@ class Database {
       avgCart: Math.round(avgCart * 100) / 100,
       totalVisitors: visitorStats.totalVisits,
       uniqueVisitors: visitorStats.uniqueVisitors,
+      visitors: visitorStats,
+      summary: {
+        revenue: Math.round(totalRevenue * 100) / 100,
+        orders: periodOrders.length,
+        unitsSold: totalUnitsSold,
+        avgCart: Math.round(avgCart * 100) / 100,
+        totalVisitors: visitorStats.totalVisits,
+        uniqueVisitors: visitorStats.uniqueVisitors
+      },
       pendingOrders,
       pendingDeposits,
       chartLabels,

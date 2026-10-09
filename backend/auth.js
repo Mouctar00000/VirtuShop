@@ -12,9 +12,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://getvirtu.shop/api/auth/google/callback';
 
-// Sessions actives en mémoire (avec expiration à 24h)
+// Sessions actives en mémoire et persistance cryptographique (30 jours)
 const activeSessions = new Map();
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+const AUTH_SECRET = process.env.SESSION_SECRET || 'getvirtu_auth_sec_hmac_2026_super_key';
 
 // Anti brute-force en mémoire
 const loginAttempts = new Map();
@@ -48,10 +49,24 @@ class AuthService {
     return computedSha === storedHash;
   }
 
-  // 2. GESTION DES JETONS ET SESSIONS
+  // 2. GESTION DES JETONS ET SESSIONS AVEC PERSISTANCE 30 JOURS
   createSession(user) {
-    const token = crypto.randomBytes(32).toString('hex');
     const now = Date.now();
+    const expiresAt = now + SESSION_DURATION_MS;
+    
+    // Génération de jeton HMAC auto-vérifiable pour résister aux redémarrages serverless Vercel
+    const payload = Buffer.from(JSON.stringify({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role || 'client',
+      createdAt: now,
+      expiresAt: expiresAt,
+      nonce: crypto.randomBytes(8).toString('hex')
+    })).toString('base64url');
+    const signature = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
+    const token = payload + '.' + signature;
+
     const session = {
       token,
       userId: user.id,
@@ -59,7 +74,7 @@ class AuthService {
       name: user.name,
       role: user.role || 'client',
       createdAt: now,
-      expiresAt: now + SESSION_DURATION_MS
+      expiresAt: expiresAt
     };
     activeSessions.set(token, session);
     return session;
@@ -67,18 +82,55 @@ class AuthService {
 
   verifySession(token) {
     if (!token) return null;
-    const session = activeSessions.get(token);
-    if (!session) return null;
-    if (Date.now() > session.expiresAt) {
-      activeSessions.delete(token);
-      return null;
+
+    // 1. Recherche en mémoire vive
+    let session = activeSessions.get(token);
+    if (session) {
+      if (Date.now() > session.expiresAt) {
+        activeSessions.delete(token);
+        return null;
+      }
+      const user = db.getUserById(session.userId);
+      if (!user) {
+        activeSessions.delete(token);
+        return null;
+      }
+      // Renouvellement glissant
+      session.expiresAt = Date.now() + SESSION_DURATION_MS;
+      return { session, user };
     }
-    const user = db.getUserById(session.userId);
-    if (!user) {
-      activeSessions.delete(token);
-      return null;
+
+    // 2. Vérification cryptographique par signature HMAC (persistance cross-containers)
+    if (typeof token === 'string' && token.includes('.')) {
+      const parts = token.split('.');
+      if (parts.length === 2) {
+        const [payloadB64, signature] = parts;
+        const expectedSig = crypto.createHmac('sha256', AUTH_SECRET).update(payloadB64).digest('base64url');
+        if (signature === expectedSig) {
+          try {
+            const data = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+            if (data && data.expiresAt && Date.now() <= data.expiresAt) {
+              const user = db.getUserById(data.userId) || db.getUserByEmail(data.email);
+              if (user) {
+                session = {
+                  token,
+                  userId: user.id,
+                  email: user.email,
+                  name: user.name,
+                  role: user.role || data.role || 'client',
+                  createdAt: data.createdAt,
+                  expiresAt: Date.now() + SESSION_DURATION_MS
+                };
+                activeSessions.set(token, session);
+                return { session, user };
+              }
+            }
+          } catch (e) {}
+        }
+      }
     }
-    return { session, user };
+
+    return null;
   }
 
   destroySession(token) {
