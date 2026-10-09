@@ -327,16 +327,45 @@ function getUserBalance() {
 function updateUserBalance(newBalance) {
   var s = AuthState.getSession();
   if (!s || !s.userId) return false;
+  var safeBalance = Math.max(0, Math.round(newBalance * 100) / 100);
+
+  // 1. Mettre à jour dans la liste des utilisateurs du DB local
   var users = DB.get('users', []);
-  var u = users.find(function(x) { return x && x.id === s.userId; });
+  var u = users.find(function(x) {
+    return x && (String(x.id) === String(s.userId) || (s.email && x.email && x.email.toLowerCase() === s.email.toLowerCase()));
+  });
   if (u) {
-    u.balance = Math.max(0, newBalance);
-    DB.set('users', users);
-    if (AuthState._user) AuthState._user.balance = u.balance;
-    updateNavbar();
-    return true;
+    u.balance = safeBalance;
+  } else {
+    // Si l'utilisateur n'existait pas encore dans vs_users, l'ajouter
+    users.push({
+      id: s.userId,
+      name: s.name,
+      email: s.email,
+      role: s.role || 'client',
+      balance: safeBalance
+    });
   }
-  return false;
+  DB.set('users', users);
+
+  // 2. Mettre à jour l'objet session actif
+  s.balance = safeBalance;
+  DB.set('session', s);
+
+  // 3. Mettre à jour AuthState._user
+  if (AuthState._user) {
+    AuthState._user.balance = safeBalance;
+  }
+
+  // 4. Mettre à jour l'affichage en direct sans rechargement
+  try {
+    AuthState.notify();
+    updateNavbar();
+    if (typeof renderLandingCatalog === 'function') renderLandingCatalog();
+    if (typeof renderConnectedCatalog === 'function') renderConnectedCatalog();
+  } catch (e) {}
+
+  return true;
 }
 
 // Synchronisation du solde et de la session en direct avec le serveur
@@ -672,8 +701,8 @@ function renderProductCardsInto(container, prods) {
               <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture' : '● ' + prod.stock + ' en stock'}</span>
               <span class="product-price">$${prod.price.toFixed(2)}</span>
             </div>
-            <button type="button" class="btn-buy-product" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${prod.id})">
-              ${oos ? 'Indisponible' : 'Acheter ⚡'}
+            <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''}" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${prod.id})">
+              ${oos ? 'Rupture de Stock' : 'Acheter ⚡'}
             </button>
           </div>
         </div>
@@ -690,7 +719,7 @@ function startProductPurchase(prodId) {
   var prod = prods.find(function(p) { return p.id === prodId; });
 
   if (!prod || prod.stock <= 0) {
-    showToast('Ce produit est en rupture de stock.', 'error');
+    showToast('Ce produit est actuellement en rupture de stock.', 'error');
     return;
   }
 
@@ -756,10 +785,11 @@ var TRYBIT_SUPPORTED_CRYPTOS = [
   { id: 'TON', name: 'The Open Network (TON)', sub: 'Réseau Telegram TON', icon: '💎', badge: '' }
 ];
 
-function renderCryptoCardsHtml(containerId, inputId, selectedId) {
+function renderCryptoCardsHtml(containerId, inputId, selectedId, isCompact) {
   selectedId = selectedId || '';
+  var compactClass = isCompact ? 'compact-crypto-list' : '';
   return `
-    <div class="crypto-cards-container" id="${containerId}">
+    <div class="crypto-cards-container ${compactClass}" id="${containerId}">
       ${TRYBIT_SUPPORTED_CRYPTOS.map(function(c) {
         var isSel = (c.id === selectedId);
         return `
@@ -848,35 +878,36 @@ function renderPurchaseModal() {
   }).join('');
 
   container.innerHTML = `
-    <div style="margin-bottom: 14px;">
-      <h2 class="modal-title" style="margin-bottom: 3px;">Acheter le Produit</h2>
-      <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0;">Livraison numérique immédiate après confirmation du paiement.</p>
+    <div class="purchase-modal-header-compact">
+      <h2 class="modal-title purchase-modal-title-compact">Acheter le Produit</h2>
+      <p class="purchase-delivery-notice-line">Livraison numérique immédiate après confirmation du paiement.</p>
     </div>
 
-    <!-- 1. Récapitulatif du produit sélectionné -->
-    <div class="purchase-header">
-      <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb" alt="${escapeHtml(selectedPayProd.name)}">
-      <div class="purchase-prod-info">
-        <span class="purchase-prod-cat">${escapeHtml(selectedPayProd.category)}</span>
-        <h3 class="purchase-prod-title">${escapeHtml(selectedPayProd.name)}</h3>
-        <div class="purchase-unit-price-line">
-          Prix unitaire : <strong>$${unitPrice.toFixed(2)}</strong>
+    <!-- 1. Grille compacte côte à côte : Produit (gauche) & Solde disponible (droite) -->
+    <div class="purchase-top-grid">
+      <div class="purchase-prod-box">
+        <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb-compact" alt="${escapeHtml(selectedPayProd.name)}">
+        <div class="purchase-prod-info-compact">
+          <span class="purchase-prod-cat-compact">${escapeHtml(selectedPayProd.category)}</span>
+          <h3 class="purchase-prod-title-compact" title="${escapeHtml(selectedPayProd.name)}">${escapeHtml(selectedPayProd.name)}</h3>
+          <div class="purchase-unit-price-compact">
+            Prix unitaire : <strong>$${unitPrice.toFixed(2)}</strong>
+          </div>
         </div>
+      </div>
+
+      <div class="purchase-balance-box">
+        <span class="purchase-balance-label">Votre solde disponible</span>
+        <strong class="purchase-balance-value">$${userBal.toFixed(2)}</strong>
       </div>
     </div>
 
-    <!-- 2. Solde disponible du client -->
-    <div class="purchase-balance-pill">
-      <span>Votre solde disponible :</span>
-      <strong style="color: var(--primary-600); font-size: 14.5px;">$${userBal.toFixed(2)}</strong>
-    </div>
-
-    <!-- 3. Sélecteur de quantité interactive (1, 2, 3, 4, etc.) -->
-    <div class="purchase-qty-card">
+    <!-- 2. Sélecteur de quantité compact -->
+    <div class="purchase-qty-card-compact">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-          <label style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin: 0;">Quantité à acheter</label>
-          <span style="font-size: 11.5px; color: ${stock > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-weight: 600; display: block; margin-top: 2px;">
+          <label style="font-weight: 700; font-size: 12px; color: var(--text-primary); margin: 0;">Quantité à acheter</label>
+          <span style="font-size: 11px; color: ${stock > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-weight: 600; display: block;">
             ${stock > 0 ? '● ' + stock + ' unités disponibles' : '● Rupture'}
           </span>
         </div>
@@ -888,70 +919,66 @@ function renderPurchaseModal() {
       </div>
     </div>
 
-    <!-- 4. Calcul automatique du montant total -->
-    <div class="purchase-calc-box">
-      <div class="calc-row">
+    <!-- 3. Calcul automatique du montant total compact -->
+    <div class="purchase-calc-box-compact">
+      <div class="calc-row-compact">
         <span>Calcul du total :</span>
         <span>$${unitPrice.toFixed(2)} &times; ${currentPurchaseQty}</span>
       </div>
-      <div class="calc-row total-row">
+      <div class="calc-row-compact total-row">
         <span>Total à régler :</span>
-        <div style="text-align: right;">
-          <span class="total-amount-large">$${total.toFixed(2)}</span>
-        </div>
+        <span class="total-amount-compact">$${total.toFixed(2)}</span>
       </div>
     </div>
 
-    <!-- 5. Choix du mode de paiement -->
-    <div style="margin-bottom: 14px;">
-      <label style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 6px; display: block;">Moyen de règlement :</label>
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
-        <button type="button" class="btn-purchase-tab ${currentPurchasePayMethod === 'balance' ? 'active' : ''}" onclick="selectPurchasePayMethod('balance')">
+    <!-- 4. Choix du mode de paiement -->
+    <div style="margin-bottom: 6px;">
+      <label style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 4px; display: block;">Moyen de règlement :</label>
+      <div class="purchase-method-tabs-compact">
+        <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'balance' ? 'active' : ''}" onclick="selectPurchasePayMethod('balance')">
           💳 Solde ($${userBal.toFixed(2)})
         </button>
-        <button type="button" class="btn-purchase-tab ${currentPurchasePayMethod === 'mobile_money' ? 'active' : ''}" onclick="selectPurchasePayMethod('mobile_money')">
+        <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'mobile_money' ? 'active' : ''}" onclick="selectPurchasePayMethod('mobile_money')">
           📱 Mobile Money
         </button>
-        <button type="button" class="btn-purchase-tab ${currentPurchasePayMethod === 'crypto' ? 'active' : ''}" onclick="selectPurchasePayMethod('crypto')">
+        <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'crypto' ? 'active' : ''}" onclick="selectPurchasePayMethod('crypto')">
           ⚡ Crypto (Trybit)
         </button>
       </div>
     </div>
 
-    <!-- 6. Panneau selon la méthode choisie -->
+    <!-- 5. Panneau selon la méthode choisie -->
     ${currentPurchasePayMethod === 'balance' ? `
-      <div style="margin-bottom: 14px;">
+      <div style="margin-bottom: 6px;">
         ${hasEnough ? `
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 9px 12px; font-size: 12px; color: var(--emerald-600); display: flex; align-items: center; justify-content: space-between;">
-            <span>✓ Solde suffisant pour cet achat ($${total.toFixed(2)})</span>
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; color: var(--emerald-600); display: flex; align-items: center; justify-content: space-between;">
+            <span>✓ Solde suffisant ($${total.toFixed(2)})</span>
             <span>Reste après paiement : <strong>$${(userBal - total).toFixed(2)}</strong></span>
           </div>
         ` : `
-          <div class="insufficient-balance-alert">
+          <div class="insufficient-balance-alert-centered">
             <span class="insufficient-balance-text">⚠️ Solde insuffisant (Il vous manque $${diff})</span>
-            <button type="button" class="btn-quick-recharge" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
-              <span>+ Recharger</span>
-              <span class="recharge-badge-spark">⚡</span>
+            <button type="button" class="btn-quick-recharge-centered btn-shimmer-flash" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
+              <span>Recharger ⚡</span>
             </button>
           </div>
         `}
       </div>
 
-      <div class="optional-contact-box">
-        <label for="purchase-contact-input">
+      <div class="optional-contact-box-compact">
+        <label for="purchase-contact-input" class="optional-contact-label-oneline">
           <span>📱 Numéro WhatsApp ou Email pour notification (Optionnel)</span>
         </label>
-        <input type="text" id="purchase-contact-input" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
+        <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
       </div>
 
       ${hasEnough ? `
-        <button type="button" class="btn-pay-now" onclick="processProductPayment()">
-          Payer maintenant avec mon Solde ⚡ ($${total.toFixed(2)})
+        <button type="button" class="btn-recharge-bottom-compact" onclick="processProductPayment()">
+          Payer maintenant ($${total.toFixed(2)}) ⚡
         </button>
       ` : `
-        <button type="button" class="btn-pay-now btn-cta-shimmer" style="background: linear-gradient(135deg, var(--primary-600), #1d4ed8);" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
-          <span>+ Recharger mon solde pour payer ($${Math.max(5, Math.ceil(parseFloat(diff))).toFixed(2)} min.)</span>
-          <span style="margin-left: 6px;">⚡</span>
+        <button type="button" class="btn-recharge-bottom-compact btn-shimmer-flash" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
+          <span>Recharger mon solde ⚡</span>
         </button>
       `}
     ` : ''}
@@ -1026,34 +1053,61 @@ function promptDepositFromPurchase(suggestedAmount) {
   openDepositModal(suggestedAmount);
 }
 
-// LIVRAISON IMMÉDIATE DU PRODUIT NUMÉRIQUE ACHETÉ
-function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName) {
+// LIVRAISON IMMÉDIATE DU PRODUIT NUMÉRIQUE ACHETÉ AVEC CLÉ UNIQUE
+function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, remainingBal) {
   var u = getCurrentUser();
   if (!u || !prod) return;
 
-  // Récupérer le contenu du coffre-fort associé au produit
+  // 1. Récupérer le coffre-fort associé au produit et délivrer une clé strictement unique
   var vaultMap = DB.get('vault', {});
-  var prodVault = vaultMap[prod.id];
+  var prodVault = vaultMap[prod.id] || {};
   var deliveredContent = null;
-  if (prodVault && prodVault.content) {
-    deliveredContent = prodVault;
-  } else {
-    // Si pas encore de coffre sur mesure, générer la licence numérique sécurisée instantanée
+
+  if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
+    // Sélectionner la première clé strictement non vendue
+    var unusedKey = prodVault.keys.find(function(k) { return !k.used; });
+    if (unusedKey) {
+      unusedKey.used = true;
+      unusedKey.soldTo = u.email || u.name || 'Client #' + u.id;
+      unusedKey.soldAt = new Date().toISOString();
+      deliveredContent = {
+        type: prodVault.type || 'text',
+        content: unusedKey.content,
+        fileName: prodVault.fileName || 'licence.txt'
+      };
+      DB.set('vault', vaultMap);
+    }
+  } else if (prodVault.content) {
+    deliveredContent = {
+      type: prodVault.type || 'text',
+      content: prodVault.content,
+      fileName: prodVault.fileName || 'licence.txt'
+    };
+  }
+
+  if (!deliveredContent) {
     deliveredContent = {
       type: 'text',
       content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
     };
   }
 
-  // Décrémenter le stock selon la quantité achetée
+  // 2. Décrémenter et recalculer automatiquement le stock selon les clés restantes
   var prods = DB.get('products', []);
   var pIndex = prods.findIndex(function(p) { return p.id === prod.id; });
   if (pIndex !== -1) {
-    prods[pIndex].stock = Math.max(0, prods[pIndex].stock - qty);
+    if (prodVault.keys && Array.isArray(prodVault.keys)) {
+      prods[pIndex].stock = Math.max(0, prodVault.keys.filter(function(k) { return !k.used; }).length);
+    } else {
+      prods[pIndex].stock = Math.max(0, (prods[pIndex].stock || 1) - qty);
+    }
     DB.set('products', prods);
   }
 
-  // Création de la commande complétée avec accès immédiat
+  // 3. Calcul du nouveau solde restant du client après transaction
+  var userBalAfter = typeof remainingBal === 'number' ? remainingBal : getUserBalance();
+
+  // 4. Création de la commande complétée avec accès immédiat et enregistrement du nouveau solde
   var orders = DB.get('orders', []);
   var newOrder = {
     id: 'ORD-' + Date.now().toString().slice(-6),
@@ -1065,6 +1119,8 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName) 
     unitPrice: prod.price,
     quantity: qty,
     amount: total,
+    remainingBalance: userBalAfter,
+    userBalanceAfter: userBalAfter,
     contactInfo: contactVal,
     method: paymentMethodName || 'Solde Client',
     status: 'Complété', // 100% complété et livré immédiatement !
@@ -1083,13 +1139,13 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName) 
         <div class="success-icon-badge" style="background: var(--emerald-500); color: white;">✓</div>
         <h3 style="font-size: 19px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Paiement Réussi & Produit Livré ! ⚡</h3>
         <p style="font-size: 13.5px; color: #475569; line-height: 1.5; margin-bottom: 16px;">
-          Félicitations ! Votre commande est validée et votre produit numérique est immédiatement accessible :
+          Félicitations ! Votre commande est validée et votre clé/accès numérique unique est débloqué(e) :
         </p>
 
         <div class="vault-delivery-card" style="margin-bottom: 16px;">
           <div class="vault-header">
             <span>🔐 CONTENU DU PRODUIT DÉBLOQUÉ</span>
-            <span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">● Accès Immédiat</span>
+            <span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">● Accès Immédiat & Clé Unique</span>
           </div>
           ${renderVaultContentDisplay(newOrder)}
         </div>
@@ -1097,8 +1153,9 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName) 
         <div class="order-recap-mini">
           <div><span>N° Commande :</span> <strong>${newOrder.id}</strong></div>
           <div><span>Article :</span> <strong>${escapeHtml(prod.name)} (x${newOrder.quantity})</strong></div>
-          <div><span>Montant réglé :</span> <strong style="color: var(--primary-600);">$${total.toFixed(2)}</strong></div>
-          <div><span>Règlement :</span> <strong style="color: var(--emerald-600);">${escapeHtml(newOrder.method)}</strong></div>
+          <div><span>Montant débité :</span> <strong style="color: var(--primary-600);">$${total.toFixed(2)}</strong></div>
+          <div><span>Nouveau solde :</span> <strong style="color: var(--emerald-600);">$${userBalAfter.toFixed(2)}</strong></div>
+          <div><span>Règlement :</span> <strong>${escapeHtml(newOrder.method)}</strong></div>
           ${contactVal ? `<div><span>Contact :</span> <strong>${escapeHtml(contactVal)}</strong></div>` : ''}
         </div>
         <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -1115,10 +1172,14 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName) 
   renderLandingCatalog();
 }
 
-// 1. RÈGLEMENT PAR SOLDE GETVIRTU (LIVRAISON INSTANTANÉE)
+// 1. RÈGLEMENT PAR SOLDE GETVIRTU (LIVRAISON INSTANTANÉE & DÉBIT STRICT)
 function processProductPayment() {
   var u = getCurrentUser();
-  if (!u || !selectedPayProd) return;
+  if (!u) {
+    openAuthModal('login', 'Veuillez vous connecter pour acheter ce produit.');
+    return;
+  }
+  if (!selectedPayProd) return;
 
   var qty = parseInt(currentPurchaseQty, 10);
   if (isNaN(qty) || qty < 1) {
@@ -1126,28 +1187,32 @@ function processProductPayment() {
     return;
   }
 
-  if (selectedPayProd.stock < qty) {
-    showToast('Stock insuffisant pour cette quantité (' + selectedPayProd.stock + ' disponible(s)).', 'error');
+  // Vérification de la disponibilité du stock
+  if ((selectedPayProd.stock || 0) <= 0 || selectedPayProd.stock < qty) {
+    showToast('Ce produit est actuellement en rupture de stock.', 'error');
+    renderPurchaseModal();
     return;
   }
 
   var total = Math.round(selectedPayProd.price * qty * 100) / 100;
   var userBal = getUserBalance();
 
+  // VÉRIFICATION EN AMONT DU SOLDE DU CLIENT (APPLICABLE SANS EXCEPTION À TOUS LES COMPTES)
   if (userBal < total) {
-    showToast('Solde insuffisant pour cette quantité.', 'error');
-    renderPurchaseModal();
+    var diff = (total - userBal).toFixed(2);
+    showToast('Solde insuffisant. Veuillez recharger votre compte', 'error');
+    promptDepositFromPurchase(Math.max(5, Math.ceil(parseFloat(diff))));
     return;
   }
 
-  // Déduire immédiatement le montant du solde client
+  // DÉBIT IMMÉDIAT DU PRIX EXACT DU PRODUIT DU SOLDE DU CLIENT
   var newBal = Math.round((userBal - total) * 100) / 100;
   updateUserBalance(newBal);
 
   var rawContact = (document.getElementById('purchase-contact-input')?.value || '').trim();
   var contactVal = typeof Security !== 'undefined' ? Security.escapeHtml(rawContact) : rawContact;
 
-  // Persister la commande côté serveur si session connectée
+  // Persister la commande et la déduction de solde côté serveur
   var session = DB.get('session');
   if (session && session.token) {
     fetch('/api/data/orders', {
@@ -1161,10 +1226,14 @@ function processProductPayment() {
         quantity: qty,
         contactInfo: contactVal
       })
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      if (res && typeof res.newBalance === 'number') {
+        updateUserBalance(res.newBalance);
+      }
     }).catch(function(e) { console.warn('Order sync:', e); });
   }
 
-  deliverCompletedOrder(selectedPayProd, total, qty, contactVal, 'Solde Client');
+  deliverCompletedOrder(selectedPayProd, total, qty, contactVal, 'Solde Client', newBal);
 }
 
 // 2. RÈGLEMENT PAR CRYPTO INSTANTANÉ TRYBIT
@@ -1615,6 +1684,10 @@ function updateDepositCalculation() {
     var localAmount = Math.round(amount * country.rate);
     localEl.textContent = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
   }
+  var cryptoBtnAmount = document.getElementById('trybit-btn-dynamic-amount');
+  if (cryptoBtnAmount) {
+    cryptoBtnAmount.textContent = '$' + amount.toFixed(2);
+  }
 }
 
 function closeDepositModal() {
@@ -1626,12 +1699,66 @@ function closeDepositModal() {
   }
 }
 
-function openSupportModal(channel) {
-  var isTg = channel === 'telegram';
-  var msg = isTg
-    ? '💬 Assistance Telegram GetVirtu : Rejoignez notre support direct via @GetVirtu_Support ou https://t.me/GetVirtu_Support\n\nNos conseillers sont disponibles 24/7 pour vos demandes de lots et commandes spéciales.'
-    : '📱 Assistance WhatsApp GetVirtu : Contactez notre équipe au +237 690 000 000 pour toute assistance immédiate ou commande personnalisée.';
-  alert(msg);
+function openSupportModal() {
+  var u = getCurrentUser();
+  var nameInput = document.getElementById('support-name-input');
+  var contactInput = document.getElementById('support-contact-input');
+  if (nameInput && u && u.name) nameInput.value = u.name;
+  if (contactInput && u && u.email) contactInput.value = u.email;
+
+  var modal = document.getElementById('modal-support');
+  if (modal) modal.classList.add('active');
+}
+
+function closeSupportModal() {
+  var modal = document.getElementById('modal-support');
+  if (modal) modal.classList.remove('active');
+}
+
+function submitSupportTicket(event) {
+  if (event && event.preventDefault) event.preventDefault();
+
+  var name = (document.getElementById('support-name-input')?.value || '').trim();
+  var contact = (document.getElementById('support-contact-input')?.value || '').trim();
+  var subject = (document.getElementById('support-subject-select')?.value || 'Support Client').trim();
+  var message = (document.getElementById('support-message-input')?.value || '').trim();
+
+  if (!contact || !message) {
+    showToast('Veuillez renseigner votre contact et votre message.', 'error');
+    return;
+  }
+
+  var u = getCurrentUser();
+  var ticketId = 'TCK-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+  var newTicket = {
+    id: ticketId,
+    userId: u ? u.id : null,
+    userName: name || (u ? u.name : 'Client'),
+    userContact: contact,
+    subject: subject,
+    message: message,
+    status: 'Ouvert',
+    date: new Date().toISOString()
+  };
+
+  var tickets = DB.get('tickets', []);
+  tickets.unshift(newTicket);
+  DB.set('tickets', tickets);
+
+  // Synchronisation backend
+  var session = DB.get('session');
+  fetch('/api/data/tickets', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': (session && session.token) ? 'Bearer ' + session.token : ''
+    },
+    body: JSON.stringify(newTicket)
+  }).catch(function(e) { console.warn('Ticket sync:', e); });
+
+  showToast('✓ Votre message a été envoyé à l\'équipe GetVirtu avec succès !', 'success');
+  closeSupportModal();
+  document.getElementById('support-ticket-form')?.reset();
 }
 
 function renderDepositMethodsTabs() {
@@ -1642,9 +1769,25 @@ function renderDepositMethodsTabs() {
   var html = '';
   methods.forEach(function(m) {
     var icon = (m.type === 'crypto_trybit' || m.provider === 'trybit') ? '⚡' : (m.type === 'crypto' ? '🪙' : (m.type === 'mobile_money' ? '📱' : '💳'));
+    var rawName = m.name || '';
+    var mainTitle = rawName;
+    var subTitle = '';
+
+    if (m.type === 'mobile_money' || m.id === 'saspay-mobile-money' || m.id === 1) {
+      mainTitle = 'Mobile Money';
+      subTitle = 'Wave, Orange, MTN, Moov';
+    } else if (m.type === 'crypto_trybit' || m.provider === 'trybit' || m.id === 2 || m.id === 'trybit') {
+      mainTitle = 'Crypto Instantané';
+      subTitle = 'Trybit (USDT, BTC, SOL...)';
+    } else if (rawName.indexOf('(') !== -1) {
+      mainTitle = rawName.substring(0, rawName.indexOf('(')).trim();
+      subTitle = rawName.substring(rawName.indexOf('(') + 1).replace(')', '').trim();
+    }
+
     html += `
       <div class="payment-method-tab ${currentDepositMethodId == m.id ? 'active' : ''}" onclick="selectDepositMethodTab('${m.id}')">
-        ${icon} ${escapeHtml(m.name)}
+        <div class="pm-title"><span class="pm-icon">${icon}</span> <span>${escapeHtml(mainTitle)}</span></div>
+        ${subTitle ? `<div class="pm-subtitle">${escapeHtml(subTitle)}</div>` : ''}
       </div>
     `;
   });
@@ -1806,14 +1949,14 @@ function renderSasPayDepositContent(container) {
 
     ${phoneFieldHtml}
 
-    <div class="method-instructions-box" style="margin-top: 10px;">
-      <span style="font-size: 14px;">🔒</span>
-      <p style="margin: 0; font-size: 12px; line-height: 1.45;">
-        Passerelle officielle SasPay : votre solde est automatiquement crédité dès réception de la confirmation bancaire ou mobile.
-      </p>
+    <div class="momo-ticker-box" style="margin: 6px 0 10px;">
+      <span class="momo-ticker-icon">🔒</span>
+      <div class="momo-ticker-track">
+        <span class="momo-ticker-text">Passerelle officielle SasPay : votre solde est automatiquement crédité dès réception de la confirmation bancaire ou mobile ⚡ Cryptage bancaire TLS 1.3 direct • Sécurité 100% garantie</span>
+      </div>
     </div>
 
-    <button type="button" class="btn-primary" id="btn-submit-momo" style="width: 100%; margin-top: 12px;" onclick="submitSasPayDeposit()">
+    <button type="button" class="btn-primary" id="btn-submit-momo" style="width: 100%; margin-top: 6px; padding: 10px;" onclick="submitSasPayDeposit()">
       Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
     </button>
   `;
@@ -2103,38 +2246,29 @@ function renderTrybitDepositContent(container) {
   var amount = parseFloat(amountInput ? amountInput.value : 0) || 10;
 
   container.innerHTML = `
-    <div class="trybit-deposit-card" style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px; margin-bottom: 12px; box-shadow: var(--shadow-sm);">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 22px;">⚡</span>
-          <div>
-            <strong style="font-size: 14px; color: var(--text-primary); display: block;">Passerelle Crypto Instantanée Trybit</strong>
-            <span style="font-size: 11.5px; color: var(--text-muted);">Paiement multi-blockchain automatisé</span>
-          </div>
-        </div>
-        <span class="status-indicator-pill online" style="font-size: 11px;">Automatique 24/7</span>
+    <div class="trybit-header-single-row">
+      <div class="trybit-header-title-wrap">
+        <span style="font-size: 15px;">⚡</span>
+        <span class="trybit-header-title">Passerelle Crypto Instantanée</span>
       </div>
-
-      <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 12px 0; line-height: 1.45;">
-        Réglez votre recharge de <strong>$${amount.toFixed(2)} USD</strong> en cryptomonnaie (Binance, Trust Wallet, Metamask, Phantom, etc.).
-        Votre solde est crédité automatiquement dès la confirmation sur la blockchain.
-      </p>
-
-      <div class="field" style="margin-bottom: 12px;">
-        <label style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: block;">Sélectionnez votre devise crypto :</label>
-        ${renderCryptoCardsHtml('trybit-deposit-crypto-cards-grid', 'trybit-crypto-select', '')}
-      </div>
-
-      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: var(--emerald-600); display: flex; align-items: center; gap: 8px;">
-        <span>🔒</span>
-        <span>Facture Trybit officielle sécurisée avec calcul de conversion en temps réel.</span>
-      </div>
-
-      <button type="button" class="btn-primary" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; padding: 12px;" onclick="submitTrybitDeposit()">
-        <span>Payer $${amount.toFixed(2)} USD en Crypto</span>
-        <span>⚡</span>
-      </button>
+      <span class="status-indicator-pill online trybit-header-pill">Automatique 24/7</span>
     </div>
+
+    <div class="field" style="margin-bottom: 6px;">
+      <label style="font-size: 11.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: block;">Sélectionnez votre devise crypto :</label>
+      ${renderCryptoCardsHtml('trybit-deposit-crypto-cards-grid', 'trybit-crypto-select', '', true)}
+    </div>
+
+    <div class="crypto-ticker-box">
+      <span class="crypto-ticker-icon">🔒</span>
+      <div class="crypto-ticker-track">
+        <span class="crypto-ticker-text">Facture Trybit officielle sécurisée : conversion et calcul du taux en temps réel ⚡ Crédit instantané après confirmation blockchain • Sécurité 100% garantie</span>
+      </div>
+    </div>
+
+    <button type="button" class="btn-primary" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; padding: 10px;" onclick="submitTrybitDeposit()">
+      <span>Payer <span id="trybit-btn-dynamic-amount">$${amount.toFixed(2)}</span> ⚡</span>
+    </button>
   `;
 }
 
@@ -2437,7 +2571,37 @@ function openOrdersModal() {
     return;
   }
 
-  var orders = DB.get('orders', []).filter(function(o) { return o && o.userId === session.userId; });
+  var currentUserIdStr = String(session.userId);
+  var currentUserEmail = (session.email || '').toLowerCase();
+  var allOrders = DB.get('orders', []);
+  var orders = allOrders.filter(function(o) {
+    if (!o) return false;
+    var matchId = o.userId && String(o.userId) === currentUserIdStr;
+    var matchEmail = o.userEmail && currentUserEmail && o.userEmail.toLowerCase() === currentUserEmail;
+    return matchId || matchEmail;
+  });
+
+  // Synchronisation des commandes du compte depuis le serveur si en ligne
+  if (session.token) {
+    fetch('/api/data/orders', {
+      headers: { 'Authorization': 'Bearer ' + session.token }
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      if (res && res.orders && Array.isArray(res.orders)) {
+        var localList = DB.get('orders', []);
+        var updated = false;
+        res.orders.forEach(function(so) {
+          if (!localList.some(function(lo) { return lo.id === so.id; })) {
+            localList.unshift(so);
+            updated = true;
+          }
+        });
+        if (updated) {
+          DB.set('orders', localList);
+        }
+      }
+    }).catch(function() {});
+  }
+
   var container = document.getElementById('orders-container-list');
 
   if (orders.length === 0) {

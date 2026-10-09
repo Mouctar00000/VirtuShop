@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=20261007_mobile_fintech_v5">
+  <link rel="stylesheet" href="style.css?v=20261008_v15_compact_vip_release">
   <script src="security.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
@@ -32,6 +32,7 @@
       top: 0;
       z-index: 100;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+      overflow: visible !important;
     }
 
     .admin-brand {
@@ -44,6 +45,13 @@
       display: flex;
       align-items: center;
       gap: 10px;
+      overflow: visible !important;
+    }
+
+    /* MENU DÉROULANT PROFIL ADMIN SANS SCROLL */
+    .admin-profile-wrapper {
+      position: relative;
+      overflow: visible !important;
     }
 
     .admin-user-chip {
@@ -57,6 +65,86 @@
       color: var(--text-secondary);
       font-weight: 600;
       border: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .admin-user-chip:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+
+    .admin-arrow-indicator {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 1px;
+    }
+
+    .admin-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 250px;
+      min-width: 230px;
+      max-width: min(290px, calc(100vw - 20px));
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.05);
+      padding: 8px;
+      z-index: 99999 !important;
+      animation: dropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .admin-dropdown-menu::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    .admin-dropdown-menu.active {
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .admin-dropdown-header {
+      padding: 8px 10px 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 6px;
+    }
+
+    .admin-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      border-radius: 8px;
+      text-decoration: none;
+      text-align: left;
+      transition: all 0.15s ease;
+      font-weight: 500;
+    }
+
+    .admin-dropdown-item:hover {
+      background: var(--primary-50);
+      color: var(--primary-600);
+    }
+
+    .admin-dropdown-item.danger {
+      color: var(--rose-600);
+    }
+
+    .admin-dropdown-item.danger:hover {
+      background: #fef2f2;
     }
 
     .admin-avatar {
@@ -91,21 +179,37 @@
       padding: 22px 24px 18px;
       margin-bottom: 24px;
       box-shadow: var(--shadow-card);
+      text-align: center;
     }
 
     .admin-hero-hub-header {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 18px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      width: 100%;
+    }
+
+    .admin-hero-hub-header > div:first-child {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      width: 100%;
     }
 
     .admin-breadcrumb {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
       font-size: 12px;
       color: var(--text-muted);
-      margin-bottom: 6px;
+      margin: 0 auto 6px;
     }
 
     .admin-breadcrumb strong {
@@ -118,18 +222,21 @@
       color: var(--text-primary);
       margin: 0 0 4px 0;
       letter-spacing: -0.3px;
+      text-align: center;
     }
 
     .admin-hero-desc {
       font-size: 13px;
       color: var(--text-secondary);
-      margin: 0;
+      margin: 0 auto;
       max-width: 650px;
+      text-align: center;
     }
 
     .admin-nav-tabs-bar {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       background: #f1f5f9;
       padding: 4px;
@@ -139,6 +246,9 @@
       white-space: nowrap;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      width: fit-content;
+      max-width: 100%;
+      margin: 10px auto 0;
     }
 
     .admin-nav-tabs-bar::-webkit-scrollbar {
@@ -182,17 +292,193 @@
       line-height: 1;
     }
 
+    .admin-hero-quick-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
     .admin-kpi-chip {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       font-size: 12px;
       font-weight: 700;
       color: var(--primary-600);
       background: var(--primary-50);
       border: 1px solid var(--primary-200);
-      padding: 5px 12px;
+      padding: 6px 14px;
       border-radius: var(--radius-full);
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    /* ==================== MODALES ADMIN POP-UP CENTRÉES & MODERNES ==================== */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.active {
+      display: flex !important;
+      animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-window {
+      background: #ffffff;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 24px !important;
+      padding: 24px 22px !important;
+      max-width: 520px !important;
+      width: 92% !important;
+      margin: auto !important;
+      max-height: 86vh !important;
+      overflow-y: auto !important;
+      position: relative !important;
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+      scrollbar-width: thin;
+    }
+
+    .modal-close-btn {
+      position: absolute !important;
+      top: 14px !important;
+      right: 14px !important;
+      width: 32px !important;
+      height: 32px !important;
+      border-radius: 50% !important;
+      background: #f1f5f9 !important;
+      border: 1px solid #e2e8f0 !important;
+      color: #475569 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      cursor: pointer !important;
+      z-index: 25 !important;
+      transition: all 0.15s ease !important;
+    }
+
+    .modal-close-btn:hover {
+      background: #e2e8f0 !important;
+      color: #0f172a !important;
+      transform: scale(1.05);
+    }
+
+    .modal-title {
+      padding-right: 36px !important;
+    }
+
+    /* ==================== ZONE D'UPLOAD D'IMAGE MODERNE (DRAG & DROP) ==================== */
+    .admin-dropzone {
+      border: 2px dashed #cbd5e1;
+      background: #f8fafc;
+      border-radius: 14px;
+      padding: 16px 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .admin-dropzone:hover, .admin-dropzone.dragover {
+      border-color: var(--primary-500);
+      background: #eff6ff;
+    }
+
+    .dropzone-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dropzone-icon {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .dropzone-text strong {
+      font-size: 12.5px;
+      color: var(--text-primary);
+      display: block;
+    }
+
+    .dropzone-text span {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: block;
+      margin-top: 2px;
+    }
+
+    .dropzone-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #ffffff;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .dropzone-preview img {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    .dropzone-preview-actions {
+      flex: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .preview-badge {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--emerald-600);
+    }
+
+    .btn-remove-img {
+      background: #fee2e2;
+      color: var(--rose-600);
+      border: 1px solid #fecdd3;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-remove-img:hover {
+      background: #fecdd3;
+    }
+
+    @keyframes statPulseAnim {
+      0% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .pulse-stat {
+      animation: statPulseAnim 0.25s ease-out;
     }
 
     /* RESPONSIVE ADMINISTRATEUR MOBILE */
@@ -242,6 +528,14 @@
       .admin-user-email {
         display: none !important;
       }
+      .admin-arrow-indicator {
+        display: none !important;
+      }
+      .admin-dropdown-menu {
+        right: 0 !important;
+        top: calc(100% + 8px) !important;
+        max-width: calc(100vw - 20px) !important;
+      }
       .btn-admin-logout-compact {
         width: 28px !important;
         height: 28px !important;
@@ -259,19 +553,41 @@
       .admin-hero-hub {
         padding: 16px 14px 12px;
         margin-bottom: 16px;
+        text-align: center;
+      }
+      .admin-hero-hub-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+      }
+      .admin-breadcrumb {
+        text-align: center;
       }
       .admin-hero-title {
         font-size: 18px;
+        text-align: center;
       }
       .admin-hero-desc {
         font-size: 12px;
+        text-align: center;
+        margin: 0 auto;
       }
       .admin-hero-quick-actions {
         width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin: 8px auto 0;
       }
       .admin-hero-quick-actions button {
-        width: 100%;
+        max-width: 280px;
+        margin: 0 auto;
         min-height: 40px;
+      }
+      .admin-kpi-chip {
+        margin: 0 auto;
       }
       .admin-section {
         padding: 16px 12px;
@@ -314,23 +630,61 @@
         font-size: 11.5px;
       }
       .admin-nav-tabs-bar {
-        width: 100%;
-        overflow-x: auto;
-        white-space: nowrap;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        display: flex;
-        gap: 6px;
-        padding: 4px 6px;
+        width: 100% !important;
+        max-width: 100% !important;
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scroll-behavior: smooth !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        gap: 8px !important;
+        padding: 6px 10px !important;
+        border-radius: 16px !important;
+        margin: 10px 0 0 0 !important;
+        box-sizing: border-box !important;
       }
       .admin-nav-tabs-bar::-webkit-scrollbar {
-        display: none;
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
       }
       .admin-nav-tab-btn {
-        flex-shrink: 0;
-        white-space: nowrap;
-        padding: 6px 12px;
-        font-size: 12px;
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+        padding: 7px 13px !important;
+        font-size: 12px !important;
+        border-radius: var(--radius-full) !important;
+      }
+      .admin-section-header {
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        gap: 10px !important;
+      }
+      .admin-section-header > div:first-child {
+        text-align: center !important;
+      }
+      .admin-section-header .status-indicator-pill {
+        margin: 0 auto !important;
+      }
+      .order-action-group {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        margin: 0 auto !important;
+      }
+      .order-status-selector-wrap {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 auto !important;
       }
       .charts-grid {
         grid-template-columns: 1fr !important;
@@ -673,9 +1027,44 @@
           <span>👁️</span>
           <span class="shop-btn-text">Boutique</span>
         </a>
-        <div class="admin-user-chip">
-          <span class="admin-avatar">AD</span>
-          <span class="admin-user-email">admin@getvirtu.shop</span>
+        <div class="admin-profile-wrapper" id="admin-profile-wrapper">
+          <button type="button" class="admin-user-chip" id="admin-user-chip" onclick="toggleAdminDropdown(event)" aria-haspopup="true" aria-expanded="false" title="Menu profil administrateur">
+            <span class="admin-avatar">AD</span>
+            <span class="admin-user-email">admin@getvirtu.shop</span>
+            <span class="admin-arrow-indicator">▾</span>
+          </button>
+          <div class="admin-dropdown-menu" id="admin-dropdown-menu">
+            <div class="admin-dropdown-header">
+              <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">Administrateur GetVirtu</div>
+              <div style="font-size: 11.5px; color: var(--text-muted); word-break: break-all;">admin@getvirtu.shop</div>
+              <div style="margin-top: 6px;"><span class="admin-status-badge">● Connecté (SuperAdmin)</span></div>
+            </div>
+            <a href="index.html" class="admin-dropdown-item" target="_blank">
+              <span>🛍️</span>
+              <span>Voir la boutique</span>
+            </a>
+            <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('products'); toggleAdminDropdown(event);">
+              <span>📦</span>
+              <span>Catalogue Produits</span>
+            </button>
+            <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('orders'); toggleAdminDropdown(event);">
+              <span>📑</span>
+              <span>Commandes & Ventes</span>
+            </button>
+            <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('users'); toggleAdminDropdown(event);">
+              <span>👥</span>
+              <span>Clients & Soldes</span>
+            </button>
+            <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('stats'); toggleAdminDropdown(event);">
+              <span>📈</span>
+              <span>Statistiques Direct</span>
+            </button>
+            <div style="height: 1px; background: var(--border-subtle); margin: 6px 0;"></div>
+            <button type="button" class="admin-dropdown-item danger" onclick="adminLogout()">
+              <span>🚪</span>
+              <span>Se déconnecter</span>
+            </button>
+          </div>
         </div>
         <button type="button" class="btn-secondary btn-admin-logout-compact" style="color: var(--rose-600);" onclick="adminLogout()" title="Déconnexion">
           <span>🚪</span>
@@ -732,6 +1121,11 @@
           <button type="button" class="admin-nav-tab-btn" id="tab-nav-stats" onclick="switchAdminTab('stats')">
             <span>📈</span>
             <span>Statistiques</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-tickets" onclick="switchAdminTab('tickets')">
+            <span>💬</span>
+            <span>Support</span>
+            <span class="admin-tab-badge hidden" id="badge-nav-tickets">0</span>
           </button>
         </nav>
       </div>
@@ -831,10 +1225,11 @@
                   <th>Réf & Date</th>
                   <th>Client</th>
                   <th>Produit & Quantité</th>
-                  <th>Montant</th>
-                  <th>Moyen</th>
-                  <th>Statut</th>
-                  <th>Validation & Actions</th>
+                  <th class="col-center">Montant</th>
+                  <th class="col-center">Nouveau Solde du Client</th>
+                  <th class="col-center">Moyen</th>
+                  <th class="col-center">Statut</th>
+                  <th class="col-center">Validation & Actions</th>
                 </tr>
               </thead>
               <tbody id="admin-orders-tbody"></tbody>
@@ -976,6 +1371,36 @@
               <canvas id="chartVolume"></canvas>
             </div>
           </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 7 : SUPPORT TICKETS & MESSAGES                                        -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-tickets" class="admin-tab-pane hidden">
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">💬 Messages & Support Client</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Messages envoyés par les clients via le formulaire de support direct.</p>
+            </div>
+            <span class="status-indicator-pill online" id="open-tickets-badge">0 ouvert</span>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Date & Réf</th>
+                  <th>Client / Contact</th>
+                  <th>Objet</th>
+                  <th>Message</th>
+                  <th class="col-center">Statut</th>
+                  <th class="col-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-tickets-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -984,7 +1409,7 @@
 
   <!-- ==================== MODAL PRODUIT COMPACTE ET RAFFINÉE ==================== -->
   <div id="admin-prod-modal" class="modal-backdrop">
-    <div class="modal-window" style="max-width: 500px;">
+    <div class="modal-window">
       <button type="button" class="modal-close-btn" onclick="closeAdminProdModal()">✕</button>
       <h2 class="modal-title" id="prod-modal-title">Ajouter un Produit</h2>
 
@@ -1006,8 +1431,8 @@
             <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
           </div>
           <div class="field">
-            <label for="admin-prod-stock">Stock disponible</label>
-            <input type="number" min="0" id="admin-prod-stock" required placeholder="50">
+            <label for="admin-prod-stock">Stock disponible <span style="font-size: 11px; font-weight: normal; color: var(--primary-600);">(Auto via coffre-fort)</span></label>
+            <input type="number" min="0" id="admin-prod-stock" readonly style="background: #f1f5f9; cursor: not-allowed; font-weight: 700;" placeholder="0">
           </div>
         </div>
 
@@ -1016,17 +1441,33 @@
           <input type="text" id="admin-prod-desc" placeholder="Ex: Compte propre vérifié avec 2FA activé...">
         </div>
 
-        <!-- IMAGE PRODUIT AVEC APERÇU IMMÉDIAT -->
-        <div class="field" style="background: #f8fafc; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-          <label style="color: var(--primary-600); font-weight: 700; margin-bottom: 6px;">🖼️ Illustration du Produit</label>
-          <div style="display: flex; gap: 12px; align-items: center;">
-            <div style="width: 54px; height: 54px; border-radius: 8px; background: #ffffff; border: 1px solid var(--border-subtle); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: var(--shadow-sm);">
-              <img id="admin-prod-img-preview" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-              <span id="admin-prod-img-placeholder" style="font-size: 22px; color: var(--text-muted);">📷</span>
+        <!-- ZONE D'UPLOAD D'ILLUSTRATION MODERNE & DRAG-AND-DROP -->
+        <div class="field" style="margin-bottom: 14px;">
+          <label style="color: var(--text-primary); font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <span>🖼️ Illustration du Produit</span>
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Optionnelle (JPG, PNG, WebP)</span>
+          </label>
+          
+          <input type="file" id="admin-prod-img-file" accept="image/*" onchange="handleProductImageFile(event)" style="display: none;">
+          
+          <div class="admin-dropzone" id="admin-prod-dropzone" onclick="triggerProductFileInput()">
+            <div id="dropzone-idle-view" class="dropzone-content">
+              <span class="dropzone-icon">📷</span>
+              <div class="dropzone-text">
+                <strong>Glissez-déposez une image ou cliquez pour parcourir</strong>
+                <span>Si vide, une illustration vectorielle dédiée sera générée automatiquement</span>
+              </div>
             </div>
-            <div style="flex: 1;">
-              <input type="file" id="admin-prod-img-file" accept="image/*" onchange="handleProductImageFile(event)" style="font-size: 12px; padding: 5px;">
-              <p style="font-size: 11px; color: var(--text-muted); margin: 3px 0 0 0;">Si vide, une illustration vectorielle dédiée sera générée automatiquement.</p>
+
+            <div id="dropzone-preview-view" class="dropzone-preview" style="display: none;">
+              <img id="admin-prod-img-preview" src="" alt="Aperçu">
+              <div class="dropzone-preview-actions">
+                <div>
+                  <div class="preview-badge">✓ Image sélectionnée</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Cliquez pour remplacer</div>
+                </div>
+                <button type="button" class="btn-remove-img" onclick="removeProductImage(event)">✕ Supprimer</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1047,7 +1488,7 @@
           <input type="hidden" id="admin-vault-type" value="text">
 
           <div id="vault-text-group">
-            <textarea id="admin-vault-content" rows="2" placeholder="Ex: login: user@gmail.com | pass: Secret! | 2FA: JBSWY..."></textarea>
+            <textarea id="admin-vault-content" rows="3" placeholder="Insérez 1 clé/compte unique par ligne :&#10;login1:pass1&#10;login2:pass2" oninput="updateStockFromVaultKeys()"></textarea>
           </div>
 
           <div id="vault-file-group" class="hidden">
@@ -1067,7 +1508,7 @@
 
   <!-- ==================== MODAL MOYEN DE PAIEMENT RECHERCHÉ ==================== -->
   <div id="admin-method-modal" class="modal-backdrop">
-    <div class="modal-window" style="max-width: 500px;">
+    <div class="modal-window">
       <button type="button" class="modal-close-btn" onclick="closeAdminMethodModal()">✕</button>
       <h2 class="modal-title" id="method-modal-title">Nouveau Moyen de Paiement</h2>
 
@@ -1328,6 +1769,12 @@
         title: '📈 Tableau de Bord & Performances',
         desc: 'Consultez le chiffre d\'affaires, les unités vendues et l\'évolution en temps réel.',
         actionHtml: '<span class="admin-kpi-chip">Statistiques en direct ⚡</span>'
+      },
+      tickets: {
+        crumb: 'Support Client & Tickets',
+        title: '💬 Messages & Support Client',
+        desc: 'Consultez les demandes reçues via le formulaire de support, traitez les commandes sur mesure et répondez aux clients.',
+        actionHtml: '<span class="admin-kpi-chip" id="kpi-tickets-chip">0 ticket(s) ouvert(s)</span>'
       }
     };
 
@@ -1338,7 +1785,12 @@
       document.querySelectorAll('.admin-tab-pane').forEach(function(p) { p.classList.add('hidden'); });
 
       var btn = document.getElementById('tab-nav-' + tabName);
-      if (btn) btn.classList.add('active');
+      if (btn) {
+        btn.classList.add('active');
+        if (btn.scrollIntoView) {
+          btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
 
       var pane = document.getElementById('tab-content-' + tabName);
       if (pane) pane.classList.remove('hidden');
@@ -1518,7 +1970,15 @@
     function changePeriod(period) {
       currentPeriod = period;
       document.querySelectorAll('.admin-period-tab').forEach(function(btn) { btn.classList.remove('active'); });
-      document.getElementById('tab-period-' + period).classList.add('active');
+      var activeTab = document.getElementById('tab-period-' + period);
+      if (activeTab) activeTab.classList.add('active');
+
+      var indRev = document.getElementById('chart-period-indicator-rev');
+      var indVol = document.getElementById('chart-period-indicator-vol');
+      var labelMap = { day: '7 derniers jours', week: '14 derniers jours', month: '30 derniers jours', year: '12 derniers mois' };
+      if (indRev) indRev.textContent = labelMap[period] || period;
+      if (indVol) indVol.textContent = labelMap[period] || period;
+
       renderDashboard();
     }
 
@@ -1529,9 +1989,27 @@
       var users = DB.get('users', []);
       var recharges = DB.get('recharges', []);
 
-      var completed = orders.filter(function(o) { return o.status === 'Complété' || o.status === 'Livré'; });
-      var totalRev = completed.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
-      var totalUnits = completed.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+      var now = Date.now();
+      var periodDays = 7;
+      if (currentPeriod === 'day') periodDays = 7;
+      else if (currentPeriod === 'week') periodDays = 14;
+      else if (currentPeriod === 'month') periodDays = 30;
+      else if (currentPeriod === 'year') periodDays = 365;
+
+      var periodCutoff = now - (periodDays * 24 * 60 * 60 * 1000);
+
+      var periodOrders = orders.filter(function(o) {
+        if (!o.date) return true;
+        var t = new Date(o.date).getTime();
+        return isNaN(t) || t >= periodCutoff;
+      });
+
+      var periodCompleted = periodOrders.filter(function(o) {
+        return o.status === 'Complété' || o.status === 'Livré';
+      });
+
+      var totalRev = periodCompleted.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+      var totalUnits = periodCompleted.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
       var avgCart = totalUnits > 0 ? totalRev / totalUnits : 0;
       var pendingOrders = orders.filter(function(o) { return o.status === 'En attente'; }).length;
       var pendingRecharges = recharges.filter(function(r) { return r.status === 'En attente'; }).length;
@@ -1556,9 +2034,19 @@
       var statUnits = document.getElementById('stat-units-sold');
       if (statUnits) statUnits.textContent = totalUnits;
       var statOrd = document.getElementById('stat-orders-count');
-      if (statOrd) statOrd.textContent = orders.length;
+      if (statOrd) statOrd.textContent = periodOrders.length;
       var statCart = document.getElementById('stat-avg-cart');
       if (statCart) statCart.textContent = '$' + avgCart.toFixed(2);
+
+      // Micro-animation de pulsation sur les métriques mises à jour
+      ['stat-revenue', 'stat-units-sold', 'stat-orders-count', 'stat-avg-cart'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.classList.remove('pulse-stat');
+          void el.offsetWidth;
+          el.classList.add('pulse-stat');
+        }
+      });
 
       var bPRech = document.getElementById('pending-recharges-badge');
       if (bPRech) bPRech.textContent = pendingRecharges + ' en attente';
@@ -1586,9 +2074,10 @@
       renderOrdersTable(orders);
       renderUsersTable(users);
       renderMethodsTable();
+      renderTicketsTable(DB.get('tickets', []));
 
       if (activeAdminTab === 'stats') {
-        renderCharts(orders);
+        renderCharts(orders, currentPeriod);
       }
     }
 
@@ -1662,15 +2151,104 @@
       }
     }
 
+    function toggleAdminDropdown(event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      var menu = document.getElementById('admin-dropdown-menu');
+      var chip = document.getElementById('admin-user-chip');
+      if (!menu) return;
+      var isOpen = menu.classList.contains('active');
+      if (isOpen) {
+        menu.classList.remove('active');
+        if (chip) chip.setAttribute('aria-expanded', 'false');
+      } else {
+        menu.classList.add('active');
+        if (chip) chip.setAttribute('aria-expanded', 'true');
+      }
+    }
+
+    function updateDropzoneUI(imgSrc) {
+      var idle = document.getElementById('dropzone-idle-view');
+      var prev = document.getElementById('dropzone-preview-view');
+      var img = document.getElementById('admin-prod-img-preview');
+      if (imgSrc) {
+        if (img) img.src = imgSrc;
+        if (prev) prev.style.display = 'flex';
+        if (idle) idle.style.display = 'none';
+      } else {
+        if (img) img.src = '';
+        if (prev) prev.style.display = 'none';
+        if (idle) idle.style.display = 'flex';
+      }
+    }
+
+    function triggerProductFileInput() {
+      var fileInput = document.getElementById('admin-prod-img-file');
+      if (fileInput) fileInput.click();
+    }
+
+    function removeProductImage(event) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+      editingProductImage = null;
+      var fileInput = document.getElementById('admin-prod-img-file');
+      if (fileInput) fileInput.value = '';
+      updateDropzoneUI(null);
+    }
+
+    function setupDropzone() {
+      var dz = document.getElementById('admin-prod-dropzone');
+      if (!dz) return;
+      ['dragenter', 'dragover'].forEach(function(eventName) {
+        dz.addEventListener(eventName, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dz.classList.add('dragover');
+        }, false);
+      });
+      ['dragleave', 'drop'].forEach(function(eventName) {
+        dz.addEventListener(eventName, function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dz.classList.remove('dragover');
+        }, false);
+      });
+      dz.addEventListener('drop', function(e) {
+        var dt = e.dataTransfer;
+        var files = dt.files;
+        if (files && files.length > 0) {
+          var fakeEvent = { target: { files: files } };
+          handleProductImageFile(fakeEvent);
+        }
+      }, false);
+    }
+
+    function updateStockFromVaultKeys() {
+      var type = document.getElementById('admin-vault-type').value;
+      var stockInput = document.getElementById('admin-prod-stock');
+      if (!stockInput) return;
+      if (type === 'text') {
+        var text = document.getElementById('admin-vault-content').value.trim();
+        if (!text) {
+          stockInput.value = 0;
+          return;
+        }
+        var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+        stockInput.value = lines.length;
+      }
+    }
+
     function openNewProductModal() {
       document.getElementById('prod-modal-title').textContent = 'Ajouter un Nouveau Produit';
       document.getElementById('admin-prod-id').value = '';
       document.getElementById('admin-prod-form').reset();
+      document.getElementById('admin-prod-stock').value = 0;
       editingProductImage = null;
       editingVaultFileContent = null;
-
-      document.getElementById('admin-prod-img-preview').style.display = 'none';
-      document.getElementById('admin-prod-img-placeholder').style.display = 'block';
+      updateDropzoneUI(null);
       setVaultType('text');
 
       document.getElementById('admin-prod-modal').classList.add('active');
@@ -1689,22 +2267,26 @@
       document.getElementById('admin-prod-name').value = p.name + ' (Copie)';
       document.getElementById('admin-prod-cat').value = p.category;
       document.getElementById('admin-prod-price').value = p.price;
-      document.getElementById('admin-prod-stock').value = p.stock;
       document.getElementById('admin-prod-desc').value = p.description || '';
 
       editingProductImage = p.image || null;
-      var preview = document.getElementById('admin-prod-img-preview');
-      var placeholder = document.getElementById('admin-prod-img-placeholder');
-      if (p.image) { preview.src = p.image; preview.style.display = 'block'; placeholder.style.display = 'none'; }
-      else { preview.style.display = 'none'; placeholder.style.display = 'block'; }
+      updateDropzoneUI(editingProductImage);
 
       setVaultType(v.type || 'text');
       if (v.type === 'file') {
         document.getElementById('vault-filename-display').textContent = 'Fichier : ' + (v.fileName || 'fichier.txt');
         document.getElementById('admin-vault-filename').value = v.fileName || '';
         editingVaultFileContent = v.content;
+        document.getElementById('admin-prod-stock').value = p.stock || 0;
       } else {
-        document.getElementById('admin-vault-content').value = v.content || '';
+        if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
+          var unusedKeys = v.keys.filter(function(k) { return !k.used; });
+          document.getElementById('admin-vault-content').value = unusedKeys.map(function(k) { return k.content; }).join('\n');
+          document.getElementById('admin-prod-stock').value = unusedKeys.length;
+        } else {
+          document.getElementById('admin-vault-content').value = v.content || '';
+          updateStockFromVaultKeys();
+        }
       }
 
       document.getElementById('admin-prod-modal').classList.add('active');
@@ -1724,21 +2306,30 @@
       document.getElementById('admin-prod-name').value = p.name;
       document.getElementById('admin-prod-cat').value = p.category;
       document.getElementById('admin-prod-price').value = p.price;
-      document.getElementById('admin-prod-stock').value = p.stock;
       document.getElementById('admin-prod-desc').value = p.description || '';
 
       editingProductImage = p.image || null;
-      var preview = document.getElementById('admin-prod-img-preview');
-      var placeholder = document.getElementById('admin-prod-img-placeholder');
-      if (p.image) { preview.src = p.image; preview.style.display = 'block'; placeholder.style.display = 'none'; }
-      else { preview.style.display = 'none'; placeholder.style.display = 'block'; }
+      updateDropzoneUI(editingProductImage);
 
       setVaultType(v.type || 'text');
       if (v.type === 'file') {
         document.getElementById('vault-filename-display').textContent = 'Fichier : ' + (v.fileName || 'fichier.txt');
+        document.getElementById('admin-vault-filename').value = v.fileName || '';
         editingVaultFileContent = v.content;
+        document.getElementById('admin-prod-stock').value = p.stock || 0;
       } else {
-        document.getElementById('admin-vault-content').value = v.content || '';
+        if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
+          var unusedKeys = v.keys.filter(function(k) { return !k.used; });
+          var soldCount = v.keys.filter(function(k) { return k.used; }).length;
+          document.getElementById('admin-vault-content').value = unusedKeys.map(function(k) { return k.content; }).join('\n');
+          document.getElementById('admin-prod-stock').value = unusedKeys.length;
+          if (soldCount > 0) {
+            showToast(`${unusedKeys.length} clé(s) disponible(s) en stock (${soldCount} déjà vendue(s) et protégée(s)).`, 'info');
+          }
+        } else {
+          document.getElementById('admin-vault-content').value = v.content || '';
+          updateStockFromVaultKeys();
+        }
       }
 
       document.getElementById('admin-prod-modal').classList.add('active');
@@ -1753,13 +2344,26 @@
       document.querySelectorAll('.vault-tab-btn').forEach(function(b) { b.classList.remove('active'); });
       document.getElementById('vtab-' + type).classList.add('active');
 
+      var stockEl = document.getElementById('admin-prod-stock');
+
       if (type === 'file') {
         document.getElementById('vault-text-group').classList.add('hidden');
         document.getElementById('vault-file-group').classList.remove('hidden');
+        if (stockEl) {
+          stockEl.removeAttribute('readonly');
+          stockEl.style.background = '#ffffff';
+          stockEl.style.cursor = 'text';
+        }
       } else {
         document.getElementById('vault-text-group').classList.remove('hidden');
         document.getElementById('vault-file-group').classList.add('hidden');
-        document.getElementById('admin-vault-content').placeholder = type === 'link' ? 'https://monlien-securise.com/token=...' : 'login: user@mail.com | pass: SecretPass | 2FA: JBSWY...';
+        if (stockEl) {
+          stockEl.setAttribute('readonly', 'true');
+          stockEl.style.background = '#f1f5f9';
+          stockEl.style.cursor = 'not-allowed';
+        }
+        document.getElementById('admin-vault-content').placeholder = type === 'link' ? 'https://monlien-securise.com/token=...' : 'Insérez 1 clé/compte unique par ligne :\nlogin1:pass1\nlogin2:pass2\nlogin3:pass3';
+        updateStockFromVaultKeys();
       }
     }
 
@@ -1779,10 +2383,7 @@
       var reader = new FileReader();
       reader.onload = function(e) {
         editingProductImage = e.target.result;
-        var preview = document.getElementById('admin-prod-img-preview');
-        preview.src = editingProductImage;
-        preview.style.display = 'block';
-        document.getElementById('admin-prod-img-placeholder').style.display = 'none';
+        updateDropzoneUI(editingProductImage);
       };
       reader.readAsDataURL(file);
     }
@@ -1817,7 +2418,6 @@
       var name = document.getElementById('admin-prod-name').value.trim();
       var cat = document.getElementById('admin-prod-cat').value.trim().toLowerCase();
       var price = parseFloat(document.getElementById('admin-prod-price').value) || 0;
-      var stock = parseInt(document.getElementById('admin-prod-stock').value, 10) || 0;
       var desc = document.getElementById('admin-prod-desc').value.trim();
 
       var vaultType = document.getElementById('admin-vault-type').value;
@@ -1828,8 +2428,37 @@
       var vault = DB.get('vault', {});
       var targetId = null;
 
+      var uniqueKeys = [];
+      var existingVault = null;
+
       if (idVal) {
         targetId = parseInt(idVal, 10);
+        existingVault = vault[targetId] || null;
+      }
+
+      var stock = 0;
+      if (vaultType === 'text') {
+        var rawLines = vaultContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+        var preservedUsedKeys = [];
+        if (existingVault && Array.isArray(existingVault.keys)) {
+          preservedUsedKeys = existingVault.keys.filter(function(k) { return k.used; });
+        }
+        var newUnusedKeys = rawLines.map(function(line, idx) {
+          return {
+            id: 'K-' + Date.now().toString(36) + '-' + idx,
+            content: line,
+            used: false,
+            soldTo: null,
+            soldAt: null
+          };
+        });
+        uniqueKeys = preservedUsedKeys.concat(newUnusedKeys);
+        stock = newUnusedKeys.length;
+      } else {
+        stock = parseInt(document.getElementById('admin-prod-stock').value, 10) || 0;
+      }
+
+      if (idVal) {
         var p = prods.find(function(x) { return x.id === targetId; });
         if (p) {
           p.name = name; p.category = cat; p.price = price; p.stock = stock; p.description = desc;
@@ -1849,14 +2478,19 @@
         });
       }
 
-      vault[targetId] = { type: vaultType, content: vaultContent, fileName: vaultFileName };
+      vault[targetId] = {
+        type: vaultType,
+        content: vaultContent,
+        fileName: vaultFileName,
+        keys: uniqueKeys.length > 0 ? uniqueKeys : undefined
+      };
 
       DB.set('products', prods);
       DB.set('vault', vault);
 
       closeAdminProdModal();
       renderDashboard();
-      showToast('Produit enregistré avec succès !', 'success');
+      showToast('Produit enregistré avec succès ! Stock calculé automatiquement.', 'success');
     }
 
     function deleteProduct(id) {
@@ -1964,11 +2598,14 @@
       r.status = 'Approuvé';
       r.reviewedAt = new Date().toISOString();
 
-      // 2. Créditer automatiquement le solde du client
+      // 2. Créditer automatiquement le solde du client (support ID string/number et fallback email)
       var users = DB.get('users', []);
-      var u = users.find(function(x) { return x.id === r.userId; });
+      var u = users.find(function(x) {
+        return (x.id && r.userId && String(x.id) === String(r.userId)) ||
+               (x.email && r.userEmail && x.email.toLowerCase() === r.userEmail.toLowerCase());
+      });
       if (u) {
-        u.balance = (u.balance || 0) + r.amount;
+        u.balance = Math.round(((u.balance || 0) + (r.amount || 0)) * 100) / 100;
         DB.set('users', users);
       }
 
@@ -2002,6 +2639,22 @@
         var isCancelled = o.status === 'Annulé';
         var statusClass = isDelivered ? 'delivered' : (isPending ? 'pending' : 'cancelled');
         var hasCustomKey = o.vaultContent && o.vaultContent.content;
+
+        // Calcul du Nouveau Solde du Client
+        var remainingBalanceDisplay = '-';
+        if (typeof o.remainingBalance === 'number') {
+          remainingBalanceDisplay = '$' + o.remainingBalance.toFixed(2);
+        } else if (typeof o.userBalanceAfter === 'number') {
+          remainingBalanceDisplay = '$' + o.userBalanceAfter.toFixed(2);
+        } else {
+          var uObj = (DB.get('users', [])).find(function(x) {
+            return (x.id && o.userId && String(x.id) === String(o.userId)) ||
+                   (x.email && o.userEmail && x.email.toLowerCase() === o.userEmail.toLowerCase());
+          });
+          if (uObj && typeof uObj.balance === 'number') {
+            remainingBalanceDisplay = '$' + uObj.balance.toFixed(2);
+          }
+        }
 
         // Sélecteur de statut compact, épuré et parfaitement aligné
         var statusSelector = `
@@ -2054,19 +2707,22 @@
               <div style="font-weight: 700;">${escapeHtml(o.productName)}</div>
               <span class="status-indicator-pill offline" style="font-size: 10.5px; padding: 2px 6px;">Quantité : ${o.quantity || 1}</span>
             </td>
-            <td>
+            <td class="col-center">
               <strong style="color: var(--primary-600); font-size: 14px;">$${(o.amount || 0).toFixed(2)}</strong>
             </td>
-            <td>
+            <td class="col-center">
+              <strong style="color: var(--emerald-600); font-size: 13.5px;">${remainingBalanceDisplay}</strong>
+            </td>
+            <td class="col-center">
               <span style="font-size: 12px; font-weight: 600;">${escapeHtml(o.method || 'Solde GetVirtu')}</span>
             </td>
-            <td>${statusSelector}</td>
-            <td>${actions}</td>
+            <td class="col-center">${statusSelector}</td>
+            <td class="col-center">${actions}</td>
           </tr>
         `;
       });
 
-      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucune commande enregistrée.</td></tr>';
+      tbody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucune commande enregistrée.</td></tr>';
     }
 
     function changeOrderStatusInline(orderId, newStatus) {
@@ -2612,9 +3268,131 @@
       showToast('Moyen supprimé.', 'success');
     }
 
-    // ========== 6. GRAPHIQUES CHART.JS (DYNAMIQUES DEPUIS LA BASE RÉELLE) ==========
-    function renderCharts(orders) {
-      var days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    // ========== 7. TABLE DES TICKETS DE SUPPORT CLIENT (MESSAGES ROUTÉS DEPUIS LE FORMULAIRE) ==========
+    function renderTicketsTable(tickets) {
+      tickets = tickets || DB.get('tickets', []);
+      var tbody = document.getElementById('admin-tickets-tbody');
+      var badgeNav = document.getElementById('badge-nav-tickets');
+      var badgeOpen = document.getElementById('open-tickets-badge');
+      var kpiChip = document.getElementById('kpi-tickets-chip');
+
+      var openCount = tickets.filter(function(t) { return t.status !== 'Résolu'; }).length;
+
+      if (badgeNav) {
+        badgeNav.textContent = openCount;
+        badgeNav.classList.toggle('hidden', openCount === 0);
+      }
+      if (badgeOpen) {
+        badgeOpen.textContent = openCount + ' ouvert' + (openCount > 1 ? 's' : '');
+        badgeOpen.className = openCount > 0 ? 'status-indicator-pill pending' : 'status-indicator-pill online';
+      }
+      if (kpiChip) {
+        kpiChip.textContent = openCount + ' ticket(s) ouvert(s)';
+      }
+
+      if (!tbody) return;
+      var html = '';
+
+      tickets.forEach(function(t) {
+        var isClosed = t.status === 'Résolu';
+        var statusBadge = isClosed 
+          ? '<span class="status-indicator-pill online">✓ Résolu</span>'
+          : '<span class="status-indicator-pill pending">⏳ Ouvert</span>';
+
+        var contactDisplay = escapeHtml(t.userContact || '');
+        var whatsappLink = '';
+        var cleanPhone = (t.userContact || '').replace(/[^0-9+]/g, '');
+        if (cleanPhone && cleanPhone.length >= 8) {
+          whatsappLink = `<a href="https://wa.me/${cleanPhone.replace('+', '')}" target="_blank" class="proof-thumbnail-btn" style="margin-top: 4px; padding: 2px 6px; font-size: 11px;">💬 WhatsApp</a>`;
+        }
+
+        html += `
+          <tr>
+            <td>
+              <strong>${escapeHtml(t.id || 'TCK')}</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">${t.date ? new Date(t.date).toLocaleDateString('fr-FR') + ' ' + new Date(t.date).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'}) : '-'}</div>
+            </td>
+            <td>
+              <div style="font-weight: 700;">${escapeHtml(t.userName || 'Client')}</div>
+              <div style="font-size: 11.5px; color: var(--primary-600); font-weight: 600;">${contactDisplay}</div>
+              ${whatsappLink}
+            </td>
+            <td>
+              <span class="status-indicator-pill offline" style="font-size: 11px;">${escapeHtml(t.subject || 'Support Client')}</span>
+            </td>
+            <td>
+              <div style="font-size: 12.5px; line-height: 1.4; max-width: 380px; word-break: break-word; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+                ${escapeHtml(t.message || '')}
+              </div>
+            </td>
+            <td class="col-center">${statusBadge}</td>
+            <td class="col-center">
+              <div style="display: flex; gap: 6px; justify-content: center;">
+                ${!isClosed ? `
+                  <button type="button" class="btn-order-quick-val" onclick="resolveTicket('${t.id}')" title="Marquer comme résolu">
+                    ✓ Résolu
+                  </button>
+                ` : `
+                  <button type="button" class="btn-order-manage" onclick="reopenTicket('${t.id}')" title="Rouvrir le ticket">
+                    🔄 Rouvrir
+                  </button>
+                `}
+                <button type="button" class="btn-icon-action delete" onclick="deleteTicket('${t.id}')" title="Supprimer le ticket">
+                  🗑️
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html || '<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun message de support pour le moment.</td></tr>';
+    }
+
+    function resolveTicket(ticketId) {
+      var tickets = DB.get('tickets', []);
+      var t = tickets.find(function(x) { return x.id === ticketId; });
+      if (t) {
+        t.status = 'Résolu';
+        t.resolvedAt = new Date().toISOString();
+        DB.set('tickets', tickets);
+        renderTicketsTable(tickets);
+        showToast('Ticket marqué comme résolu !', 'success');
+
+        var session = DB.get('session');
+        fetch('/api/data/tickets', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': (session && session.token) ? 'Bearer ' + session.token : ''
+          },
+          body: JSON.stringify({ id: ticketId, status: 'Résolu' })
+        }).catch(function(e) { console.warn('Sync ticket:', e); });
+      }
+    }
+
+    function reopenTicket(ticketId) {
+      var tickets = DB.get('tickets', []);
+      var t = tickets.find(function(x) { return x.id === ticketId; });
+      if (t) {
+        t.status = 'Ouvert';
+        DB.set('tickets', tickets);
+        renderTicketsTable(tickets);
+        showToast('Ticket rouvert.', 'info');
+      }
+    }
+
+    function deleteTicket(ticketId) {
+      if (!confirm('Supprimer ce ticket de support ?')) return;
+      var tickets = DB.get('tickets', []).filter(function(x) { return x.id !== ticketId; });
+      DB.set('tickets', tickets);
+      renderTicketsTable(tickets);
+      showToast('Ticket supprimé.', 'success');
+    }
+
+    // ========== 6. GRAPHIQUES CHART.JS (DYNAMIQUES SELON LA PÉRIODE SÉLECTIONNÉE) ==========
+    function renderCharts(orders, period) {
+      period = period || currentPeriod || 'day';
       var now = new Date();
       var labels = [];
       var revs = [];
@@ -2622,16 +3400,63 @@
 
       var completed = (orders || []).filter(function(o) { return o.status === 'Complété' || o.status === 'Livré'; });
 
-      for (var i = 6; i >= 0; i--) {
-        var d = new Date();
-        d.setDate(now.getDate() - i);
-        labels.push(days[d.getDay()]);
-        var dStr = d.toISOString().split('T')[0];
-        var dayOrders = completed.filter(function(o) { return o.date && o.date.startsWith(dStr); });
-        var dayRev = dayOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
-        var dayVol = dayOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
-        revs.push(Math.round(dayRev * 100) / 100);
-        vols.push(dayVol);
+      if (period === 'day') {
+        var days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+        for (var i = 6; i >= 0; i--) {
+          var d = new Date();
+          d.setDate(now.getDate() - i);
+          labels.push(days[d.getDay()]);
+          var dStr = d.toISOString().split('T')[0];
+          var dayOrders = completed.filter(function(o) { return o.date && o.date.startsWith(dStr); });
+          var dayRev = dayOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+          var dayVol = dayOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+          revs.push(Math.round(dayRev * 100) / 100);
+          vols.push(dayVol);
+        }
+      } else if (period === 'week') {
+        for (var i = 13; i >= 0; i--) {
+          var d = new Date();
+          d.setDate(now.getDate() - i);
+          labels.push((d.getDate() < 10 ? '0' : '') + d.getDate() + '/' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1));
+          var dStr = d.toISOString().split('T')[0];
+          var dayOrders = completed.filter(function(o) { return o.date && o.date.startsWith(dStr); });
+          var dayRev = dayOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+          var dayVol = dayOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+          revs.push(Math.round(dayRev * 100) / 100);
+          vols.push(dayVol);
+        }
+      } else if (period === 'month') {
+        for (var i = 25; i >= 0; i -= 5) {
+          var d = new Date();
+          d.setDate(now.getDate() - i);
+          labels.push((d.getDate() < 10 ? '0' : '') + d.getDate() + '/' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1));
+          var endD = new Date(d);
+          endD.setDate(d.getDate() + 5);
+          var chunkOrders = completed.filter(function(o) {
+            if (!o.date) return false;
+            var od = new Date(o.date);
+            return od >= d && od < endD;
+          });
+          var chunkRev = chunkOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+          var chunkVol = chunkOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+          revs.push(Math.round(chunkRev * 100) / 100);
+          vols.push(chunkVol);
+        }
+      } else if (period === 'year') {
+        var monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+        var curMonth = now.getMonth();
+        for (var m = 11; m >= 0; m--) {
+          var targetDate = new Date(now.getFullYear(), curMonth - m, 1);
+          var y = targetDate.getFullYear();
+          var mo = targetDate.getMonth();
+          labels.push(monthNames[mo]);
+          var moPrefix = y + '-' + (mo + 1 < 10 ? '0' : '') + (mo + 1);
+          var moOrders = completed.filter(function(o) { return o.date && o.date.startsWith(moPrefix); });
+          var moRev = moOrders.reduce(function(sum, o) { return sum + (o.amount || 0); }, 0);
+          var moVol = moOrders.reduce(function(sum, o) { return sum + (o.quantity || 1); }, 0);
+          revs.push(Math.round(moRev * 100) / 100);
+          vols.push(moVol);
+        }
       }
 
       var canvasR = document.getElementById('chartRevenue');
@@ -2705,6 +3530,29 @@
     document.addEventListener('DOMContentLoaded', function() {
       checkAdminAuth();
       renderDashboard();
+      setupDropzone();
+
+      // Fermeture des modales au clic sur le fond (backdrop)
+      document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+        backdrop.addEventListener('click', function(e) {
+          if (e.target === backdrop) {
+            backdrop.classList.remove('active');
+          }
+        });
+      });
+
+      // Fermeture du popover profil administrateur au clic en dehors
+      document.addEventListener('click', function(e) {
+        var wrap = document.getElementById('admin-profile-wrapper');
+        var menu = document.getElementById('admin-dropdown-menu');
+        if (menu && menu.classList.contains('active')) {
+          if (!wrap || !wrap.contains(e.target)) {
+            menu.classList.remove('active');
+            var chip = document.getElementById('admin-user-chip');
+            if (chip) chip.setAttribute('aria-expanded', 'false');
+          }
+        }
+      });
     });
   </script>
 </body>

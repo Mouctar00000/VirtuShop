@@ -1597,25 +1597,46 @@ button {
   border-radius: var(--radius-sm);
 }
 
-/* Payment Method Tabs & Selector */
+/* Payment Method Tabs & Selector (Ultra Compact & Élégant) */
 .payment-method-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .payment-method-tab {
   background: #f8fafc;
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 10px 8px;
+  padding: 6px 6px;
+  min-height: 42px;
   text-align: center;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   transition: var(--transition-normal);
+}
+
+.payment-method-tab .pm-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.payment-method-tab .pm-subtitle {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.2;
+  margin-top: 2px;
 }
 
 .payment-method-tab:hover {
@@ -1625,8 +1646,16 @@ button {
 .payment-method-tab.active {
   background: #eff6ff;
   border-color: var(--primary-600);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.15);
+}
+
+.payment-method-tab.active .pm-title {
   color: var(--primary-600);
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+}
+
+.payment-method-tab.active .pm-subtitle {
+  color: var(--primary-600);
+  opacity: 0.85;
 }
 
 .pay-qr-wrapper {
@@ -2416,10 +2445,26 @@ button {
 }
 
 .order-action-group {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
+  margin: 0 auto;
+}
+
+.order-status-selector-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.admin-table th.col-center,
+.admin-table td.col-center {
+  text-align: center !important;
+  vertical-align: middle !important;
 }
 
 .btn-order-manage {
@@ -3536,27 +3581,38 @@ html, body {
 
   /* Footer */
   .footer {
-    padding: 32px 0 18px;
+    padding: 26px 0 16px;
   }
   .footer-top {
-    grid-template-columns: 1fr;
-    gap: 22px;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px 18px !important;
+  }
+  .footer-brand {
+    grid-column: 1 / -1 !important;
+    margin-bottom: 2px;
+  }
+  .footer-brand p {
+    max-width: 100% !important;
+    font-size: 12px !important;
+    line-height: 1.5 !important;
   }
   .footer-col h5 {
-    font-size: 13px;
-    margin-bottom: 10px;
+    font-size: 12px !important;
+    margin-bottom: 8px !important;
   }
-  .footer-col ul li {
-    font-size: 12px;
-    margin-bottom: 6px;
+  .footer-col ul {
+    gap: 6px !important;
+  }
+  .footer-col a, .footer-col span {
+    font-size: 12px !important;
   }
   .footer-bottom {
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     text-align: center;
-    font-size: 11.5px;
-    padding-top: 18px;
+    font-size: 11px;
+    padding-top: 14px;
   }
 }
 
@@ -4419,4 +4475,654 @@ html, body {
   }
 }
 
+/* ==================== OPTIMISATION COMPACTE MODALE DE RECHARGE ==================== */
+.deposit-amount-row-clean {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  gap: 8px;
+}
 
+.deposit-amount-clean-label {
+  margin-bottom: 0 !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  color: var(--text-primary);
+}
+
+.deposit-min-badge-compact {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--primary-600) !important;
+  background: var(--primary-50) !important;
+  border: 1px solid var(--primary-200) !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  white-space: nowrap !important;
+}
+
+/* TICKER DÉFILANT CONTINU (CSS MARQUEE EFFECT) SASPAY TRUST BADGE */
+.momo-ticker-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  overflow: hidden;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.momo-ticker-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  line-height: 1;
+  z-index: 2;
+  background: #f0fdf4;
+}
+
+.momo-ticker-track {
+  overflow: hidden;
+  white-space: nowrap;
+  flex: 1;
+  position: relative;
+  display: flex;
+}
+
+.momo-ticker-text {
+  display: inline-block;
+  white-space: nowrap;
+  animation: momoMarquee 22s linear infinite;
+  font-size: 11px;
+  font-weight: 600;
+  color: #166534;
+  will-change: transform;
+}
+
+.momo-ticker-box:hover .momo-ticker-text {
+  animation-play-state: paused;
+}
+
+@keyframes momoMarquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* BADGE RUPTURE DE STOCK AUTOMATIQUE & BOUTON DÉSACTIVÉ */
+.badge-stock-out {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #dc2626;
+  background: #fee2e2;
+  border: 1px solid #fecdd3;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.btn-buy-disabled {
+  background: #cbd5e1 !important;
+  border-color: #cbd5e1 !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@media (max-width: 768px) {
+  .modal-deposit-compact {
+    padding: 12px 14px !important;
+    max-height: 96vh !important;
+  }
+  .modal-deposit-compact h2.modal-title {
+    font-size: 16px !important;
+    margin-bottom: 2px !important;
+  }
+  .modal-deposit-compact p {
+    font-size: 11px !important;
+    margin-bottom: 6px !important;
+    line-height: 1.3 !important;
+  }
+  .deposit-amount-row-clean {
+    margin-bottom: 2px !important;
+  }
+  .deposit-amount-clean-label {
+    font-size: 11.5px !important;
+  }
+  .deposit-min-badge-compact {
+    font-size: 10px !important;
+    padding: 1px 6px !important;
+  }
+  #deposit-amount-input {
+    height: 32px !important;
+    font-size: 13px !important;
+  }
+  .payment-method-tabs {
+    gap: 6px !important;
+    margin-bottom: 4px !important;
+  }
+  .payment-method-tab {
+    min-height: 36px !important;
+    padding: 4px 6px !important;
+  }
+  .payment-method-tab .pm-title {
+    font-size: 11.5px !important;
+  }
+  .payment-method-tab .pm-subtitle {
+    font-size: 9.5px !important;
+    margin-top: 1px !important;
+  }
+  .momo-country-wrapper {
+    margin-bottom: 4px !important;
+  }
+  .momo-select {
+    padding: 4px 8px !important;
+    height: 32px !important;
+    font-size: 12px !important;
+  }
+  .momo-networks-grid {
+    margin-bottom: 4px !important;
+    gap: 4px !important;
+  }
+  .momo-network-btn {
+    padding: 4px 6px !important;
+  }
+  .momo-network-title {
+    font-size: 11.5px !important;
+  }
+  .momo-convert-card {
+    padding: 4px 8px !important;
+    margin-bottom: 4px !important;
+  }
+  .momo-convert-value {
+    font-size: 13.5px !important;
+  }
+  .phone-input-group input {
+    height: 32px !important;
+    font-size: 13px !important;
+  }
+  .phone-prefix {
+    padding: 0 8px !important;
+    font-size: 12px !important;
+  }
+  .momo-ticker-box {
+    height: 24px !important;
+    padding: 2px 6px !important;
+    margin: 3px 0 6px !important;
+  }
+  .momo-ticker-text {
+    font-size: 10.5px !important;
+  }
+  #btn-submit-momo, #btn-submit-trybit {
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+    margin-top: 4px !important;
+  }
+  .crypto-ticker-box {
+    height: 24px !important;
+    padding: 2px 6px !important;
+    margin: 3px 0 6px !important;
+  }
+  .crypto-ticker-text {
+    font-size: 10.5px !important;
+  }
+  .crypto-cards-container.compact-crypto-list {
+    max-height: 125px !important;
+  }
+  .modal-purchase-compact {
+    padding: 12px 14px !important;
+    max-height: 96vh !important;
+  }
+  .purchase-top-grid {
+    gap: 6px !important;
+    margin-bottom: 6px !important;
+  }
+  .purchase-prod-box {
+    padding: 5px 8px !important;
+  }
+  .purchase-prod-thumb-compact {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  .purchase-prod-title-compact {
+    font-size: 12px !important;
+  }
+  .purchase-balance-box {
+    padding: 4px 6px !important;
+  }
+  .purchase-balance-value {
+    font-size: 14.5px !important;
+  }
+  .purchase-qty-card-compact {
+    padding: 4px 8px !important;
+    margin-bottom: 4px !important;
+  }
+  .purchase-calc-box-compact {
+    padding: 4px 8px !important;
+    margin-bottom: 6px !important;
+  }
+  .purchase-method-tabs-compact {
+    gap: 4px !important;
+    margin-bottom: 6px !important;
+  }
+  .insufficient-balance-alert-centered {
+    padding: 6px 10px !important;
+    margin-bottom: 6px !important;
+  }
+  .optional-contact-box-compact {
+    padding: 4px 8px !important;
+    margin-bottom: 6px !important;
+  }
+  .btn-recharge-bottom-compact {
+    padding: 8px 14px !important;
+    font-size: 12.5px !important;
+  }
+}
+
+/* ==================== EFFET SHIMMER FLASH CTA ==================== */
+@keyframes btnFlashShimmer {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  25% { transform: translateX(250%) skewX(-20deg); }
+  100% { transform: translateX(250%) skewX(-20deg); }
+}
+
+.btn-shimmer-flash {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.btn-shimmer-flash::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: btnFlashShimmer 2.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+/* ==================== PASSERELLE CRYPTO INSTANTANÉE COMPACTE & MARQUEE ==================== */
+.trybit-header-single-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.trybit-header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.trybit-header-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.trybit-header-pill {
+  font-size: 10.5px !important;
+  padding: 2px 8px !important;
+  white-space: nowrap !important;
+}
+
+.crypto-cards-container.compact-crypto-list {
+  max-height: 135px !important;
+  gap: 5px !important;
+  padding: 2px !important;
+}
+
+.crypto-cards-container.compact-crypto-list .crypto-card-item {
+  padding: 5px 10px !important;
+  border-radius: 9px !important;
+  gap: 8px !important;
+}
+
+.crypto-cards-container.compact-crypto-list .crypto-card-icon {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+}
+
+.crypto-cards-container.compact-crypto-list .crypto-card-name {
+  font-size: 11.5px !important;
+}
+
+.crypto-cards-container.compact-crypto-list .crypto-card-sub {
+  font-size: 10px !important;
+}
+
+.crypto-cards-container.compact-crypto-list .crypto-card-radio-circle {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+/* MARQUEE TICKER POUR CRYPTO (TRYBIT) */
+.crypto-ticker-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  overflow: hidden;
+  height: 26px;
+  box-sizing: border-box;
+  margin: 6px 0 10px 0;
+}
+
+.crypto-ticker-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  line-height: 1;
+  z-index: 2;
+  background: #f0fdf4;
+}
+
+.crypto-ticker-track {
+  overflow: hidden;
+  white-space: nowrap;
+  flex: 1;
+  position: relative;
+  display: flex;
+}
+
+.crypto-ticker-text {
+  display: inline-block;
+  white-space: nowrap;
+  animation: momoMarquee 20s linear infinite;
+  font-size: 11px;
+  font-weight: 600;
+  color: #166534;
+  will-change: transform;
+}
+
+.crypto-ticker-box:hover .crypto-ticker-text {
+  animation-play-state: paused;
+}
+
+/* ==================== MODALE ACHAT ULTRA-COMPACTE (SANS SCROLLBAR) ==================== */
+.modal-purchase-compact {
+  padding: 16px 18px !important;
+  max-height: 94vh !important;
+  overflow-y: auto !important;
+}
+
+.purchase-modal-header-compact {
+  margin-bottom: 8px !important;
+}
+
+.purchase-modal-title-compact {
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  margin-bottom: 2px !important;
+  color: var(--text-primary);
+}
+
+.purchase-delivery-notice-line {
+  font-size: 11.5px !important;
+  color: var(--text-secondary) !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* GRILLE CÔTE À CÔTE : PRODUIT (GAUCHE) & SOLDE (DROITE) */
+.purchase-top-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.purchase-prod-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  min-width: 0;
+}
+
+.purchase-prod-thumb-compact {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.purchase-prod-info-compact {
+  flex: 1;
+  min-width: 0;
+}
+
+.purchase-prod-cat-compact {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--primary-600);
+  display: block;
+  line-height: 1.2;
+}
+
+.purchase-prod-title-compact {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 1px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.purchase-unit-price-compact {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.purchase-unit-price-compact strong {
+  color: var(--primary-600);
+}
+
+.purchase-balance-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 6px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+}
+
+.purchase-balance-label {
+  font-size: 10.5px;
+  color: #1e3a8a;
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.purchase-balance-value {
+  font-size: 16px;
+  color: var(--primary-600);
+  font-weight: 800;
+  font-family: var(--font-display);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+/* CARTES COMPACTES : QUANTITÉ & CALCUL TOTAL */
+.purchase-qty-card-compact {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.purchase-calc-box-compact {
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.calc-row-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+
+.calc-row-compact.total-row {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+  margin-top: 4px;
+  margin-bottom: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.total-amount-compact {
+  font-size: 16px;
+  color: var(--primary-600);
+  font-weight: 800;
+}
+
+/* SÉLECTION DU MOYEN DE RÈGLEMENT */
+.purchase-method-tabs-compact {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.purchase-method-tab-compact {
+  padding: 6px 4px !important;
+  font-size: 11px !important;
+  border-radius: 7px !important;
+  white-space: nowrap;
+  text-align: center;
+  min-height: 34px !important;
+}
+
+/* ALERTE SOLDE INSUFFISANT CENTRÉE AVEC BOUTON SHIMMER FLASH */
+.insufficient-balance-alert-centered {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.insufficient-balance-alert-centered .insufficient-balance-text {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #e11d48;
+}
+
+.btn-quick-recharge-centered {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 18px;
+  border-radius: var(--radius-full);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  margin: 0 auto;
+}
+
+/* CONTACT OPTIONNEL EN UNE SEULE LIGNE */
+.optional-contact-box-compact {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.optional-contact-label-oneline {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin-bottom: 3px !important;
+}
+
+.optional-contact-input-compact {
+  width: 100%;
+  padding: 5px 8px !important;
+  font-size: 11.5px !important;
+  height: 30px !important;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+/* GRAND BOUTON D'ACTION INFÉRIEUR (CENTRÉ & SHIMMER FLASH) */
+.btn-recharge-bottom-compact {
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 18px !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-md) !important;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  color: #ffffff !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 3px 12px rgba(37, 99, 235, 0.35) !important;
+}

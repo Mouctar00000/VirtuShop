@@ -40,6 +40,7 @@ const INITIAL_DB = {
   orders: [], // Zéro commande de test
   transactions: [], // Zéro fausse transaction
   vault: {}, // Zéro faux identifiant
+  tickets: [], // Messages du support client
   payment_methods: [
     {
       id: 1,
@@ -85,6 +86,7 @@ class Database {
           orders: parsed.orders || [],
           transactions: parsed.transactions || [],
           vault: parsed.vault || {},
+          tickets: parsed.tickets || [],
           payment_methods: parsed.payment_methods || INITIAL_DB.payment_methods,
           settings: parsed.settings || INITIAL_DB.settings
         };
@@ -319,6 +321,39 @@ class Database {
     if (!this.data.vault) this.data.vault = {};
     this.data.vault[prodId] = item;
     this.persist();
+  }
+
+  // ========== SUPPORT CLIENT & TICKETS ==========
+  getTickets() {
+    return this.data.tickets || [];
+  }
+
+  createTicket(ticket) {
+    const now = new Date().toISOString();
+    const newT = {
+      id: ticket.id || 'TCK-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+      userId: ticket.userId || null,
+      userName: ticket.userName || 'Client',
+      userContact: ticket.userContact || '',
+      subject: ticket.subject || 'Support Client',
+      message: ticket.message || '',
+      status: ticket.status || 'Ouvert',
+      date: ticket.date || now,
+      createdAt: now
+    };
+    if (!this.data.tickets) this.data.tickets = [];
+    this.data.tickets.unshift(newT);
+    this.persist();
+    return newT;
+  }
+
+  updateTicket(id, updates) {
+    if (!this.data.tickets) return null;
+    const t = this.data.tickets.find(x => x.id === id);
+    if (!t) return null;
+    Object.assign(t, updates, { updatedAt: new Date().toISOString() });
+    this.persist();
+    return t;
   }
 
   // ========== MOYENS DE PAIEMENT ==========

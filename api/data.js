@@ -95,18 +95,42 @@ module.exports = async function handler(req, res) {
           return res.status(400).json({ error: 'Solde insuffisant pour cet achat.' });
         }
 
-        // Déduction du solde et du stock côté serveur
+        // Déduction du solde côté serveur
         const newBalance = Math.round((auth.user.balance - total) * 100) / 100;
         db.updateUser(auth.user.id, { balance: newBalance });
-        db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
 
-        // Récupération du coffre-fort pour livraison numérique immédiate
+        // Récupération du coffre-fort et attribution de clé strictement unique
         const vault = db.getVault();
-        const prodVault = vault[prod.id];
-        const deliveredContent = (prodVault && prodVault.content) ? prodVault : {
-          type: 'text',
-          content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
-        };
+        const prodVault = vault[prod.id] || {};
+        let deliveredContent = null;
+
+        if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
+          const unusedKey = prodVault.keys.find(k => !k.used);
+          if (unusedKey) {
+            unusedKey.used = true;
+            unusedKey.soldTo = auth.user.email;
+            unusedKey.soldAt = new Date().toISOString();
+            deliveredContent = {
+              type: prodVault.type || 'text',
+              content: unusedKey.content,
+              fileName: prodVault.fileName || 'licence.txt'
+            };
+            db.saveVaultItem(prod.id, prodVault);
+            const remainingStock = prodVault.keys.filter(k => !k.used).length;
+            db.saveProduct({ id: prod.id, stock: remainingStock });
+          }
+        } else if (prodVault.content) {
+          deliveredContent = prodVault;
+          db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
+        }
+
+        if (!deliveredContent) {
+          deliveredContent = {
+            type: 'text',
+            content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
+          };
+          db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
+        }
 
         const newOrder = db.createOrder({
           userId: auth.user.id,
@@ -117,6 +141,8 @@ module.exports = async function handler(req, res) {
           unitPrice: prod.price,
           quantity: qty,
           amount: total,
+          remainingBalance: newBalance,
+          userBalanceAfter: newBalance,
           contactInfo: body.contactInfo || '',
           method: 'Solde GetVirtu',
           status: 'Complété',
@@ -133,6 +159,36 @@ module.exports = async function handler(req, res) {
         });
 
         return res.status(201).json({ success: true, order: newOrder, newBalance });
+      }
+    }
+
+    // 4. TICKETS SUPPORT CLIENT
+    if (resource === 'tickets') {
+      if (req.method === 'GET') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        return res.status(200).json({ tickets: db.getTickets() });
+      }
+
+      if (req.method === 'POST') {
+        const newTicket = db.createTicket({
+          userId: auth ? auth.user.id : (body.userId || null),
+          userName: body.userName || (auth ? auth.user.name : 'Client'),
+          userContact: body.userContact || body.contact || '',
+          subject: body.subject || 'Support Client',
+          message: body.message || '',
+          status: 'Ouvert'
+        });
+        return res.status(201).json({ success: true, ticket: newTicket });
+      }
+
+      if (req.method === 'PUT') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        const updated = db.updateTicket(body.id, { status: body.status || 'Résolu' });
+        return res.status(200).json({ success: true, ticket: updated });
       }
     }
 
