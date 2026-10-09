@@ -2914,14 +2914,16 @@ function handleGoogleAuthTrigger() {
               console.warn('[Google Auth] Erreur popup OAuth:', resp.error);
               if (resp.error === 'popup_closed_by_user') {
                 showToast('Connexion Google annulée.', 'info');
+              } else if (resp.error === 'origin_mismatch' || (resp.error && resp.error.indexOf('origin') !== -1)) {
+                showToast('Origine non autorisée : ajoutez ' + window.location.origin + ' dans la Google Cloud Console.', 'warning');
               } else {
-                fallbackToGoogleRedirect();
+                showToast('Erreur Google: ' + (resp.error_description || resp.error), 'error');
               }
             }
           },
           error_callback: function(err) {
             console.warn('[Google Auth] Error callback popup:', err);
-            fallbackToGoogleRedirect();
+            showToast('Autorisation Google non validée pour ' + window.location.origin + '.', 'warning');
           }
         });
       }
