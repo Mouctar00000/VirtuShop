@@ -584,7 +584,7 @@ function renderLandingShowcase() {
           <div class="showcase-price-box">
             <span class="showcase-price-val">$${p.price.toFixed(2)}</span>
           </div>
-          <button type="button" class="btn-primary btn-sm showcase-buy-btn" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${p.id})">
+          <button type="button" class="btn-primary btn-sm showcase-buy-btn btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${p.id})">
             ${oos ? 'Rupture' : 'Acheter ⚡'}
           </button>
         </div>
@@ -701,7 +701,7 @@ function renderProductCardsInto(container, prods) {
               <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture' : '● ' + prod.stock + ' en stock'}</span>
               <span class="product-price">$${prod.price.toFixed(2)}</span>
             </div>
-            <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''}" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${prod.id})">
+            <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${prod.id})">
               ${oos ? 'Rupture de Stock' : 'Acheter ⚡'}
             </button>
           </div>
@@ -958,7 +958,7 @@ function renderPurchaseModal() {
         ` : `
           <div class="insufficient-balance-alert-centered">
             <span class="insufficient-balance-text">⚠️ Solde insuffisant (Il vous manque $${diff})</span>
-            <button type="button" class="btn-quick-recharge-centered btn-shimmer-flash" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
+            <button type="button" class="btn-quick-recharge-centered btn-light-sweep" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
               <span>Recharger ⚡</span>
             </button>
           </div>
@@ -973,58 +973,62 @@ function renderPurchaseModal() {
       </div>
 
       ${hasEnough ? `
-        <button type="button" class="btn-recharge-bottom-compact" onclick="processProductPayment()">
-          Payer maintenant ($${total.toFixed(2)}) ⚡
+        <button type="button" class="btn-recharge-bottom-compact btn-purchase-action-single-line btn-light-sweep" onclick="processProductPayment()">
+          <span>Payer maintenant ($${total.toFixed(2)}) ⚡</span>
         </button>
       ` : `
-        <button type="button" class="btn-recharge-bottom-compact btn-shimmer-flash" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
+        <button type="button" class="btn-recharge-bottom-compact btn-purchase-action-single-line btn-light-sweep" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
           <span>Recharger mon solde ⚡</span>
         </button>
       `}
     ` : ''}
 
     ${currentPurchasePayMethod === 'mobile_money' ? `
-      <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px;">
-        <div class="field" style="margin-bottom: 10px;">
-          <label style="font-size: 12px; font-weight: 700;">Pays :</label>
-          <select id="purchase-momo-country" onchange="onPurchaseMomoCountryChange(this.value)" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 13px;">
+      <div class="purchase-method-panel-compact">
+        <div style="margin-bottom: 5px;">
+          <label style="font-size: 11px; font-weight: 700; margin-bottom: 2px; display: block;">Pays :</label>
+          <select id="purchase-momo-country" onchange="onPurchaseMomoCountryChange(this.value)" style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12px; height: 30px;">
             ${countryOptionsHtml}
           </select>
         </div>
-        <div style="margin-bottom: 10px;">
-          <label style="font-size: 12px; font-weight: 700; display: block; margin-bottom: 5px;">Réseau Mobile Money :</label>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px;">
+        <div style="margin-bottom: 5px;">
+          <label style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 2px;">Réseau Mobile Money :</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px;">
             ${networksHtml}
           </div>
         </div>
-        <div class="field" style="margin-bottom: 10px;">
-          <label for="purchase-momo-phone" style="font-size: 12px; font-weight: 700;">Numéro de téléphone Mobile Money :</label>
-          <input type="tel" id="purchase-momo-phone" placeholder="Ex: 0700000000" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 13px;">
-          <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 3px;">Montant estimé : ~${momoAmountLocal.toLocaleString('fr-FR')} ${country.currency}</span>
+        <div class="field" style="margin-bottom: 5px;">
+          <label for="purchase-momo-phone" style="font-size: 11px; font-weight: 700;">Numéro de téléphone Mobile Money :</label>
+          <input type="tel" id="purchase-momo-phone" placeholder="Ex: 0700000000" style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12px; height: 30px;">
+          <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 1px;">Montant estimé : ~${momoAmountLocal.toLocaleString('fr-FR')} ${country.currency}</span>
         </div>
-        <div class="optional-contact-box" style="margin-bottom: 0;">
-          <label for="purchase-contact-input"><span>📱 Email ou WhatsApp de confirmation :</span></label>
-          <input type="text" id="purchase-contact-input" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
+        <div class="optional-contact-box-compact" style="margin-bottom: 0;">
+          <label for="purchase-contact-input" class="optional-contact-label-oneline">
+            <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
+          </label>
+          <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
         </div>
       </div>
-      <button type="button" class="btn-pay-now" onclick="startPurchaseMomoPayment(${total}, ${currentPurchaseQty})">
-        Payer $${total.toFixed(2)} avec Mobile Money ⚡
+      <button type="button" class="btn-pay-now btn-purchase-action-single-line btn-light-sweep" onclick="startPurchaseMomoPayment(${total}, ${currentPurchaseQty})">
+        <span>Payer $${total.toFixed(2)} avec Mobile Money ⚡</span>
       </button>
     ` : ''}
 
     ${currentPurchasePayMethod === 'crypto' ? `
-      <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px;">
-        <div class="field" style="margin-bottom: 10px;">
-          <label style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: block;">Sélectionnez votre devise crypto :</label>
-          ${renderCryptoCardsHtml('purchase-crypto-cards-grid', 'purchase-crypto-select', '')}
+      <div class="purchase-method-panel-compact">
+        <div style="margin-bottom: 5px;">
+          <label style="font-size: 11px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; display: block;">Sélectionnez votre devise crypto :</label>
+          ${renderCryptoCardsHtml('purchase-crypto-cards-grid', 'purchase-crypto-select', '', true)}
         </div>
-        <div class="optional-contact-box" style="margin-bottom: 0;">
-          <label for="purchase-contact-input"><span>📱 Email ou WhatsApp de confirmation :</span></label>
-          <input type="text" id="purchase-contact-input" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
+        <div class="optional-contact-box-compact" style="margin-bottom: 0;">
+          <label for="purchase-contact-input" class="optional-contact-label-oneline">
+            <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
+          </label>
+          <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
         </div>
       </div>
-      <button type="button" class="btn-pay-now" onclick="startPurchaseTrybitPayment(${total}, ${currentPurchaseQty})">
-        Payer $${total.toFixed(2)} en Crypto Instantané (Trybit) ⚡
+      <button type="button" class="btn-pay-now btn-purchase-action-single-line btn-light-sweep" onclick="startPurchaseTrybitPayment(${total}, ${currentPurchaseQty})">
+        <span>Payer $${total.toFixed(2)} en Crypto ⚡</span>
       </button>
     ` : ''}
   `;
@@ -1875,7 +1879,7 @@ function renderDepositMethodContent() {
       </div>
     </div>
 
-    <button type="button" class="btn-primary" style="width: 100%; margin-top: 10px;" onclick="submitDepositRequest()">
+    <button type="button" class="btn-primary btn-light-sweep" style="width: 100%; margin-top: 10px;" onclick="submitDepositRequest()">
       Valider la Recharge de Solde ⚡
     </button>
   `;
@@ -1956,7 +1960,7 @@ function renderSasPayDepositContent(container) {
       </div>
     </div>
 
-    <button type="button" class="btn-primary" id="btn-submit-momo" style="width: 100%; margin-top: 6px; padding: 10px;" onclick="submitSasPayDeposit()">
+    <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" style="width: 100%; margin-top: 6px; padding: 10px;" onclick="submitSasPayDeposit()">
       Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
     </button>
   `;
@@ -2266,7 +2270,7 @@ function renderTrybitDepositContent(container) {
       </div>
     </div>
 
-    <button type="button" class="btn-primary" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; padding: 10px;" onclick="submitTrybitDeposit()">
+    <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; padding: 10px;" onclick="submitTrybitDeposit()">
       <span>Payer <span id="trybit-btn-dynamic-amount">$${amount.toFixed(2)}</span> ⚡</span>
     </button>
   `;

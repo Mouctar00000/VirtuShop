@@ -4677,82 +4677,127 @@ html, body {
     font-size: 12px !important;
   }
   .modal-purchase-compact {
-    padding: 12px 14px !important;
-    max-height: 96vh !important;
+    max-width: 385px !important;
+    width: 94% !important;
+    padding: 11px 13px !important;
+    max-height: 92vh !important;
   }
   .purchase-top-grid {
-    gap: 6px !important;
-    margin-bottom: 6px !important;
+    gap: 5px !important;
+    margin-bottom: 5px !important;
   }
   .purchase-prod-box {
-    padding: 5px 8px !important;
+    padding: 4px 7px !important;
   }
   .purchase-prod-thumb-compact {
-    width: 36px !important;
-    height: 36px !important;
+    width: 34px !important;
+    height: 34px !important;
   }
   .purchase-prod-title-compact {
-    font-size: 12px !important;
+    font-size: 11.5px !important;
   }
   .purchase-balance-box {
-    padding: 4px 6px !important;
+    padding: 3px 5px !important;
   }
   .purchase-balance-value {
-    font-size: 14.5px !important;
+    font-size: 14px !important;
   }
   .purchase-qty-card-compact {
-    padding: 4px 8px !important;
+    padding: 4px 7px !important;
     margin-bottom: 4px !important;
   }
   .purchase-calc-box-compact {
-    padding: 4px 8px !important;
-    margin-bottom: 6px !important;
+    padding: 4px 7px !important;
+    margin-bottom: 5px !important;
   }
   .purchase-method-tabs-compact {
-    gap: 4px !important;
-    margin-bottom: 6px !important;
+    gap: 3px !important;
+    margin-bottom: 5px !important;
   }
   .insufficient-balance-alert-centered {
-    padding: 6px 10px !important;
-    margin-bottom: 6px !important;
+    padding: 5px 8px !important;
+    margin-bottom: 5px !important;
   }
   .optional-contact-box-compact {
-    padding: 4px 8px !important;
-    margin-bottom: 6px !important;
+    padding: 4px 7px !important;
+    margin-bottom: 5px !important;
   }
-  .btn-recharge-bottom-compact {
+  .btn-purchase-action-single-line,
+  .btn-recharge-bottom-compact,
+  .btn-pay-now {
+    max-width: 290px !important;
     padding: 8px 14px !important;
-    font-size: 12.5px !important;
+    font-size: 13px !important;
+    height: 38px !important;
   }
 }
 
-/* ==================== EFFET SHIMMER FLASH CTA ==================== */
-@keyframes btnFlashShimmer {
-  0% { transform: translateX(-150%) skewX(-20deg); }
-  25% { transform: translateX(250%) skewX(-20deg); }
-  100% { transform: translateX(250%) skewX(-20deg); }
+/* ==================== SUBTLE LIGHT-SWEEP ANIMATION (PAYMENT BUTTONS) ==================== */
+@keyframes paymentLightSweep {
+  0% {
+    transform: translateX(-140%) skewX(-20deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  38% {
+    transform: translateX(260%) skewX(-20deg);
+    opacity: 1;
+  }
+  44% {
+    transform: translateX(260%) skewX(-20deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-140%) skewX(-20deg);
+    opacity: 0;
+  }
 }
 
+.btn-light-sweep,
+.btn-buy-product:not(:disabled):not(.btn-buy-disabled),
+.showcase-buy-btn:not(:disabled),
+.btn-pay-now:not(:disabled),
+.btn-recharge-bottom-compact:not(:disabled),
+.btn-quick-recharge-centered,
+#btn-submit-trybit:not(:disabled),
+#btn-submit-momo:not(:disabled),
+.btn-cta-shimmer,
 .btn-shimmer-flash {
   position: relative !important;
   overflow: hidden !important;
+  isolation: isolate;
 }
 
+.btn-light-sweep::after,
+.btn-buy-product:not(:disabled):not(.btn-buy-disabled)::after,
+.showcase-buy-btn:not(:disabled)::after,
+.btn-pay-now:not(:disabled)::after,
+.btn-recharge-bottom-compact:not(:disabled)::after,
+.btn-quick-recharge-centered::after,
+#btn-submit-trybit:not(:disabled)::after,
+#btn-submit-momo:not(:disabled)::after,
+.btn-cta-shimmer::after,
 .btn-shimmer-flash::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 50%;
-  height: 100%;
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 45% !important;
+  height: 100% !important;
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.12) 25%,
     rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0.12) 75%,
     rgba(255, 255, 255, 0) 100%
-  );
-  animation: btnFlashShimmer 2.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
+  ) !important;
+  transform: translateX(-140%) skewX(-20deg) !important;
+  animation: paymentLightSweep 3.6s ease-in-out infinite !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
 }
 
 /* ==================== PASSERELLE CRYPTO INSTANTANÉE COMPACTE & MARQUEE ==================== */
@@ -4864,54 +4909,57 @@ html, body {
 
 /* ==================== MODALE ACHAT ULTRA-COMPACTE (SANS SCROLLBAR) ==================== */
 .modal-purchase-compact {
-  padding: 16px 18px !important;
-  max-height: 94vh !important;
+  max-width: 420px !important;
+  width: 94% !important;
+  padding: 13px 16px !important;
+  max-height: 90vh !important;
   overflow-y: auto !important;
 }
 
 .purchase-modal-header-compact {
-  margin-bottom: 8px !important;
+  margin-bottom: 6px !important;
 }
 
 .purchase-modal-title-compact {
-  font-size: 17px !important;
+  font-size: 16px !important;
   font-weight: 800 !important;
-  margin-bottom: 2px !important;
+  margin-bottom: 1px !important;
   color: var(--text-primary);
 }
 
 .purchase-delivery-notice-line {
-  font-size: 11.5px !important;
+  font-size: 11px !important;
   color: var(--text-secondary) !important;
   margin: 0 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
+  line-height: 1.2 !important;
 }
 
 /* GRILLE CÔTE À CÔTE : PRODUIT (GAUCHE) & SOLDE (DROITE) */
 .purchase-top-grid {
   display: grid;
   grid-template-columns: 1.35fr 1fr;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .purchase-prod-box {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 8px;
+  padding: 5px 8px;
   background: #f8fafc;
   border: 1px solid var(--border-subtle);
-  border-radius: 9px;
+  border-radius: 8px;
   min-width: 0;
 }
 
 .purchase-prod-thumb-compact {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
   object-fit: cover;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
@@ -4924,7 +4972,7 @@ html, body {
 }
 
 .purchase-prod-cat-compact {
-  font-size: 9.5px;
+  font-size: 9px;
   text-transform: uppercase;
   font-weight: 700;
   color: var(--primary-600);
@@ -4933,7 +4981,7 @@ html, body {
 }
 
 .purchase-prod-title-compact {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 800;
   color: var(--text-primary);
   margin: 1px 0;
@@ -4944,7 +4992,7 @@ html, body {
 }
 
 .purchase-unit-price-compact {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-secondary);
   line-height: 1.2;
 }
@@ -4959,14 +5007,14 @@ html, body {
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding: 6px 10px;
+  padding: 5px 8px;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
-  border-radius: 9px;
+  border-radius: 8px;
 }
 
 .purchase-balance-label {
-  font-size: 10.5px;
+  font-size: 10px;
   color: #1e3a8a;
   font-weight: 600;
   white-space: nowrap;
@@ -4974,52 +5022,52 @@ html, body {
 }
 
 .purchase-balance-value {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--primary-600);
   font-weight: 800;
   font-family: var(--font-display);
   line-height: 1.2;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 /* CARTES COMPACTES : QUANTITÉ & CALCUL TOTAL */
 .purchase-qty-card-compact {
   background: #ffffff;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 6px 10px;
-  margin-bottom: 6px;
+  border-radius: 7px;
+  padding: 4px 8px;
+  margin-bottom: 5px;
 }
 
 .purchase-calc-box-compact {
   background: #f8fafc;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 6px 10px;
-  margin-bottom: 8px;
+  border-radius: 7px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
 }
 
 .calc-row-compact {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-secondary);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .calc-row-compact.total-row {
   border-top: 1px solid var(--border-subtle);
-  padding-top: 4px;
-  margin-top: 4px;
+  padding-top: 3px;
+  margin-top: 3px;
   margin-bottom: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text-primary);
 }
 
 .total-amount-compact {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--primary-600);
   font-weight: 800;
 }
@@ -5028,36 +5076,85 @@ html, body {
 .purchase-method-tabs-compact {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-bottom: 6px;
 }
 
 .purchase-method-tab-compact {
-  padding: 6px 4px !important;
-  font-size: 11px !important;
-  border-radius: 7px !important;
+  padding: 5px 3px !important;
+  font-size: 10.5px !important;
+  border-radius: 6px !important;
   white-space: nowrap;
   text-align: center;
-  min-height: 34px !important;
+  min-height: 31px !important;
 }
 
-/* ALERTE SOLDE INSUFFISANT CENTRÉE AVEC BOUTON SHIMMER FLASH */
+/* PANNEAU MÉTHODE DE PAIEMENT COMPACT */
+.purchase-method-panel-compact {
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  padding: 6px 8px;
+  margin-bottom: 7px;
+}
+
+/* LISTE CRYPTO COMPACTE DANS LA MODALE ACHAT */
+.modal-purchase-compact .crypto-cards-container {
+  max-height: 108px !important;
+  gap: 4px !important;
+  padding: 1px !important;
+}
+
+.modal-purchase-compact .crypto-card-item {
+  padding: 4px 8px !important;
+  border-radius: 7px !important;
+  gap: 6px !important;
+  min-height: 30px !important;
+}
+
+.modal-purchase-compact .crypto-card-icon {
+  width: 22px !important;
+  height: 22px !important;
+  font-size: 11.5px !important;
+  border-radius: 5px !important;
+}
+
+.modal-purchase-compact .crypto-card-name {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+.modal-purchase-compact .crypto-card-badge {
+  font-size: 8.5px !important;
+  padding: 1px 4px !important;
+}
+
+.modal-purchase-compact .crypto-card-sub {
+  font-size: 9px !important;
+}
+
+.modal-purchase-compact .crypto-card-radio-circle {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* ALERTE SOLDE INSUFFISANT CENTRÉE */
 .insufficient-balance-alert-centered {
   background: #fff1f2;
   border: 1px solid #fecdd3;
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
+  border-radius: 7px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .insufficient-balance-alert-centered .insufficient-balance-text {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: #e11d48;
 }
@@ -5069,9 +5166,9 @@ html, body {
   gap: 5px;
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: #ffffff !important;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 6px 18px;
+  padding: 5px 16px;
   border-radius: var(--radius-full);
   border: none;
   cursor: pointer;
@@ -5083,49 +5180,64 @@ html, body {
 .optional-contact-box-compact {
   background: #ffffff;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 6px 10px;
-  margin-bottom: 8px;
+  border-radius: 7px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
 }
 
 .optional-contact-label-oneline {
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   font-weight: 700 !important;
   color: var(--text-primary) !important;
   display: block !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  margin-bottom: 3px !important;
+  margin-bottom: 2px !important;
 }
 
 .optional-contact-input-compact {
   width: 100%;
-  padding: 5px 8px !important;
-  font-size: 11.5px !important;
-  height: 30px !important;
+  padding: 4px 7px !important;
+  font-size: 11px !important;
+  height: 28px !important;
   background: #f8fafc;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 5px;
   box-sizing: border-box;
 }
 
-/* GRAND BOUTON D'ACTION INFÉRIEUR (CENTRÉ & SHIMMER FLASH) */
-.btn-recharge-bottom-compact {
-  width: 100%;
-  max-width: 320px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 9px 18px !important;
+/* BOUTONS D'ACTION SUR UNE SEULE LIGNE PROPRE */
+.btn-purchase-action-single-line,
+.btn-recharge-bottom-compact,
+.modal-purchase-compact .btn-pay-now {
+  width: 100% !important;
+  max-width: 300px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 8px 16px !important;
   font-size: 13.5px !important;
   font-weight: 700 !important;
+  height: 40px !important;
   border-radius: var(--radius-md) !important;
   background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
   color: #ffffff !important;
   border: none !important;
   cursor: pointer !important;
   box-shadow: 0 3px 12px rgba(37, 99, 235, 0.35) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  box-sizing: border-box !important;
+}
+
+.btn-purchase-action-single-line span,
+.btn-recharge-bottom-compact span,
+.modal-purchase-compact .btn-pay-now span {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
