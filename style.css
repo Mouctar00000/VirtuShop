@@ -2718,12 +2718,12 @@ button {
 }
 
 .btn-qty-step {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: var(--text-primary);
   cursor: pointer;
@@ -2732,6 +2732,7 @@ button {
   justify-content: center;
   transition: var(--transition-normal);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  line-height: 1;
 }
 
 .btn-qty-step:hover:not(:disabled) {
@@ -2746,10 +2747,10 @@ button {
 }
 
 .qty-display-value {
-  width: 48px;
+  width: 38px;
   text-align: center;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   color: var(--text-primary);
 }
 
@@ -4979,40 +4980,76 @@ html, body {
 .modal-purchase-compact {
   max-width: 420px !important;
   width: 94% !important;
-  padding: 13px 16px !important;
-  max-height: 90vh !important;
+  padding: 12px 15px 12px !important;
+  border-radius: 18px !important;
+  max-height: 94vh !important;
   overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #e2e8f0 transparent !important;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.25) !important;
+}
+
+@media (min-height: 700px) {
+  .modal-purchase-compact {
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+  }
+}
+
+@media (max-height: 560px) {
+  .modal-purchase-compact {
+    overflow-y: auto !important;
+    scrollbar-width: thin !important;
+  }
 }
 
 .purchase-modal-header-compact {
-  margin-bottom: 6px !important;
+  margin-bottom: 5px !important;
 }
 
 .purchase-modal-title-compact {
-  font-size: 16px !important;
+  font-size: 15.5px !important;
   font-weight: 800 !important;
-  margin-bottom: 1px !important;
+  margin: 0 !important;
   color: var(--text-primary);
+  line-height: 1.2 !important;
 }
 
 .purchase-delivery-notice-line {
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   color: var(--text-secondary) !important;
-  margin: 0 !important;
+  margin: 2px 0 0 0 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   line-height: 1.2 !important;
 }
 
-/* GRILLE CÔTE À CÔTE : PRODUIT (GAUCHE) & SOLDE (DROITE) */
-.purchase-top-grid {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 6px;
-  margin-bottom: 6px;
+/* BADGE SOLDE COMPACT EN LIGNE */
+.purchase-balance-compact-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
+.purchase-balance-compact-inline .balance-tag {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.purchase-balance-compact-inline .balance-val {
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* FICHE PRODUIT COMPACTE */
 .purchase-prod-box {
   display: flex;
   align-items: center;
@@ -5022,11 +5059,12 @@ html, body {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .purchase-prod-thumb-compact {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 6px;
   object-fit: cover;
   background: #ffffff;
@@ -5045,18 +5083,18 @@ html, body {
   font-weight: 700;
   color: var(--primary-600);
   display: block;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .purchase-prod-title-compact {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text-primary);
   margin: 1px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .purchase-unit-price-compact {
@@ -5067,35 +5105,6 @@ html, body {
 
 .purchase-unit-price-compact strong {
   color: var(--primary-600);
-}
-
-.purchase-balance-box {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 5px 8px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-}
-
-.purchase-balance-label {
-  font-size: 10px;
-  color: #1e3a8a;
-  font-weight: 600;
-  white-space: nowrap;
-  line-height: 1.2;
-}
-
-.purchase-balance-value {
-  font-size: 15px;
-  color: var(--primary-600);
-  font-weight: 800;
-  font-family: var(--font-display);
-  line-height: 1.2;
-  margin-top: 1px;
 }
 
 /* CARTES COMPACTES : QUANTITÉ & CALCUL TOTAL */

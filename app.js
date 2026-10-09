@@ -779,11 +779,32 @@ function closePayModal() {
   currentPurchaseQty = 1;
 }
 
-function changePurchaseQty(delta) {
+window.changePurchaseQty = function(delta) {
   if (!selectedPayProd) return;
-  var stock = Math.max(1, selectedPayProd.stock || 1);
-  currentPurchaseQty = Math.max(1, Math.min(stock, currentPurchaseQty + delta));
+  delta = parseInt(delta, 10) || 0;
+  
+  var stock = 999;
+  if (typeof selectedPayProd.stock !== 'undefined' && selectedPayProd.stock !== null) {
+    var parsed = parseInt(selectedPayProd.stock, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      stock = parsed;
+    }
+  }
+
+  var newQty = currentPurchaseQty + delta;
+  if (newQty < 1) newQty = 1;
+  if (newQty > stock) {
+    if (typeof showToast === 'function') {
+      showToast('Stock limité : maximum ' + stock + ' unité(s) disponible(s).', 'warning');
+    }
+    newQty = stock;
+  }
+  currentPurchaseQty = newQty;
   renderPurchaseModal();
+};
+
+function changePurchaseQty(delta) {
+  return window.changePurchaseQty(delta);
 }
 
 var currentPurchasePayMethod = 'balance'; // 'balance', 'mobile_money', 'crypto'
@@ -875,7 +896,8 @@ function renderPurchaseModal() {
   var u = getCurrentUser();
   var defaultContact = getActiveCustomerEmail();
   var userBal = getUserBalance();
-  var stock = selectedPayProd.stock || 0;
+  var parsedStock = parseInt(selectedPayProd.stock, 10);
+  var stock = (!isNaN(parsedStock) && parsedStock > 0) ? parsedStock : (selectedPayProd.stock === 0 ? 0 : 999);
   var unitPrice = selectedPayProd.price;
 
   // Calcul automatique du total selon la quantité choisie (1, 2, 3, etc.)
@@ -902,42 +924,41 @@ function renderPurchaseModal() {
 
   container.innerHTML = `
     <div class="purchase-modal-header-compact">
-      <h2 class="modal-title purchase-modal-title-compact">Acheter le Produit</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px;">
+        <h2 class="modal-title purchase-modal-title-compact" style="margin: 0;">Acheter le Produit</h2>
+        <div class="purchase-balance-compact-inline" title="Votre solde disponible">
+          <span class="balance-tag">Solde :</span>
+          <strong class="balance-val">$${userBal.toFixed(2)}</strong>
+        </div>
+      </div>
       <p class="purchase-delivery-notice-line">Livraison numérique immédiate après confirmation du paiement.</p>
     </div>
 
-    <!-- 1. Grille compacte côte à côte : Produit (gauche) & Solde disponible (droite) -->
-    <div class="purchase-top-grid">
-      <div class="purchase-prod-box">
-        <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb-compact" alt="${escapeHtml(selectedPayProd.name)}">
-        <div class="purchase-prod-info-compact">
-          <span class="purchase-prod-cat-compact">${escapeHtml(selectedPayProd.category)}</span>
-          <h3 class="purchase-prod-title-compact" title="${escapeHtml(selectedPayProd.name)}">${escapeHtml(selectedPayProd.name)}</h3>
-          <div class="purchase-unit-price-compact">
-            Prix unitaire : <strong>$${unitPrice.toFixed(2)}</strong>
-          </div>
+    <!-- 1. Fiche Produit Compacte -->
+    <div class="purchase-prod-box purchase-prod-box-full" style="margin-bottom: 5px;">
+      <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb-compact" alt="${escapeHtml(selectedPayProd.name)}">
+      <div class="purchase-prod-info-compact">
+        <span class="purchase-prod-cat-compact">${escapeHtml(selectedPayProd.category)}</span>
+        <h3 class="purchase-prod-title-compact" title="${escapeHtml(selectedPayProd.name)}">${escapeHtml(selectedPayProd.name)}</h3>
+        <div class="purchase-unit-price-compact">
+          Prix unitaire : <strong>$${unitPrice.toFixed(2)}</strong>
         </div>
-      </div>
-
-      <div class="purchase-balance-box">
-        <span class="purchase-balance-label">Votre solde disponible</span>
-        <strong class="purchase-balance-value">$${userBal.toFixed(2)}</strong>
       </div>
     </div>
 
-    <!-- 2. Sélecteur de quantité compact -->
+    <!-- 2. Sélecteur de quantité réactif & robuste -->
     <div class="purchase-qty-card-compact">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-          <label style="font-weight: 700; font-size: 12px; color: var(--text-primary); margin: 0;">Quantité à acheter</label>
-          <span style="font-size: 11px; color: ${stock > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-weight: 600; display: block;">
-            ${stock > 0 ? '● ' + stock + ' unités disponibles' : '● Rupture'}
+          <label style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin: 0;">Quantité à acheter</label>
+          <span style="font-size: 10.5px; color: ${stock > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-weight: 600; display: block;">
+            ${stock > 0 ? (stock === 999 ? '● En stock' : '● ' + stock + ' disponible' + (stock > 1 ? 's' : '')) : '● Rupture'}
           </span>
         </div>
         <div class="qty-stepper">
-          <button type="button" class="btn-qty-step" onclick="changePurchaseQty(-1)" ${currentPurchaseQty <= 1 ? 'disabled' : ''} title="Diminuer">&minus;</button>
+          <button type="button" class="btn-qty-step" onclick="window.changePurchaseQty(-1)" ${currentPurchaseQty <= 1 ? 'disabled' : ''} aria-label="Diminuer la quantité" title="Diminuer">&minus;</button>
           <span class="qty-display-value">${currentPurchaseQty}</span>
-          <button type="button" class="btn-qty-step" onclick="changePurchaseQty(1)" ${currentPurchaseQty >= stock ? 'disabled' : ''} title="Augmenter">&plus;</button>
+          <button type="button" class="btn-qty-step" onclick="window.changePurchaseQty(1)" ${currentPurchaseQty >= stock ? 'disabled' : ''} aria-label="Augmenter la quantité" title="Augmenter">&plus;</button>
         </div>
       </div>
     </div>

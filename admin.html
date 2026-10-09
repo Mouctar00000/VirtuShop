@@ -486,19 +486,20 @@
     #admin-method-modal .modal-window {
       border-radius: 20px !important;
       box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
-      padding: 16px 20px 16px !important;
-      overflow-y: hidden !important;
-      max-height: 96vh !important;
-      scrollbar-width: none;
+      padding: 14px 18px 14px !important;
+      overflow-y: auto !important;
+      max-height: 95vh !important;
+      scrollbar-width: thin !important;
+      scrollbar-color: #cbd5e1 transparent !important;
     }
 
     #admin-prod-modal .modal-window {
-      max-width: 640px !important;
+      max-width: 620px !important;
       width: 95% !important;
     }
 
     #admin-method-modal .modal-window {
-      max-width: 530px !important;
+      max-width: 510px !important;
       width: 95% !important;
     }
 
@@ -559,70 +560,143 @@
       height: 34px !important;
     }
 
-    /* Dropzone compacte */
-    .admin-dropzone-compact {
-      padding: 6px 12px !important;
-      border-radius: 10px !important;
-      min-height: 38px !important;
-    }
-
-    .dropzone-content-compact {
+    /* Dropzone ultra-compacte et sans texte superflu */
+    .admin-dropzone-minimal {
+      border: 1.5px dashed #cbd5e1 !important;
+      background: #f8fafc !important;
+      border-radius: 8px !important;
+      padding: 4px 10px !important;
+      min-height: 34px !important;
+      height: 34px !important;
       display: flex !important;
-      flex-direction: row !important;
       align-items: center !important;
       justify-content: center !important;
-      gap: 8px !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
     }
 
-    .dropzone-icon-compact {
-      font-size: 16px !important;
-      line-height: 1 !important;
+    .admin-dropzone-minimal:hover {
+      border-color: var(--primary-500) !important;
+      background: #eff6ff !important;
     }
 
-    .dropzone-text-compact {
-      font-size: 11px !important;
-      color: var(--text-secondary) !important;
-      white-space: nowrap !important;
+    .dropzone-idle-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--primary-600);
+      user-select: none;
     }
 
-    .dropzone-text-compact strong {
-      font-size: 11.5px !important;
-      color: var(--primary-600) !important;
+    .dropzone-preview-minimal {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 8px;
     }
 
-    .dropzone-text-compact span {
-      color: var(--text-muted) !important;
-      font-size: 10.5px !important;
-      margin-left: 4px !important;
+    .dropzone-preview-minimal img {
+      width: 24px;
+      height: 24px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+      flex-shrink: 0;
     }
 
-    .dropzone-preview-compact {
-      display: flex !important;
-      align-items: center !important;
-      gap: 10px !important;
-      background: #ffffff !important;
-      padding: 3px 8px !important;
-      border-radius: 8px !important;
-      border: 1px solid var(--border-subtle) !important;
-      height: 32px !important;
+    .preview-badge-minimal {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--emerald-600);
+      flex: 1;
+      text-align: left;
     }
 
-    .dropzone-preview-compact img {
-      width: 26px !important;
-      height: 26px !important;
-      object-fit: cover !important;
-      border-radius: 5px !important;
-      flex-shrink: 0 !important;
+    .btn-trash-img {
+      background: #fee2e2;
+      color: var(--rose-600);
+      border: 1px solid #fecdd3;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      padding: 0;
+      flex-shrink: 0;
     }
 
-    /* Coffre-fort numérique compact */
+    .btn-trash-img:hover {
+      background: #fecdd3;
+      color: var(--rose-700);
+      transform: scale(1.05);
+    }
+
+    /* Coffre-fort numérique compact et titre avec défilement fluide sans débordement */
     .admin-vault-box-compact {
       background: #eff6ff !important;
-      padding: 7px 10px !important;
-      border-radius: 10px !important;
+      padding: 6px 10px !important;
+      border-radius: 8px !important;
       border: 1px solid #bfdbfe !important;
-      margin-top: 6px !important;
+      margin-top: 4px !important;
       margin-bottom: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .vault-box-header-compact {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      gap: 6px !important;
+      margin-bottom: 3px !important;
+      width: 100% !important;
+      overflow: hidden !important;
+    }
+
+    .vault-box-label {
+      color: #1e40af !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      margin: 0 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+    }
+
+    .vault-status-marquee {
+      max-width: 130px !important;
+      min-width: 90px !important;
+      overflow: hidden !important;
+      background: #dbeafe !important;
+      padding: 1px 5px !important;
+      border-radius: 4px !important;
+      flex-shrink: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      border: 1px solid #bfdbfe !important;
+      position: relative !important;
+    }
+
+    .vault-status-text {
+      font-size: 9px !important;
+      color: var(--emerald-600) !important;
+      font-weight: 700 !important;
+      white-space: nowrap !important;
+      display: inline-block !important;
+      padding-left: 100% !important;
+      animation: marqueeVault 8s linear infinite !important;
+    }
+
+    @keyframes marqueeVault {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
     }
 
     .admin-vault-box-compact .vault-tabs-segmented {
@@ -1621,27 +1695,17 @@
       <form id="admin-prod-form" onsubmit="saveProduct(event)">
         <input type="hidden" id="admin-prod-id">
 
-        <!-- Ligne 1 : Nom et Catégorie regroupés -->
-        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-bottom: 7px;">
-          <div class="field" style="margin-bottom: 0;">
-            <label for="admin-prod-name">Nom du produit</label>
-            <input type="text" id="admin-prod-name" required placeholder="Ex: Compte Gmail Vérifié (2FA + Secours)">
-          </div>
+        <!-- Nom du produit -->
+        <div class="field" style="margin-bottom: 6px;">
+          <label for="admin-prod-name">Nom du produit</label>
+          <input type="text" id="admin-prod-name" required placeholder="Ex: Compte Gmail Vérifié (2FA + Secours)">
+        </div>
+
+        <!-- Première ligne : Catégorie à gauche, Description courte à droite -->
+        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; margin-bottom: 6px;">
           <div class="field" style="margin-bottom: 0;">
             <label for="admin-prod-cat">Catégorie</label>
             <input type="text" id="admin-prod-cat" required placeholder="gmail, youtube, discord...">
-          </div>
-        </div>
-
-        <!-- Ligne 2 : Prix, Stock auto, et Description courte parfaitement alignés -->
-        <div class="modal-grid-3col" style="display: grid; grid-template-columns: 0.9fr 1.1fr 1.6fr; gap: 8px; margin-bottom: 7px;">
-          <div class="field" style="margin-bottom: 0;">
-            <label for="admin-prod-price">Prix ($ USD)</label>
-            <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
-          </div>
-          <div class="field" style="margin-bottom: 0;">
-            <label for="admin-prod-stock" style="white-space: nowrap;">Stock <span style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
-            <input type="number" min="0" id="admin-prod-stock" readonly style="background: #f1f5f9; cursor: not-allowed; font-weight: 700;" placeholder="0">
           </div>
           <div class="field" style="margin-bottom: 0;">
             <label for="admin-prod-desc">Description courte</label>
@@ -1649,42 +1713,59 @@
           </div>
         </div>
 
-        <!-- ZONE D'UPLOAD D'ILLUSTRATION MODERNE & ULTRA COMPACTE -->
-        <div class="field" style="margin-bottom: 7px;">
+        <!-- Deuxième ligne : Prix à gauche, Stock disponible à droite -->
+        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+          <div class="field" style="margin-bottom: 0;">
+            <label for="admin-prod-price">Prix ($ USD)</label>
+            <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
+          </div>
+          <div class="field" style="margin-bottom: 0;">
+            <label for="admin-prod-stock" style="white-space: nowrap;">Stock disponible <span style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
+            <input type="number" min="0" id="admin-prod-stock" readonly style="background: #f1f5f9; cursor: not-allowed; font-weight: 700;" placeholder="0">
+          </div>
+        </div>
+
+        <!-- Section Illustration du produit ultra-compacte -->
+        <div class="field" style="margin-bottom: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
-            <label style="color: var(--text-primary); font-weight: 700; margin-bottom: 0; white-space: nowrap;">🖼️ Illustration du Produit</label>
-            <span style="font-size: 10.5px; color: var(--text-muted); font-weight: normal; white-space: nowrap;">Optionnel — JPG, PNG, WebP</span>
+            <label style="color: var(--text-primary); font-weight: 700; margin-bottom: 0; font-size: 11.5px; white-space: nowrap;">Illustration du produit</label>
+            <span style="font-size: 10px; color: var(--text-muted); font-weight: normal;">Optionnel — JPG, PNG, WebP</span>
           </div>
           
           <input type="file" id="admin-prod-img-file" accept="image/*" onchange="handleProductImageFile(event)" style="display: none;">
           
-          <div class="admin-dropzone admin-dropzone-compact" id="admin-prod-dropzone" onclick="triggerProductFileInput()">
-            <div id="dropzone-idle-view" class="dropzone-content-compact">
-              <span class="dropzone-icon-compact">📷</span>
-              <div class="dropzone-text-compact">
-                <strong>Glissez-déposez une image ou cliquez pour parcourir</strong>
-                <span>(Si vide, illustration générée automatiquement)</span>
-              </div>
+          <div class="admin-dropzone admin-dropzone-minimal" id="admin-prod-dropzone" onclick="triggerProductFileInput()">
+            <div id="dropzone-idle-view" class="dropzone-idle-btn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary-600); flex-shrink: 0;">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <span>Cliquer pour importer</span>
             </div>
 
-            <div id="dropzone-preview-view" class="dropzone-preview-compact" style="display: none;">
-              <img id="admin-prod-img-preview" src="" alt="Aperçu">
-              <div class="dropzone-preview-actions" style="display: flex; align-items: center; justify-content: space-between; flex: 1;">
-                <div>
-                  <span class="preview-badge" style="font-size: 11px;">✓ Image sélectionnée</span>
-                  <span style="font-size: 10.5px; color: var(--text-muted); margin-left: 6px;">(Cliquer pour remplacer)</span>
-                </div>
-                <button type="button" class="btn-remove-img" onclick="removeProductImage(event)" style="padding: 2px 8px; font-size: 10.5px;">✕ Supprimer</button>
-              </div>
+            <div id="dropzone-preview-view" class="dropzone-preview-minimal hidden" style="display: none;">
+              <img id="admin-prod-img-preview" src="" alt="Aperçu du produit">
+              <span class="preview-badge-minimal">✓ Image sélectionnée</span>
+              <button type="button" class="btn-trash-img" onclick="removeProductImage(event)" title="Supprimer l'image" aria-label="Supprimer l'image">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
 
-        <!-- COFFRE-FORT NUMÉRIQUE (LIVRAISON AUTOMATISÉE) COMPACT -->
+        <!-- COFFRE-FORT NUMÉRIQUE (LIVRAISON AUTOMATISÉE) COMPACT AVEC DÉFILEMENT FLUIDE -->
         <div class="field admin-vault-box-compact">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <label style="color: #1e40af; font-weight: 700; margin-bottom: 0; white-space: nowrap;">🔐 Contenu Livré (Coffre-Fort Numérique)</label>
-            <span style="font-size: 10.5px; color: var(--emerald-600); font-weight: 600; white-space: nowrap;">● Protégé avant achat</span>
+          <div class="vault-box-header-compact">
+            <label class="vault-box-label">🔐 Contenu Livré (Coffre-Fort Numérique)</label>
+            <div class="vault-status-marquee" title="Contenu protégé avant achat">
+              <span class="vault-status-text">● Protégé avant achat</span>
+            </div>
           </div>
 
           <!-- Onglets segmentés Text / File / Link -->
@@ -2475,12 +2556,24 @@
       var img = document.getElementById('admin-prod-img-preview');
       if (imgSrc) {
         if (img) img.src = imgSrc;
-        if (prev) prev.style.display = 'flex';
-        if (idle) idle.style.display = 'none';
+        if (prev) {
+          prev.classList.remove('hidden');
+          prev.style.display = 'flex';
+        }
+        if (idle) {
+          idle.classList.add('hidden');
+          idle.style.display = 'none';
+        }
       } else {
         if (img) img.src = '';
-        if (prev) prev.style.display = 'none';
-        if (idle) idle.style.display = 'flex';
+        if (prev) {
+          prev.classList.add('hidden');
+          prev.style.display = 'none';
+        }
+        if (idle) {
+          idle.classList.remove('hidden');
+          idle.style.display = 'flex';
+        }
       }
     }
 
