@@ -4673,6 +4673,9 @@ html, body {
   .crypto-cards-container.compact-crypto-list {
     max-height: 125px !important;
   }
+  .trybit-header-title {
+    font-size: 12px !important;
+  }
   .modal-purchase-compact {
     padding: 12px 14px !important;
     max-height: 96vh !important;

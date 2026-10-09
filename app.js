@@ -942,7 +942,7 @@ function renderPurchaseModal() {
           📱 Mobile Money
         </button>
         <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'crypto' ? 'active' : ''}" onclick="selectPurchasePayMethod('crypto')">
-          ⚡ Crypto (Trybit)
+          ⚡ Crypto
         </button>
       </div>
     </div>
@@ -967,7 +967,7 @@ function renderPurchaseModal() {
 
       <div class="optional-contact-box-compact">
         <label for="purchase-contact-input" class="optional-contact-label-oneline">
-          <span>📱 Numéro WhatsApp ou Email pour notification (Optionnel)</span>
+          <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
         </label>
         <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
       </div>
