@@ -481,6 +481,199 @@
       animation: statPulseAnim 0.25s ease-out;
     }
 
+    /* ==================== OPTIMISATION MODALES ADMIN COMPACTES SANS SCROLL ==================== */
+    #admin-prod-modal .modal-window,
+    #admin-method-modal .modal-window {
+      border-radius: 20px !important;
+      box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+      padding: 16px 20px 16px !important;
+      overflow-y: hidden !important;
+      max-height: 96vh !important;
+      scrollbar-width: none;
+    }
+
+    #admin-prod-modal .modal-window {
+      max-width: 640px !important;
+      width: 95% !important;
+    }
+
+    #admin-method-modal .modal-window {
+      max-width: 530px !important;
+      width: 95% !important;
+    }
+
+    /* Titres sur une seule ligne */
+    #admin-prod-modal .modal-title,
+    #admin-method-modal .modal-title {
+      font-size: 16.5px !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.3px !important;
+      margin-bottom: 11px !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      padding-right: 36px !important;
+      line-height: 1.2 !important;
+    }
+
+    /* Réduction globale des champs et espacements */
+    #admin-prod-modal .field,
+    #admin-method-modal .field {
+      margin-bottom: 7px !important;
+    }
+
+    #admin-prod-modal .field label,
+    #admin-method-modal .field label {
+      font-size: 11.5px !important;
+      font-weight: 600 !important;
+      margin-bottom: 3px !important;
+      color: var(--text-secondary) !important;
+      line-height: 1.2 !important;
+    }
+
+    #admin-prod-modal input[type="text"],
+    #admin-prod-modal input[type="number"],
+    #admin-method-modal input[type="text"],
+    #admin-method-modal select {
+      padding: 6px 10px !important;
+      font-size: 12.5px !important;
+      height: 33px !important;
+      border-radius: 8px !important;
+    }
+
+    /* Boutons d'action compacts */
+    #admin-prod-modal .modal-actions-compact,
+    #admin-method-modal .modal-actions-compact {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    #admin-prod-modal .modal-actions-compact button,
+    #admin-method-modal .modal-actions-compact button {
+      padding: 7px 16px !important;
+      font-size: 12.5px !important;
+      font-weight: 700 !important;
+      border-radius: 8px !important;
+      min-height: 34px !important;
+      height: 34px !important;
+    }
+
+    /* Dropzone compacte */
+    .admin-dropzone-compact {
+      padding: 6px 12px !important;
+      border-radius: 10px !important;
+      min-height: 38px !important;
+    }
+
+    .dropzone-content-compact {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+    }
+
+    .dropzone-icon-compact {
+      font-size: 16px !important;
+      line-height: 1 !important;
+    }
+
+    .dropzone-text-compact {
+      font-size: 11px !important;
+      color: var(--text-secondary) !important;
+      white-space: nowrap !important;
+    }
+
+    .dropzone-text-compact strong {
+      font-size: 11.5px !important;
+      color: var(--primary-600) !important;
+    }
+
+    .dropzone-text-compact span {
+      color: var(--text-muted) !important;
+      font-size: 10.5px !important;
+      margin-left: 4px !important;
+    }
+
+    .dropzone-preview-compact {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      background: #ffffff !important;
+      padding: 3px 8px !important;
+      border-radius: 8px !important;
+      border: 1px solid var(--border-subtle) !important;
+      height: 32px !important;
+    }
+
+    .dropzone-preview-compact img {
+      width: 26px !important;
+      height: 26px !important;
+      object-fit: cover !important;
+      border-radius: 5px !important;
+      flex-shrink: 0 !important;
+    }
+
+    /* Coffre-fort numérique compact */
+    .admin-vault-box-compact {
+      background: #eff6ff !important;
+      padding: 7px 10px !important;
+      border-radius: 10px !important;
+      border: 1px solid #bfdbfe !important;
+      margin-top: 6px !important;
+      margin-bottom: 0 !important;
+    }
+
+    .admin-vault-box-compact .vault-tabs-segmented {
+      margin-bottom: 5px !important;
+      padding: 2px !important;
+      gap: 3px !important;
+    }
+
+    .admin-vault-box-compact .vault-tab-btn {
+      padding: 3px 8px !important;
+      font-size: 11px !important;
+      border-radius: 6px !important;
+    }
+
+    /* Le seul élément avec scroll autorisé si long contenu */
+    #admin-vault-content {
+      padding: 5px 8px !important;
+      font-size: 11.5px !important;
+      min-height: 42px !important;
+      max-height: 64px !important;
+      font-family: monospace !important;
+      resize: vertical !important;
+      overflow-y: auto !important;
+      scrollbar-width: thin !important;
+      border-radius: 6px !important;
+      line-height: 1.3 !important;
+    }
+
+    /* Adaptabilité si écran avec hauteur ultra-réduite (< 560px) */
+    @media (max-height: 560px) {
+      #admin-prod-modal .modal-window,
+      #admin-method-modal .modal-window {
+        overflow-y: auto !important;
+        scrollbar-width: thin !important;
+      }
+    }
+
+    /* Responsive mobile pour les grilles internes */
+    @media (max-width: 580px) {
+      .modal-grid-2col,
+      .modal-grid-3col {
+        grid-template-columns: 1fr !important;
+        gap: 6px !important;
+      }
+      #admin-prod-modal .modal-window,
+      #admin-method-modal .modal-window {
+        padding: 14px 14px 14px !important;
+        overflow-y: auto !important;
+      }
+    }
+
     /* RESPONSIVE ADMINISTRATEUR MOBILE */
     @media (max-width: 768px) {
       .admin-header {
@@ -1423,72 +1616,75 @@
   <div id="admin-prod-modal" class="modal-backdrop">
     <div class="modal-window">
       <button type="button" class="modal-close-btn" onclick="closeAdminProdModal()">✕</button>
-      <h2 class="modal-title" id="prod-modal-title">Ajouter un Produit</h2>
+      <h2 class="modal-title" id="prod-modal-title">Ajouter un Nouveau Produit</h2>
 
       <form id="admin-prod-form" onsubmit="saveProduct(event)">
         <input type="hidden" id="admin-prod-id">
 
-        <div class="field">
-          <label for="admin-prod-name">Nom du produit</label>
-          <input type="text" id="admin-prod-name" required placeholder="Ex: Compte Gmail Vérifié (2FA + Secours)">
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px;">
-          <div class="field">
+        <!-- Ligne 1 : Nom et Catégorie regroupés -->
+        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-bottom: 7px;">
+          <div class="field" style="margin-bottom: 0;">
+            <label for="admin-prod-name">Nom du produit</label>
+            <input type="text" id="admin-prod-name" required placeholder="Ex: Compte Gmail Vérifié (2FA + Secours)">
+          </div>
+          <div class="field" style="margin-bottom: 0;">
             <label for="admin-prod-cat">Catégorie</label>
             <input type="text" id="admin-prod-cat" required placeholder="gmail, youtube, discord...">
           </div>
-          <div class="field">
+        </div>
+
+        <!-- Ligne 2 : Prix, Stock auto, et Description courte parfaitement alignés -->
+        <div class="modal-grid-3col" style="display: grid; grid-template-columns: 0.9fr 1.1fr 1.6fr; gap: 8px; margin-bottom: 7px;">
+          <div class="field" style="margin-bottom: 0;">
             <label for="admin-prod-price">Prix ($ USD)</label>
             <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
           </div>
-          <div class="field">
-            <label for="admin-prod-stock">Stock disponible <span style="font-size: 11px; font-weight: normal; color: var(--primary-600);">(Auto via coffre-fort)</span></label>
+          <div class="field" style="margin-bottom: 0;">
+            <label for="admin-prod-stock" style="white-space: nowrap;">Stock <span style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
             <input type="number" min="0" id="admin-prod-stock" readonly style="background: #f1f5f9; cursor: not-allowed; font-weight: 700;" placeholder="0">
+          </div>
+          <div class="field" style="margin-bottom: 0;">
+            <label for="admin-prod-desc">Description courte</label>
+            <input type="text" id="admin-prod-desc" placeholder="Ex: Compte propre avec 2FA activé...">
           </div>
         </div>
 
-        <div class="field">
-          <label for="admin-prod-desc">Description courte</label>
-          <input type="text" id="admin-prod-desc" placeholder="Ex: Compte propre vérifié avec 2FA activé...">
-        </div>
-
-        <!-- ZONE D'UPLOAD D'ILLUSTRATION MODERNE & DRAG-AND-DROP -->
-        <div class="field" style="margin-bottom: 14px;">
-          <label style="color: var(--text-primary); font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-            <span>🖼️ Illustration du Produit</span>
-            <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Optionnelle (JPG, PNG, WebP)</span>
-          </label>
+        <!-- ZONE D'UPLOAD D'ILLUSTRATION MODERNE & ULTRA COMPACTE -->
+        <div class="field" style="margin-bottom: 7px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <label style="color: var(--text-primary); font-weight: 700; margin-bottom: 0; white-space: nowrap;">🖼️ Illustration du Produit</label>
+            <span style="font-size: 10.5px; color: var(--text-muted); font-weight: normal; white-space: nowrap;">Optionnel — JPG, PNG, WebP</span>
+          </div>
           
           <input type="file" id="admin-prod-img-file" accept="image/*" onchange="handleProductImageFile(event)" style="display: none;">
           
-          <div class="admin-dropzone" id="admin-prod-dropzone" onclick="triggerProductFileInput()">
-            <div id="dropzone-idle-view" class="dropzone-content">
-              <span class="dropzone-icon">📷</span>
-              <div class="dropzone-text">
+          <div class="admin-dropzone admin-dropzone-compact" id="admin-prod-dropzone" onclick="triggerProductFileInput()">
+            <div id="dropzone-idle-view" class="dropzone-content-compact">
+              <span class="dropzone-icon-compact">📷</span>
+              <div class="dropzone-text-compact">
                 <strong>Glissez-déposez une image ou cliquez pour parcourir</strong>
-                <span>Si vide, une illustration vectorielle dédiée sera générée automatiquement</span>
+                <span>(Si vide, illustration générée automatiquement)</span>
               </div>
             </div>
 
-            <div id="dropzone-preview-view" class="dropzone-preview" style="display: none;">
+            <div id="dropzone-preview-view" class="dropzone-preview-compact" style="display: none;">
               <img id="admin-prod-img-preview" src="" alt="Aperçu">
-              <div class="dropzone-preview-actions">
+              <div class="dropzone-preview-actions" style="display: flex; align-items: center; justify-content: space-between; flex: 1;">
                 <div>
-                  <div class="preview-badge">✓ Image sélectionnée</div>
-                  <div style="font-size: 11px; color: var(--text-muted);">Cliquez pour remplacer</div>
+                  <span class="preview-badge" style="font-size: 11px;">✓ Image sélectionnée</span>
+                  <span style="font-size: 10.5px; color: var(--text-muted); margin-left: 6px;">(Cliquer pour remplacer)</span>
                 </div>
-                <button type="button" class="btn-remove-img" onclick="removeProductImage(event)">✕ Supprimer</button>
+                <button type="button" class="btn-remove-img" onclick="removeProductImage(event)" style="padding: 2px 8px; font-size: 10.5px;">✕ Supprimer</button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- COFFRE-FORT NUMÉRIQUE (LIVRAISON AUTOMATISÉE) -->
-        <div class="field" style="background: #eff6ff; padding: 14px; border-radius: var(--radius-sm); border: 1px solid #bfdbfe; margin-top: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <label style="color: #1e40af; font-weight: 700; margin-bottom: 0;">🔐 Contenu Livré (Coffre-Fort Numérique)</label>
-            <span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">● Protégé avant achat</span>
+        <!-- COFFRE-FORT NUMÉRIQUE (LIVRAISON AUTOMATISÉE) COMPACT -->
+        <div class="field admin-vault-box-compact">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="color: #1e40af; font-weight: 700; margin-bottom: 0; white-space: nowrap;">🔐 Contenu Livré (Coffre-Fort Numérique)</label>
+            <span style="font-size: 10.5px; color: var(--emerald-600); font-weight: 600; white-space: nowrap;">● Protégé avant achat</span>
           </div>
 
           <!-- Onglets segmentés Text / File / Link -->
@@ -1500,19 +1696,19 @@
           <input type="hidden" id="admin-vault-type" value="text">
 
           <div id="vault-text-group">
-            <textarea id="admin-vault-content" rows="3" placeholder="Insérez 1 clé/compte unique par ligne :&#10;login1:pass1&#10;login2:pass2" oninput="updateStockFromVaultKeys()"></textarea>
+            <textarea id="admin-vault-content" rows="2" placeholder="Insérez 1 clé/compte unique par ligne :&#10;login1:pass1&#10;login2:pass2" oninput="updateStockFromVaultKeys()"></textarea>
           </div>
 
           <div id="vault-file-group" class="hidden">
-            <input type="file" id="admin-vault-file-input" onchange="handleVaultFileSelected(event)" style="font-size: 12px;">
+            <input type="file" id="admin-vault-file-input" onchange="handleVaultFileSelected(event)" style="font-size: 11px; padding: 2px 4px;">
             <input type="hidden" id="admin-vault-filename">
-            <p id="vault-filename-display" style="font-size: 11.5px; color: var(--emerald-600); margin-top: 4px; font-weight: 600;"></p>
+            <p id="vault-filename-display" style="font-size: 11px; color: var(--emerald-600); margin: 3px 0 0 0; font-weight: 600;"></p>
           </div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <div class="modal-actions-compact">
           <button type="button" class="btn-secondary" style="flex: 1;" onclick="closeAdminProdModal()">Annuler</button>
-          <button type="submit" class="btn-primary" style="flex: 2;">Enregistrer le Produit ⚡</button>
+          <button type="submit" class="btn-primary" style="flex: 1.5;">Enregistrer</button>
         </div>
       </form>
     </div>
@@ -1527,13 +1723,13 @@
       <form id="admin-method-form" onsubmit="savePaymentMethod(event)">
         <input type="hidden" id="admin-method-id">
 
-        <div class="field">
+        <div class="field" style="margin-bottom: 7px;">
           <label for="admin-method-name">Nom du moyen de paiement</label>
           <input type="text" id="admin-method-name" required placeholder="Ex: USDT (Binance / TRC20), Orange Money, Bitcoin...">
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div class="field">
+        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 7px;">
+          <div class="field" style="margin-bottom: 0;">
             <label for="admin-method-type">Type de moyen</label>
             <select id="admin-method-type" onchange="handleMethodTypeChange()">
               <option value="crypto">Crypto (USDT, BTC, etc.)</option>
@@ -1541,41 +1737,43 @@
               <option value="other">Autre moyen</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" style="margin-bottom: 0;">
             <label for="admin-method-network">Réseau (optionnel)</label>
             <input type="text" id="admin-method-network" placeholder="Ex: TRC20, ERC20, BTC...">
           </div>
         </div>
 
-        <div class="field" id="field-is-binance">
-          <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer;">
-            <input type="checkbox" id="admin-method-is-binance" style="width: auto;">
-            <span>Activer la consigne "Scanner avec l'application Binance"</span>
+        <div class="field" id="field-is-binance" style="margin-bottom: 7px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 11.5px; cursor: pointer; color: var(--text-secondary); background: #f8fafc; border: 1px solid var(--border-subtle); padding: 5px 10px; border-radius: 8px; margin-bottom: 0;">
+            <input type="checkbox" id="admin-method-is-binance" style="width: 14px; height: 14px; accent-color: var(--primary-600); cursor: pointer; margin: 0;">
+            <span style="white-space: nowrap;">Activer la consigne "Scanner avec l'application Binance"</span>
           </label>
         </div>
 
-        <div class="field">
+        <div class="field" style="margin-bottom: 7px;">
           <label for="admin-method-addr" id="label-method-addr">Adresse de portefeuille ou Numéro de téléphone</label>
           <input type="text" id="admin-method-addr" required placeholder="TWej9xKq... ou +237 690 123 456">
         </div>
 
         <!-- CONSIGNES PERSONNALISABLES (CONTRÔLE ADMINISTRATEUR COMPLET) -->
-        <div class="field">
+        <div class="field" style="margin-bottom: 7px;">
           <label for="admin-method-instructions">Consignes de paiement affichées au client</label>
-          <textarea id="admin-method-instructions" rows="2" placeholder="Ex: Envoyez en USDT TRC20 — Consigne : Scanner avec l'application Binance ou TrustWallet."></textarea>
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">Ce texte exact sera affiché dans l'encart d'instructions lors du rechargement de solde.</p>
+          <textarea id="admin-method-instructions" rows="1" style="padding: 6px 10px; font-size: 12px; height: 36px; min-height: 36px; max-height: 48px; resize: none; border-radius: 8px;" placeholder="Ex: Envoyez en USDT TRC20 — Consigne : Scanner avec l'application Binance ou TrustWallet."></textarea>
+          <p style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px; margin-bottom: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Ce texte exact sera affiché dans l'encart d'instructions lors du rechargement de solde.</p>
         </div>
 
         <!-- QR CODE (OPTIONNEL POUR CRYPTO, MASQUÉ POUR ORANGE MONEY) -->
-        <div class="field" id="field-method-qr" style="background: #f8fafc; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-          <label style="color: var(--primary-600); font-weight: 700; margin-bottom: 4px;">📸 Image du QR Code (Optionnel)</label>
-          <input type="file" id="admin-method-qr-file" accept="image/*" onchange="handleMethodQrFile(event)" style="font-size: 12px;">
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Si non fourni, un QR code vectoriel sera généré automatiquement pour les cryptomonnaies.</p>
+        <div class="field" id="field-method-qr" style="background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <label style="color: var(--primary-600); font-weight: 700; margin: 0; font-size: 11.5px; white-space: nowrap;">📸 QR Code (Optionnel)</label>
+            <input type="file" id="admin-method-qr-file" accept="image/*" onchange="handleMethodQrFile(event)" style="font-size: 11px; padding: 2px 4px; max-width: 250px; height: auto;">
+          </div>
+          <p style="font-size: 10px; color: var(--text-muted); margin: 2px 0 0 0; white-space: nowrap;">Si non fourni, un QR code vectoriel sera généré automatiquement pour les cryptomonnaies.</p>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <div class="modal-actions-compact">
           <button type="button" class="btn-secondary" style="flex: 1;" onclick="closeAdminMethodModal()">Annuler</button>
-          <button type="submit" class="btn-primary" style="flex: 2;">Enregistrer la Méthode</button>
+          <button type="submit" class="btn-primary" style="flex: 1.5;">Enregistrer</button>
         </div>
       </form>
     </div>
