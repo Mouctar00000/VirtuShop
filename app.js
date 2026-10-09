@@ -1303,7 +1303,10 @@ async function startPurchaseTrybitPayment(total, qty) {
         cryptocurrency: selectedCrypto || null,
         customerEmail: safeEmail || (u.email && !u.email.toLowerCase().includes('admin@') ? u.email : null),
         customerName: (u.role === 'admin' ? 'Client GetVirtu' : (u.name || 'Client')),
-        returnUrl: window.location.origin + '/#catalog?order_crypto=success'
+        returnUrl: window.location.origin + '/?payment_status=success',
+        productId: prod.id,
+        quantity: qty,
+        contactInfo: contactVal
       })
     });
     var data = await res.json();
@@ -2341,7 +2344,7 @@ async function submitTrybitDeposit() {
         cryptocurrency: selectedCrypto || null,
         customerEmail: getActiveCustomerEmail() || (u.email && !u.email.toLowerCase().includes('admin@') ? u.email : null),
         customerName: (u.role === 'admin' ? 'Client GetVirtu' : (u.name || 'Client')),
-        returnUrl: window.location.origin + '/#catalog?payment=success'
+        returnUrl: window.location.origin + '/?payment_status=success'
       })
     });
 
@@ -3383,6 +3386,34 @@ function startApp() {
     // Nettoyage fluide du paramètre URL après retour Google OAuth
     if (window.location.search && window.location.search.includes('auth_success=google')) {
       try { history.replaceState(null, '', window.location.pathname + '#catalog'); } catch (e) {}
+    }
+
+    // Gestion du retour de paiement Trybit Crypto (Succès / Annulation)
+    if (window.location.search) {
+      try {
+        var searchParams = new URLSearchParams(window.location.search);
+        var payStatus = searchParams.get('payment_status');
+        var invUuid = searchParams.get('invoice_uuid');
+        var ordId = searchParams.get('order_id');
+
+        if (payStatus === 'success' || searchParams.has('order_crypto') || searchParams.has('deposit_success')) {
+          showToast('Paiement Crypto validé ! Vérification et synchronisation en cours...', 'success');
+          if (invUuid || ordId) {
+            fetch(`/api/payments/trybit/verify?transactionId=${encodeURIComponent(ordId || '')}&invoiceUuid=${encodeURIComponent(invUuid || '')}`)
+              .then(function(r) { return r.json(); })
+              .then(function(res) {
+                if (res && res.status === 'completed') {
+                  if (typeof res.newBalance === 'number') updateUserBalance(res.newBalance);
+                  showToast('Votre solde a été mis à jour avec succès !', 'success');
+                }
+              }).catch(function() {});
+          }
+          history.replaceState(null, '', window.location.pathname + '#catalog');
+        } else if (payStatus === 'failed' || payStatus === 'fail' || payStatus === 'canceled') {
+          showToast('Le paiement en cryptomonnaie a été annulé ou a expiré.', 'info');
+          history.replaceState(null, '', window.location.pathname + '#catalog');
+        }
+      } catch (e) {}
     }
 
     // Traçabilité des visites réelles (Prompt 8)

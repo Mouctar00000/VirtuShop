@@ -346,6 +346,7 @@ class Database {
       notes: tx.notes || null,
       balanceBefore: tx.balanceBefore !== undefined ? tx.balanceBefore : null,
       balanceAfter: tx.balanceAfter !== undefined ? tx.balanceAfter : null,
+      metadata: tx.metadata || null,
       createdAt: now,
       updatedAt: now,
       completedAt: tx.status === 'completed' ? now : null,

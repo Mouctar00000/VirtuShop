@@ -117,7 +117,7 @@ const server = http.createServer((req, res) => {
         if (safePath.startsWith('/api/auth')) {
           return await require('./api/auth')(req, res);
         }
-        if (safePath.startsWith('/api/payments')) {
+        if (safePath.startsWith('/api/payments') || safePath.startsWith('/api/trybit')) {
           return await require('./api/payments')(req, res);
         }
         if (safePath.startsWith('/api/data')) {

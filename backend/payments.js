@@ -661,9 +661,9 @@ class PaymentService {
   // ========== INTÉGRATION OFFICIELLE CRYPTO TRYBIT ==========
 
   /**
-   * Création d'une recharge de solde par Crypto Instantané via Trybit
+   * Création d'une recharge de solde ou d'un achat direct par Crypto Instantané via Trybit
    */
-  async createTrybitDeposit({ userId, amountUsd, customerEmail, customerName, cryptocurrency, returnUrl }) {
+  async createTrybitDeposit({ userId, amountUsd, customerEmail, customerName, cryptocurrency, returnUrl, productId, quantity, contactInfo }) {
     if (!userId) throw new Error('Utilisateur non authentifié.');
     let user = db.getUserById(userId);
     if (!user && customerEmail) {
@@ -681,10 +681,10 @@ class PaymentService {
     }
 
     const parsedUsd = parseFloat(amountUsd);
-    const minRecharge = db.data.settings?.min_recharge || 5.0;
+    const minRecharge = productId ? 0.01 : (db.data.settings?.min_recharge || 5.0);
 
     if (isNaN(parsedUsd) || parsedUsd < minRecharge) {
-      throw new Error(`Le montant minimum de recharge est de ${minRecharge.toFixed(2)} USD.`);
+      throw new Error(`Le montant minimum est de ${minRecharge.toFixed(2)} USD.`);
     }
 
     const idempotencyKey = crypto.randomBytes(16).toString('hex');
@@ -705,7 +705,10 @@ class PaymentService {
         customerEmail: customerEmail || user.email,
         customerName: customerName || user.name,
         cryptocurrency: cryptocurrency || null,
-        returnUrl: returnUrl || 'https://getvirtu.shop/#deposit_success'
+        returnUrl: returnUrl || 'https://getvirtu.shop/?payment_status=success',
+        productId: productId || null,
+        quantity: quantity || 1,
+        contactInfo: contactInfo || null
       }
     });
 
@@ -799,9 +802,9 @@ class PaymentService {
 
     console.log(`[Trybit Verify] Statut pour ${tx.id} (${effectiveUuid}) : status=${invStatus}, invoice_status=${invInvoiceStatus}`);
 
-    if (invStatus === 'paid' || invStatus === 'overpaid' || invInvoiceStatus === 'success') {
+    if (invStatus === 'paid' || invStatus === 'overpaid' || invInvoiceStatus === 'success' || invStatus === 'success') {
       return this._creditUserForTransaction(tx, effectiveUuid, invoiceData);
-    } else if (invStatus === 'canceled' || invStatus === 'cancelled') {
+    } else if (invStatus === 'canceled' || invStatus === 'cancelled' || invStatus === 'expired') {
       const failedTx = db.updateTransaction(tx.id, {
         status: 'failed',
         failureReason: 'Paiement annulé ou expiré sur Trybit.'
@@ -819,29 +822,45 @@ class PaymentService {
   /**
    * Traitement officiel du POSTBACK webhook Trybit avec vérification JWT HS256
    */
-  async handleTrybitWebhook(payload) {
+  async handleTrybitWebhook(payload = {}, headers = {}) {
     console.log('[Trybit POSTBACK] Traitement notification webhook...');
     if (!payload || typeof payload !== 'object') {
       throw new Error('Payload webhook Trybit invalide.');
     }
 
-    const token = payload.token;
-    if (token) {
-      const isValid = trybitService.verifyWebhookToken(token);
-      if (!isValid) {
-        console.warn('[Trybit POSTBACK] Jeton JWT invalide ou expiré !');
-        throw new Error('Jeton JWT du webhook Trybit invalide.');
+    // Extraction du jeton JWT dans le corps ou dans les en-têtes HTTP
+    let token = payload.token || payload.jwt;
+    if (!token && headers) {
+      const authHeader = headers['authorization'] || headers['Authorization'] || '';
+      if (authHeader) {
+        token = authHeader.replace(/^(Bearer|Token)\s+/i, '').trim();
+      }
+      if (!token) {
+        token = headers['x-token'] || headers['x-webhook-token'] || headers['token'] || '';
       }
     }
 
-    const orderId = payload.order_id;
-    const invoiceId = payload.invoice_id;
-    const invoiceInfo = payload.invoice_info || {};
+    let tokenPayload = null;
+    if (token) {
+      const verifyResult = trybitService.verifyWebhookToken(token);
+      if (!verifyResult.valid) {
+        console.warn('[Trybit POSTBACK] Jeton JWT invalide ou expiré :', verifyResult.error);
+        throw new Error('Jeton JWT du webhook Trybit invalide: ' + verifyResult.error);
+      }
+      tokenPayload = verifyResult.payload;
+    } else {
+      console.log('[Trybit POSTBACK] Information: notification reçue sans jeton JWT de signature.');
+    }
+
+    const orderId = payload.order_id || tokenPayload?.order_id || payload.orderId;
+    const invoiceId = payload.invoice_id || tokenPayload?.invoice_id || payload.invoiceId;
+    const invoiceInfo = payload.invoice_info || tokenPayload?.invoice_info || {};
     const uuid = invoiceInfo.uuid || (invoiceId ? (invoiceId.startsWith('INV-') ? invoiceId : `INV-${invoiceId}`) : null);
 
     let tx = null;
     if (orderId) tx = db.getTransactionById(orderId);
     if (!tx && uuid) tx = db.getTransactionByProviderTxId(uuid);
+    if (!tx && invoiceId) tx = db.getTransactionByProviderTxId(invoiceId);
     if (!tx && uuid) {
       tx = db.data.transactions.find(t => t.metadata?.invoiceUuid === uuid || t.providerTxId === uuid);
     }
@@ -851,20 +870,21 @@ class PaymentService {
       return { success: true, message: 'Notification reçue (transaction non locale).' };
     }
 
+    // Protection anti-double traitement (Idempotence)
     if (tx.status === 'completed') {
       console.log(`[Trybit POSTBACK] Transaction ${tx.id} déjà traitée (Idempotence).`);
       return { success: true, message: 'Déjà traitée.' };
     }
 
-    const status = (payload.status || invoiceInfo.status || '').toLowerCase();
+    const status = (payload.status || tokenPayload?.status || invoiceInfo.status || '').toLowerCase();
     const invoiceStatus = (invoiceInfo.invoice_status || '').toLowerCase();
 
     if (status === 'success' || status === 'paid' || status === 'overpaid' || invoiceStatus === 'success' || invoiceStatus === 'paid') {
-      return this._creditUserForTransaction(tx, uuid, invoiceInfo);
-    } else if (status === 'canceled' || status === 'cancelled') {
+      return this._creditUserForTransaction(tx, uuid || tx.providerTxId, { ...invoiceInfo, payload });
+    } else if (status === 'canceled' || status === 'cancelled' || status === 'expired') {
       db.updateTransaction(tx.id, {
         status: 'failed',
-        failureReason: 'Annulé sur Trybit.'
+        failureReason: 'Annulé ou expiré sur Trybit.'
       });
       return { success: true, message: 'Transaction marquée annulée.' };
     }
@@ -873,7 +893,7 @@ class PaymentService {
   }
 
   /**
-   * Crédit atomique et sécurisé du solde utilisateur avec protection anti-race condition
+   * Crédit atomique et sécurisé du solde utilisateur ou livraison directe de commande
    */
   _creditUserForTransaction(tx, providerTxId, extraData = {}) {
     const freshTx = db.getTransactionById(tx.id);
@@ -893,10 +913,66 @@ class PaymentService {
       });
     }
 
-    const creditAmount = tx.amount || 0;
-    const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
+    // 1. Si c'était un achat direct de produit par crypto
+    if (tx.metadata?.productId) {
+      const prod = db.getProductById(tx.metadata.productId);
+      if (prod) {
+        const qty = tx.metadata.quantity || 1;
+        const vault = db.getVault();
+        const prodVault = vault[prod.id] || {};
+        let deliveredContent = null;
 
-    db.updateUser(user.id, { balance: newBalance });
+        if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
+          const unusedKey = prodVault.keys.find(k => !k.used);
+          if (unusedKey) {
+            unusedKey.used = true;
+            unusedKey.soldTo = user.email;
+            unusedKey.soldAt = new Date().toISOString();
+            deliveredContent = {
+              type: prodVault.type || 'text',
+              content: unusedKey.content,
+              fileName: prodVault.fileName || 'licence.txt'
+            };
+            db.saveVaultItem(prod.id, prodVault);
+            const remainingStock = prodVault.keys.filter(k => !k.used).length;
+            db.saveProduct({ id: prod.id, stock: remainingStock });
+          }
+        }
+
+        if (!deliveredContent) {
+          deliveredContent = prodVault.content || {
+            type: 'text',
+            content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
+          };
+          db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
+        }
+
+        db.createOrder({
+          id: 'ORD-' + (tx.id.replace('TXN-TB-', '').substring(0, 8) || Date.now().toString().slice(-6)),
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          productId: prod.id,
+          productName: prod.name,
+          unitPrice: prod.price,
+          quantity: qty,
+          amount: tx.amount,
+          remainingBalance: user.balance,
+          userBalanceAfter: user.balance,
+          contactInfo: tx.metadata.contactInfo || '',
+          method: 'Crypto Instantané (Trybit)',
+          status: 'Complété',
+          vaultContent: deliveredContent
+        });
+        console.log(`[Trybit Achat] Commande débloquée et livrée avec succès pour ${prod.name} (x${qty}) !`);
+      }
+    } else {
+      // 2. Si c'était une recharge de solde
+      const creditAmount = tx.amount || 0;
+      const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
+      db.updateUser(user.id, { balance: newBalance });
+      console.log(`[Paiement Validé] Transaction ${tx.id} complétée. Solde ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
+    }
 
     const completedTx = db.updateTransaction(tx.id, {
       status: 'completed',
@@ -915,15 +991,13 @@ class PaymentService {
       db.persist();
     }
 
-    console.log(`[Paiement Validé] Transaction ${tx.id} complétée. Solde ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
-
     return {
       success: true,
       status: 'completed',
-      newBalance: newBalance,
-      creditedAmount: creditAmount,
+      newBalance: user.balance,
+      creditedAmount: tx.amount,
       transaction: completedTx,
-      message: 'Paiement confirmé avec succès ! Votre solde a été crédité.'
+      message: 'Paiement Trybit confirmé avec succès !'
     };
   }
 }

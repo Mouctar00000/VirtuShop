@@ -94,7 +94,10 @@ module.exports = async function handler(req, res) {
           customerEmail: body.customerEmail || body.email,
           customerName: body.customerName || body.name,
           cryptocurrency: body.cryptocurrency,
-          returnUrl: body.returnUrl
+          returnUrl: body.returnUrl,
+          productId: body.productId,
+          quantity: body.quantity,
+          contactInfo: body.contactInfo
         });
 
         return res.status(201).json(result);
@@ -169,7 +172,7 @@ module.exports = async function handler(req, res) {
 
       // 9. Webhook POSTBACK Trybit (dédié ou détection de signature JWT Trybit)
       if ((isTrybitRoute && (action === 'webhook' || action === 'postback')) || (action === 'webhook' && (body.invoice_id || body.invoice_info || body.token))) {
-        const result = await paymentService.handleTrybitWebhook(body);
+        const result = await paymentService.handleTrybitWebhook(body, req.headers);
         return res.status(200).json(result);
       }
 

@@ -6,6 +6,7 @@
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/api/auth/:path*", "destination": "/api/auth" },
     { "source": "/api/payments/:path*", "destination": "/api/payments" },
+    { "source": "/api/trybit/:path*", "destination": "/api/payments" },
     { "source": "/api/data/:path*", "destination": "/api/data" }
   ],
   "headers": [

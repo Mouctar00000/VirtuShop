@@ -1,7 +1,7 @@
 /**
  * GetVirtu Production Trybit Crypto Payment Integration (backend/trybit.js)
  * Intégration officielle de l'API Trybit v2 (Passerelle Crypto Multi-Devises)
- * Documentation officielle : https://support.trybit.com/integration & https://docs.trybit.com/
+ * Documentation officielle : https://support.trybit.com/ & https://docs.trybit.com/
  */
 
 const https = require('https');
@@ -28,28 +28,38 @@ try {
   }
 } catch (e) {}
 
-// Configuration officielle Trybit (Credentials serveur uniquement via variables d'environnement)
-const TRYBIT_API_KEY = process.env.TRYBIT_API_KEY || '';
-const TRYBIT_SHOP_ID = process.env.TRYBIT_SHOP_ID || '';
 const TRYBIT_API_BASE = 'https://api.trybit.com/v2';
 
 class TrybitService {
-  constructor() {
-    this.apiKey = TRYBIT_API_KEY;
-    this.shopId = TRYBIT_SHOP_ID;
+  get apiKey() {
+    return process.env.TRYBIT_API_KEY || '';
+  }
+
+  get shopId() {
+    return process.env.TRYBIT_SHOP_ID || '';
+  }
+
+  get secretKey() {
+    return process.env.TRYBIT_SECRET_KEY || '';
   }
 
   /**
    * Envoi d'une requête HTTP POST sécurisée vers l'API Trybit v2
+   * Format d'authentification officiel : Authorization: Token <API_KEY>
    */
   requestTrybit(endpoint, body = {}) {
     return new Promise((resolve, reject) => {
+      const apiKey = this.apiKey;
+      if (!apiKey) {
+        return reject(new Error('TRYBIT_API_KEY non configurée sur le serveur.'));
+      }
+
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
       const url = new URL(TRYBIT_API_BASE + cleanEndpoint);
       const postData = JSON.stringify(body);
 
       const reqHeaders = {
-        'Authorization': `Token ${this.apiKey}`,
+        'Authorization': `Token ${apiKey}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       };
@@ -111,7 +121,7 @@ class TrybitService {
     const payload = {
       shop_id: this.shopId,
       amount: parsedAmount,
-      currency: currency.toUpperCase(),
+      currency: (currency || 'USD').toUpperCase(),
       order_id: orderId || `ORD-${Date.now()}`
     };
 
@@ -185,57 +195,65 @@ class TrybitService {
 
   /**
    * 3. VÉRIFICATION DE LA SIGNATURE JWT DU POSTBACK (HS256)
-   * Documentation : https://docs.trybit.com/api-reference-v2/postback.md
-   * "JWT token — a signature of the server response. Signed with secret key, HS256 algorithm. Valid 5 minutes."
+   * Documentation officielle Trybit : https://docs.trybit.com/api-reference-v2/postback.md
+   * Le jeton JWT est signé avec la SECRET KEY (Clé secrète) via l'algorithme HS256.
+   * Il est valide 5 minutes.
    */
   verifyWebhookToken(token) {
-    if (token === undefined || token === null) return true;
-    if (typeof token !== 'string') return false;
+    if (!token || typeof token !== 'string') {
+      return { valid: false, error: 'Token manquant ou format non textuel.' };
+    }
 
     const t = token.trim();
-    if (t === '') return true;
+    const parts = t.split('.');
+    if (parts.length !== 3) {
+      return { valid: false, error: 'Structure JWT invalide (3 segments requis).' };
+    }
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+    const secret = this.secretKey;
+
+    if (!secret) {
+      console.error('[Trybit JWT Error] TRYBIT_SECRET_KEY non configurée.');
+      return { valid: false, error: 'Clé secrète Trybit non configurée sur le serveur.' };
+    }
 
     try {
-      const parts = t.split('.');
-      if (parts.length !== 3) return false;
+      // 1. Calcul de la signature attendue HMAC-SHA256 avec la SECRET KEY
+      const expectedSigUrl = crypto.createHmac('sha256', secret)
+        .update(`${headerB64}.${payloadB64}`)
+        .digest('base64url');
 
-      const [headerB64, payloadB64, signatureB64] = parts;
+      const expectedSigStd = crypto.createHmac('sha256', secret)
+        .update(`${headerB64}.${payloadB64}`)
+        .digest('base64')
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
 
-      // Calcul de la signature attendue via HMAC-SHA256
-      const hmac = crypto.createHmac('sha256', this.apiKey);
-      hmac.update(`${headerB64}.${payloadB64}`);
-      const expectedSig = hmac.digest('base64url');
-
-      if (expectedSig !== signatureB64) {
-        // Fallback base64 standard avec URL-safe replacement
-        const expectedSigStd = crypto.createHmac('sha256', this.apiKey)
-          .update(`${headerB64}.${payloadB64}`)
-          .digest('base64')
-          .replace(/=/g, '')
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_');
-
-        if (expectedSigStd !== signatureB64) {
-          console.warn('[Trybit JWT] Signature mismatch');
-          return false;
-        }
+      const matches = (signatureB64 === expectedSigUrl) || (signatureB64 === expectedSigStd);
+      if (!matches) {
+        console.warn('[Trybit JWT] Signature mismatch');
+        return { valid: false, error: 'Signature JWT non conforme.' };
       }
 
-      // Vérification de l'expiration du token JWT
-      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+      // 2. Décodage du payload et validation de l'expiration (exp)
+      const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf8');
+      const payload = JSON.parse(payloadJson);
+
       if (payload && payload.exp) {
         const now = Math.floor(Date.now() / 1000);
-        // Tolérance de 5 minutes + 180s d'horloge serveur
-        if (now > payload.exp + 180) {
-          console.warn('[Trybit JWT] Token expired (timestamp)');
-          return false;
+        // Validité Trybit : 5 minutes + 300s de tolérance d'horloge serveur
+        if (now > payload.exp + 300) {
+          console.warn('[Trybit JWT] Token expiré (exp:', payload.exp, 'now:', now, ')');
+          return { valid: false, error: 'Jeton JWT expiré.', payload };
         }
       }
 
-      return true;
+      return { valid: true, payload };
     } catch (e) {
       console.warn('[Trybit JWT Error]', e.message);
-      return false;
+      return { valid: false, error: 'Erreur lors du décodage du jeton JWT: ' + e.message };
     }
   }
 }
