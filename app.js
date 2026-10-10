@@ -650,10 +650,34 @@ function renderLandingShowcase() {
   container.innerHTML = html;
 }
 
+function getConsolidatedProducts() {
+  var rawProds = (DB.get('products', []) || []).filter(function(p) { return p && p.published; });
+  var vault = DB.get('vault', {}) || {};
+
+  var map = new Map();
+  rawProds.forEach(function(p) {
+    if (!p) return;
+    var norm = (p.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!norm) return;
+
+    var v = vault[p.id];
+    var actualStock = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (p.stock || 0);
+
+    if (!map.has(norm)) {
+      map.set(norm, Object.assign({}, p, { stock: actualStock }));
+    } else {
+      var existing = map.get(norm);
+      existing.stock += actualStock;
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 function renderLandingCategories() {
   var container = document.getElementById('landing-cats-filters');
   if (!container) return;
-  var prods = DB.get('products', []).filter(function(p) { return p.published; });
+  var prods = getConsolidatedProducts();
   var cats = ['all'];
   prods.forEach(function(p) { if (p.category && cats.indexOf(p.category) === -1) cats.push(p.category); });
 
@@ -678,7 +702,7 @@ function renderLandingCatalog() {
   var container = document.getElementById('landing-products-grid');
   if (!container) return;
   var q = (document.getElementById('landing-search')?.value || '').trim().toLowerCase();
-  var prods = DB.get('products', []).filter(function(p) { return p.published; });
+  var prods = getConsolidatedProducts();
 
   if (currentLandingCat !== 'all') prods = prods.filter(function(p) { return p.category === currentLandingCat; });
   if (q) prods = prods.filter(function(p) { return p.name.toLowerCase().indexOf(q) !== -1 || (p.description && p.description.toLowerCase().indexOf(q) !== -1); });
@@ -689,7 +713,7 @@ function renderLandingCatalog() {
 function renderConnectedCategories() {
   var container = document.getElementById('connected-cats-filters');
   if (!container) return;
-  var prods = DB.get('products', []).filter(function(p) { return p.published; });
+  var prods = getConsolidatedProducts();
   var cats = ['all'];
   prods.forEach(function(p) { if (p.category && cats.indexOf(p.category) === -1) cats.push(p.category); });
 
@@ -714,7 +738,7 @@ function renderConnectedCatalog() {
   var container = document.getElementById('connected-products-grid');
   if (!container) return;
   var q = (document.getElementById('connected-search')?.value || '').trim().toLowerCase();
-  var prods = DB.get('products', []).filter(function(p) { return p.published; });
+  var prods = getConsolidatedProducts();
 
   if (currentConnectedCat !== 'all') prods = prods.filter(function(p) { return p.category === currentConnectedCat; });
   if (q) prods = prods.filter(function(p) { return p.name.toLowerCase().indexOf(q) !== -1 || (p.description && p.description.toLowerCase().indexOf(q) !== -1); });
@@ -754,7 +778,7 @@ function renderProductCardsInto(container, prods) {
 
           <div class="product-card-footer">
             <div class="product-meta">
-              <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture' : '● ' + prod.stock + ' en stock'}</span>
+              <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture de stock' : '● ' + prod.stock + ' disponible' + (prod.stock > 1 ? 's' : '')}</span>
               <span class="product-price">$${prod.price.toFixed(2)}</span>
             </div>
             <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${prod.id})">
@@ -1145,16 +1169,20 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, 
   var deliveredContent = null;
 
   if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
-    // Sélectionner la première clé strictement non vendue
-    var unusedKey = prodVault.keys.find(function(k) { return !k.used; });
-    if (unusedKey) {
-      unusedKey.used = true;
-      unusedKey.soldTo = u.email || u.name || 'Client #' + u.id;
-      unusedKey.soldAt = new Date().toISOString();
+    // Sélectionner les N clés strictement disponibles
+    var unusedKeys = prodVault.keys.filter(function(k) { return !k.used; }).slice(0, qty);
+    if (unusedKeys.length > 0) {
+      var nowIso = new Date().toISOString();
+      unusedKeys.forEach(function(k) {
+        k.used = true;
+        k.soldTo = u.email || u.name || 'Client #' + u.id;
+        k.soldAt = nowIso;
+      });
       deliveredContent = {
         type: prodVault.type || 'text',
-        content: unusedKey.content,
-        fileName: prodVault.fileName || 'licence.txt'
+        content: unusedKeys.map(function(k) { return k.content; }).join('\n'),
+        keys: unusedKeys,
+        fileName: prodVault.fileName || 'licences.txt'
       };
       DB.set('vault', vaultMap);
     }
@@ -2793,8 +2821,9 @@ function renderVaultContentDisplay(order) {
     } else if (v.key) {
       rawContent = String(v.key).trim();
     } else if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
-      var foundKey = v.keys.find(function(k) { return k.used || k.soldTo; }) || v.keys[0];
-      rawContent = (foundKey.content || foundKey.key || JSON.stringify(foundKey)).trim();
+      rawContent = v.keys.map(function(k) {
+        return (k && typeof k === 'object' ? (k.content || k.key || '') : String(k || '')).trim();
+      }).filter(Boolean).join('\n');
     } else {
       rawContent = JSON.stringify(v);
     }

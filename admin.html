@@ -1426,7 +1426,8 @@
                   <th>Nom du Produit</th>
                   <th>Catégorie</th>
                   <th>Prix ($ USD)</th>
-                  <th>Stock</th>
+                  <th>Stock & Ventes</th>
+                  <th>Clés & Inventaire</th>
                   <th>Visibilité</th>
                   <th>Actions</th>
                 </tr>
@@ -1695,10 +1696,14 @@
       <form id="admin-prod-form" onsubmit="saveProduct(event)">
         <input type="hidden" id="admin-prod-id">
 
-        <!-- Nom du produit -->
+        <!-- Nom du produit avec autocomplétion dynamique -->
         <div class="field" style="margin-bottom: 6px;">
-          <label for="admin-prod-name">Nom du produit</label>
-          <input type="text" id="admin-prod-name" required placeholder="Ex: Compte Gmail Vérifié (2FA + Secours)">
+          <label for="admin-prod-name">Nom du produit <span style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(1 nom unique = 1 seul produit)</span></label>
+          <input type="text" id="admin-prod-name" required placeholder="Ex: Gmail" oninput="onProductNameInput(this.value)">
+          <div id="admin-prod-match-banner" style="display: none; margin-top: 5px; padding: 6px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 11.5px; color: #1e40af; align-items: center; gap: 6px;">
+            <span>⚡</span>
+            <span id="admin-prod-match-text">Produit existant détecté : le stock actuel sera incrémenté avec les nouvelles clés.</span>
+          </div>
         </div>
 
         <!-- Première ligne : Catégorie à gauche, Description courte à droite -->
@@ -1792,10 +1797,36 @@
           <button type="submit" class="btn-primary" style="flex: 1.5;">Enregistrer</button>
         </div>
       </form>
-    </div>
   </div>
 
-  <!-- ==================== MODAL MOYEN DE PAIEMENT RECHERCHÉ ==================== -->
+  <!-- ==================== MODAL INVENTAIRE DÉTAILLÉ DES CLÉS ==================== -->
+  <div id="admin-keys-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 680px; width: 95%;">
+      <button type="button" class="modal-close-btn" onclick="closeAdminKeysModal()">✕</button>
+      <h2 class="modal-title" id="keys-modal-title">🔐 Inventaire des Clés du Produit</h2>
+      
+      <div id="keys-modal-summary" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px;"></div>
+
+      <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: 10px; background: #ffffff;">
+        <table class="admin-table" style="font-size: 11.5px; margin: 0; width: 100%;">
+          <thead>
+            <tr>
+              <th style="padding: 8px 10px;">Clé / Identifiant</th>
+              <th style="padding: 8px 10px;">Statut</th>
+              <th style="padding: 8px 10px;">Client</th>
+              <th style="padding: 8px 10px;">Commande</th>
+              <th style="padding: 8px 10px;">Date Vente</th>
+            </tr>
+          </thead>
+          <tbody id="keys-modal-tbody"></tbody>
+        </table>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+        <button type="button" class="btn-secondary" style="padding: 6px 16px;" onclick="closeAdminKeysModal()">Fermer</button>
+      </div>
+    </div>
+  </div>
   <div id="admin-method-modal" class="modal-backdrop">
     <div class="modal-window">
       <button type="button" class="modal-close-btn" onclick="closeAdminMethodModal()">✕</button>
@@ -2484,8 +2515,14 @@
       var tbody = document.getElementById('admin-products-tbody');
       if (!tbody) return;
       var html = '';
+      var vault = DB.get('vault', {}) || {};
 
       prods.forEach(function(p) {
+        var v = vault[p.id];
+        var avail = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (p.stock || 0);
+        var sold = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return k.used; }).length : 0;
+        var totalKeys = (v && Array.isArray(v.keys)) ? v.keys.length : (avail + sold);
+
         html += `
           <tr>
             <td><img src="${p.image}" class="thumb-table-img" alt="${escapeHtml(p.name)}"></td>
@@ -2496,7 +2533,17 @@
             <td><span class="status-indicator-pill offline">${escapeHtml(p.category)}</span></td>
             <td><strong style="color: var(--primary-600); font-size: 14px;">${p.price.toFixed(2)} $</strong></td>
             <td>
-              <input type="number" value="${p.stock}" min="0" style="width: 65px; padding: 4px 6px; font-size: 12px; font-weight: 600;" onchange="updateStock(${p.id}, this.value)">
+              <div style="font-weight: 700; color: ${avail > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-size: 12.5px;">
+                ${avail > 0 ? '● ' + avail + ' dispo' : '○ Rupture (0)'}
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                ${sold} vendue(s)
+              </div>
+            </td>
+            <td>
+              <button type="button" class="btn-secondary btn-sm" style="padding: 4px 9px; font-size: 11px; white-space: nowrap;" onclick="viewProductKeysInventory(${p.id})">
+                🔐 Clés (${totalKeys})
+              </button>
             </td>
             <td>
               <span class="status-indicator-pill ${p.published ? 'online' : 'offline'}" onclick="toggleProductVisibility(${p.id})">
@@ -2505,7 +2552,7 @@
             </td>
             <td>
               <div style="display: flex; gap: 6px;">
-                <button type="button" class="btn-icon-action edit" title="Modifier le produit" onclick="editProduct(${p.id})">✏️</button>
+                <button type="button" class="btn-icon-action edit" title="Modifier le produit / ajouter des clés" onclick="editProduct(${p.id})">✏️</button>
                 <button type="button" class="btn-icon-action duplicate" title="Dupliquer le produit" onclick="duplicateProduct(${p.id})">📑</button>
                 <button type="button" class="btn-icon-action delete" title="Supprimer le produit" onclick="deleteProduct(${p.id})">🗑️</button>
               </div>
@@ -2514,14 +2561,86 @@
         `;
       });
 
-      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun produit configuré.</td></tr>';
+      tbody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun produit configuré.</td></tr>';
     }
 
-    function updateStock(id, val) {
+    function viewProductKeysInventory(prodId) {
       var prods = DB.get('products', []);
-      var p = prods.find(function(x) { return x.id === id; });
-      if (p) {
-        p.stock = Math.max(0, parseInt(val, 10) || 0);
+      var p = prods.find(function(x) { return x.id === prodId; });
+      if (!p) return;
+
+      var titleEl = document.getElementById('keys-modal-title');
+      if (titleEl) titleEl.textContent = '🔐 Inventaire des Clés : ' + p.name;
+
+      var summaryEl = document.getElementById('keys-modal-summary');
+      var tbody = document.getElementById('keys-modal-tbody');
+
+      function displayKeys(keysData) {
+        var keys = keysData.keys || [];
+        var stock = keysData.stock || keys.filter(function(k) { return !k.used; }).length;
+        var sold = keysData.sold || keys.filter(function(k) { return k.used; }).length;
+
+        if (summaryEl) {
+          summaryEl.innerHTML = `
+            <span class="status-indicator-pill online">● ${stock} disponible(s)</span>
+            <span class="status-indicator-pill offline">● ${sold} vendue(s)</span>
+            <span class="status-indicator-pill" style="background: #f1f5f9; color: #334155;">Total : ${keys.length} clé(s)</span>
+          `;
+        }
+
+        if (tbody) {
+          if (keys.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Aucune clé enregistrée pour ce produit. Ajoutez des clés via le bouton Modifier.</td></tr>';
+          } else {
+            tbody.innerHTML = keys.map(function(k) {
+              return `
+                <tr>
+                  <td style="font-family: monospace; font-size: 11px; font-weight: 600;"><code>${escapeHtml(k.content)}</code></td>
+                  <td>
+                    <span class="status-indicator-pill ${k.used ? 'offline' : 'online'}" style="font-size: 10.5px;">
+                      ${k.used ? '● Vendue' : '● Disponible'}
+                    </span>
+                  </td>
+                  <td style="font-size: 11px;">${escapeHtml(k.soldTo || '—')}</td>
+                  <td style="font-size: 11px; font-family: monospace;">${escapeHtml(k.orderId || '—')}</td>
+                  <td style="font-size: 11px;">${k.soldAt ? new Date(k.soldAt).toLocaleString('fr-FR') : '—'}</td>
+                </tr>
+              `;
+            }).join('');
+          }
+        }
+
+        document.getElementById('admin-keys-modal').classList.add('active');
+      }
+
+      // Tentative de récupération depuis l'API serveur
+      var session = DB.get('session');
+      if (session && session.token) {
+        fetch('/api/data/products?productId=' + prodId + '&keys=1', {
+          headers: { 'Authorization': 'Bearer ' + session.token }
+        }).then(function(r) { return r.json(); }).then(function(res) {
+          if (res && res.keys) {
+            displayKeys(res);
+          } else {
+            fallbackLocal();
+          }
+        }).catch(function() { fallbackLocal(); });
+      } else {
+        fallbackLocal();
+      }
+
+      function fallbackLocal() {
+        var vault = DB.get('vault', {});
+        var v = vault[p.id] || { keys: [] };
+        var keys = Array.isArray(v.keys) ? v.keys : [];
+        displayKeys({ keys: keys });
+      }
+    }
+
+    function closeAdminKeysModal() {
+      var m = document.getElementById('admin-keys-modal');
+      if (m) m.classList.remove('active');
+    }
         DB.set('products', prods);
         showToast('Stock mis à jour avec succès.', 'success');
       }
@@ -2645,12 +2764,56 @@
       document.getElementById('admin-prod-id').value = '';
       document.getElementById('admin-prod-form').reset();
       document.getElementById('admin-prod-stock').value = 0;
+      var banner = document.getElementById('admin-prod-match-banner');
+      if (banner) banner.style.display = 'none';
       editingProductImage = null;
       editingVaultFileContent = null;
       updateDropzoneUI(null);
       setVaultType('text');
 
       document.getElementById('admin-prod-modal').classList.add('active');
+    }
+
+    function onProductNameInput(val) {
+      var clean = (val || '').trim();
+      var banner = document.getElementById('admin-prod-match-banner');
+      var matchText = document.getElementById('admin-prod-match-text');
+      var currentEditId = document.getElementById('admin-prod-id').value;
+
+      if (!clean) {
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+
+      var prods = DB.get('products', []) || [];
+      var norm = clean.toLowerCase().replace(/\s+/g, ' ');
+      var found = prods.find(function(p) {
+        return (p.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === norm;
+      });
+
+      if (found && (!currentEditId || parseInt(currentEditId, 10) !== found.id)) {
+        // Produit existant détecté ! Auto-remplissage
+        document.getElementById('admin-prod-id').value = found.id;
+        document.getElementById('admin-prod-cat').value = found.category || '';
+        document.getElementById('admin-prod-price').value = found.price || '';
+        document.getElementById('admin-prod-desc').value = found.description || '';
+        if (found.image) {
+          editingProductImage = found.image;
+          updateDropzoneUI(found.image);
+        }
+
+        var vault = DB.get('vault', {}) || {};
+        var v = vault[found.id];
+        var avail = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (found.stock || 0);
+        document.getElementById('admin-prod-stock').value = avail;
+
+        if (banner && matchText) {
+          matchText.innerHTML = `<strong>Produit existant détecté :</strong> Le stock actuel est de <strong>${avail}</strong>. Vos nouvelles clés ci-dessous augmenteront le stock disponible.`;
+          banner.style.display = 'flex';
+        }
+      } else if (!found && !currentEditId) {
+        if (banner) banner.style.display = 'none';
+      }
     }
 
     function duplicateProduct(id) {
@@ -2667,6 +2830,9 @@
       document.getElementById('admin-prod-cat').value = p.category;
       document.getElementById('admin-prod-price').value = p.price;
       document.getElementById('admin-prod-desc').value = p.description || '';
+
+      var banner = document.getElementById('admin-prod-match-banner');
+      if (banner) banner.style.display = 'none';
 
       editingProductImage = p.image || null;
       updateDropzoneUI(editingProductImage);
@@ -2698,14 +2864,17 @@
       if (!p) return;
 
       var vault = DB.get('vault', {});
-      var v = vault[p.id] || { type: 'text', content: '' };
+      var v = vault[p.id] || { type: 'text', content: '', keys: [] };
 
-      document.getElementById('prod-modal-title').textContent = 'Modifier le Produit #' + p.id;
+      document.getElementById('prod-modal-title').textContent = 'Modifier le Produit : ' + p.name;
       document.getElementById('admin-prod-id').value = p.id;
       document.getElementById('admin-prod-name').value = p.name;
       document.getElementById('admin-prod-cat').value = p.category;
       document.getElementById('admin-prod-price').value = p.price;
       document.getElementById('admin-prod-desc').value = p.description || '';
+
+      var banner = document.getElementById('admin-prod-match-banner');
+      if (banner) banner.style.display = 'none';
 
       editingProductImage = p.image || null;
       updateDropzoneUI(editingProductImage);
@@ -2720,7 +2889,8 @@
         if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
           var unusedKeys = v.keys.filter(function(k) { return !k.used; });
           var soldCount = v.keys.filter(function(k) { return k.used; }).length;
-          document.getElementById('admin-vault-content').value = unusedKeys.map(function(k) { return k.content; }).join('\n');
+          document.getElementById('admin-vault-content').value = '';
+          document.getElementById('admin-vault-content').placeholder = 'Insérez de NOUVELLES clés à ajouter (1 par ligne) :\nclé_suivante_1\nclé_suivante_2';
           document.getElementById('admin-prod-stock').value = unusedKeys.length;
           if (soldCount > 0) {
             showToast(`${unusedKeys.length} clé(s) disponible(s) en stock (${soldCount} déjà vendue(s) et protégée(s)).`, 'info');
@@ -2811,7 +2981,7 @@
       reader.readAsText(file);
     }
 
-    function saveProduct(e) {
+    async function saveProduct(e) {
       e.preventDefault();
       var idVal = document.getElementById('admin-prod-id').value;
       var name = document.getElementById('admin-prod-name').value.trim();
@@ -2823,66 +2993,129 @@
       var vaultContent = vaultType === 'file' ? (editingVaultFileContent || 'Fichier') : document.getElementById('admin-vault-content').value.trim();
       var vaultFileName = document.getElementById('admin-vault-filename').value || 'livraison.txt';
 
-      var prods = DB.get('products', []);
-      var vault = DB.get('vault', {});
+      var prods = DB.get('products', []) || [];
+      var vault = DB.get('vault', {}) || {};
+
+      // Détection de produit existant par nom normalisé
+      var norm = name.toLowerCase().replace(/\s+/g, ' ');
+      var matchedProduct = prods.find(function(p) {
+        return (p.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === norm;
+      });
+
       var targetId = null;
-
-      var uniqueKeys = [];
-      var existingVault = null;
-
       if (idVal) {
         targetId = parseInt(idVal, 10);
-        existingVault = vault[targetId] || null;
+      } else if (matchedProduct) {
+        targetId = matchedProduct.id;
       }
 
-      var stock = 0;
-      if (vaultType === 'text') {
-        var rawLines = vaultContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
-        var preservedUsedKeys = [];
-        if (existingVault && Array.isArray(existingVault.keys)) {
-          preservedUsedKeys = existingVault.keys.filter(function(k) { return k.used; });
+      var existingVault = targetId ? (vault[targetId] || null) : null;
+      var existingKeys = (existingVault && Array.isArray(existingVault.keys)) ? existingVault.keys : [];
+
+      var rawLines = vaultType === 'text' && vaultContent
+        ? vaultContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; })
+        : [];
+
+      // Contrôle strict des doublons parmi les clés saisies
+      var seenInput = new Set();
+      for (var i = 0; i < rawLines.length; i++) {
+        var lineLower = rawLines[i].toLowerCase();
+        if (seenInput.has(lineLower)) {
+          showToast(`Erreur : la clé '${rawLines[i]}' apparaît plusieurs fois dans votre saisie.`, 'error');
+          return;
         }
-        var newUnusedKeys = rawLines.map(function(line, idx) {
-          return {
-            id: 'K-' + Date.now().toString(36) + '-' + idx,
-            content: line,
-            used: false,
-            soldTo: null,
-            soldAt: null
-          };
-        });
-        uniqueKeys = preservedUsedKeys.concat(newUnusedKeys);
-        stock = newUnusedKeys.length;
-      } else {
-        stock = parseInt(document.getElementById('admin-prod-stock').value, 10) || 0;
+        seenInput.add(lineLower);
       }
 
-      if (idVal) {
+      // Contrôle strict des doublons avec les clés déjà présentes dans le système
+      var existingSet = new Set(existingKeys.map(function(k) { return (k.content || '').trim().toLowerCase(); }));
+      for (var j = 0; j < rawLines.length; j++) {
+        if (existingSet.has(rawLines[j].toLowerCase())) {
+          showToast(`Erreur : la clé '${rawLines[j]}' est déjà enregistrée pour ce produit (doublon refusé).`, 'error');
+          return;
+        }
+      }
+
+      // Appel API serveur pour persistance synchronisée
+      var session = DB.get('session');
+      try {
+        var apiRes = await fetch('/api/data/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+          },
+          body: JSON.stringify({
+            id: targetId,
+            name: name,
+            category: cat,
+            price: price,
+            description: desc,
+            image: editingProductImage,
+            published: true,
+            newKeys: rawLines
+          })
+        });
+
+        var resData = await apiRes.json();
+        if (!apiRes.ok || !resData.success) {
+          throw new Error(resData.error || 'Erreur lors de l\'enregistrement du produit.');
+        }
+
+        if (resData.products) {
+          DB.set('products', resData.products);
+        }
+      } catch (err) {
+        console.warn('API saveProduct fallback local :', err.message);
+      }
+
+      // Mise à jour locale DB
+      var newUnusedKeys = rawLines.map(function(line, idx) {
+        return {
+          id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + idx,
+          content: line,
+          used: false,
+          orderId: null,
+          soldTo: null,
+          userId: null,
+          soldAt: null
+        };
+      });
+
+      if (targetId) {
         var p = prods.find(function(x) { return x.id === targetId; });
         if (p) {
-          p.name = name; p.category = cat; p.price = price; p.stock = stock; p.description = desc;
+          p.name = name; p.category = cat; p.price = price; p.description = desc;
           if (editingProductImage) p.image = editingProductImage;
+          var combinedKeys = existingKeys.concat(newUnusedKeys);
+          p.stock = combinedKeys.filter(function(k) { return !k.used; }).length;
+          vault[targetId] = {
+            type: vaultType,
+            content: vaultContent,
+            fileName: vaultFileName,
+            keys: combinedKeys
+          };
         }
       } else {
         targetId = prods.length > 0 ? Math.max.apply(null, prods.map(function(x) { return x.id; })) + 1 : 1;
+        var initialStock = newUnusedKeys.length;
         prods.push({
           id: targetId,
           name: name,
           category: cat,
           price: price,
-          stock: stock,
+          stock: initialStock,
           description: desc,
           image: editingProductImage || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220"><rect width="400" height="220" fill="%232563eb"/><text x="200" y="115" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="%23ffffff">GETVIRTU</text></svg>',
           published: true
         });
+        vault[targetId] = {
+          type: vaultType,
+          content: vaultContent,
+          fileName: vaultFileName,
+          keys: newUnusedKeys
+        };
       }
-
-      vault[targetId] = {
-        type: vaultType,
-        content: vaultContent,
-        fileName: vaultFileName,
-        keys: uniqueKeys.length > 0 ? uniqueKeys : undefined
-      };
 
       DB.set('products', prods);
       DB.set('vault', vault);

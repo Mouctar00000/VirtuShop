@@ -71,9 +71,27 @@ const INITIAL_DB = {
   }
 };
 
+function normalizeProductName(name) {
+  if (!name || typeof name !== 'string') return '';
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+class SimpleMutex {
+  constructor() {
+    this._queue = Promise.resolve();
+  }
+  runExclusive(callback) {
+    const res = this._queue.then(() => callback());
+    this._queue = res.catch(() => {});
+    return res;
+  }
+}
+
 class Database {
   constructor() {
+    this.mutex = new SimpleMutex();
     this.data = this.load();
+    this.migrateAndDeduplicateProducts();
   }
 
   load() {
@@ -105,6 +123,105 @@ class Database {
     }
     this.saveData(INITIAL_DB);
     return JSON.parse(JSON.stringify(INITIAL_DB));
+  }
+
+  migrateAndDeduplicateProducts() {
+    let modified = false;
+    if (!this.data.products || !Array.isArray(this.data.products)) {
+      this.data.products = [];
+      return;
+    }
+    if (!this.data.vault) this.data.vault = {};
+
+    // 1. Regrouper les produits par nom normalisé
+    const groups = new Map();
+    for (const prod of this.data.products) {
+      const norm = normalizeProductName(prod.name);
+      if (!groups.has(norm)) groups.set(norm, []);
+      groups.get(norm).push(prod);
+    }
+
+    const uniqueProducts = [];
+
+    for (const [norm, prods] of groups.entries()) {
+      if (prods.length === 1) {
+        const p = prods[0];
+        // S'assurer que le stock correspond aux clés du coffre-fort si des clés existent
+        const v = this.data.vault[p.id];
+        if (v && Array.isArray(v.keys)) {
+          const avail = v.keys.filter(k => !k.used).length;
+          if (p.stock !== avail) {
+            p.stock = avail;
+            modified = true;
+          }
+        }
+        uniqueProducts.push(p);
+      } else {
+        // Fusion de doublons : conserver le produit principal
+        modified = true;
+        const primary = prods[0];
+        const secondaryList = prods.slice(1);
+
+        if (!this.data.vault[primary.id]) {
+          this.data.vault[primary.id] = { type: 'text', keys: [] };
+        }
+        if (!Array.isArray(this.data.vault[primary.id].keys)) {
+          this.data.vault[primary.id].keys = [];
+        }
+
+        const primaryKeys = this.data.vault[primary.id].keys;
+        const knownContents = new Set(primaryKeys.map(k => (k.content || '').trim()));
+
+        for (const sec of secondaryList) {
+          const secVault = this.data.vault[sec.id];
+          if (secVault) {
+            if (Array.isArray(secVault.keys)) {
+              for (const sk of secVault.keys) {
+                const cTrim = (sk.content || '').trim();
+                if (!knownContents.has(cTrim) || sk.used) {
+                  primaryKeys.push(sk);
+                  if (cTrim) knownContents.add(cTrim);
+                }
+              }
+            } else if (secVault.content) {
+              const cTrim = (secVault.content || '').trim();
+              if (cTrim && !knownContents.has(cTrim)) {
+                primaryKeys.push({
+                  id: 'KEY-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+                  content: cTrim,
+                  used: false,
+                  orderId: null,
+                  soldTo: null,
+                  userId: null,
+                  soldAt: null
+                });
+                knownContents.add(cTrim);
+              }
+            }
+            delete this.data.vault[sec.id];
+          }
+
+          // Remapper les commandes pointant vers le produit secondaire
+          if (Array.isArray(this.data.orders)) {
+            for (const ord of this.data.orders) {
+              if (ord.productId === sec.id) {
+                ord.productId = primary.id;
+              }
+            }
+          }
+        }
+
+        // Recalculer le stock du produit primaire fusionné
+        primary.stock = primaryKeys.filter(k => !k.used).length;
+        uniqueProducts.push(primary);
+      }
+    }
+
+    this.data.products = uniqueProducts;
+    if (modified) {
+      console.log('[DB] Migration des doublons de produits appliquée avec succès.');
+      this.persist();
+    }
   }
 
   saveData(data) {
@@ -245,33 +362,258 @@ class Database {
     return { user: u, transaction: tx, diff, oldBalance: oldBal, newBalance: newBal };
   }
 
-  // ========== MODÈLE PRODUITS ==========
+  // ========== MODÈLE PRODUITS & GESTION DES CLÉS ==========
   getProducts() {
+    // S'assurer que le stock correspond toujours exactement au nombre de clés disponibles
+    if (Array.isArray(this.data.products) && this.data.vault) {
+      for (const p of this.data.products) {
+        const v = this.data.vault[p.id];
+        if (v && Array.isArray(v.keys)) {
+          p.stock = v.keys.filter(k => !k.used).length;
+        }
+      }
+    }
     return this.data.products;
   }
 
   getProductById(id) {
-    return this.data.products.find(p => p.id === id) || null;
+    if (!id && id !== 0) return null;
+    const numId = parseInt(id, 10);
+    return this.data.products.find(p => p.id === id || p.id === numId) || null;
   }
 
-  saveProduct(prod) {
+  findProductByNormalizedName(name) {
+    if (!name) return null;
+    const norm = normalizeProductName(name);
+    return this.data.products.find(p => normalizeProductName(p.name) === norm) || null;
+  }
+
+  saveProduct(prod, options = {}) {
     const now = new Date().toISOString();
+    const cleanName = (prod.name || '').trim();
+    const norm = normalizeProductName(cleanName);
+    if (!cleanName) throw new Error('Le nom du produit est requis.');
+
+    // Recherche d'un produit existant portant le même nom normalisé
+    let existingByName = this.findProductByNormalizedName(cleanName);
+    let targetProduct = null;
+
     if (prod.id) {
-      const idx = this.data.products.findIndex(p => p.id === prod.id);
-      if (idx !== -1) {
-        this.data.products[idx] = { ...this.data.products[idx], ...prod, updated_at: now };
-      }
-    } else {
-      const newId = this.data.products.length > 0 ? Math.max(...this.data.products.map(p => p.id)) + 1 : 1;
-      this.data.products.push({ ...prod, id: newId, created_at: now, updated_at: now });
+      targetProduct = this.getProductById(prod.id);
     }
-    this.persist();
+    if (!targetProduct && existingByName) {
+      targetProduct = existingByName;
+    }
+
+    if (targetProduct) {
+      // MISE À JOUR DU PRODUIT EXISTANT (Un seul produit par nom)
+      targetProduct.name = cleanName;
+      if (prod.category !== undefined) targetProduct.category = prod.category;
+      if (prod.price !== undefined) targetProduct.price = parseFloat(prod.price) || 0;
+      if (prod.description !== undefined) targetProduct.description = prod.description;
+      if (prod.image !== undefined) targetProduct.image = prod.image;
+      if (prod.published !== undefined) targetProduct.published = prod.published;
+      targetProduct.updated_at = now;
+
+      // Initialiser le coffre-fort si absent
+      if (!this.data.vault[targetProduct.id]) {
+        this.data.vault[targetProduct.id] = { type: 'text', keys: [] };
+      }
+      if (!Array.isArray(this.data.vault[targetProduct.id].keys)) {
+        this.data.vault[targetProduct.id].keys = [];
+      }
+
+      // Ajout de nouvelles clés si fournies
+      let newKeysArray = options.newKeys || prod.newKeys;
+      if (typeof newKeysArray === 'string') {
+        newKeysArray = newKeysArray.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      }
+      if (Array.isArray(newKeysArray) && newKeysArray.length > 0) {
+        this._addKeysToProductVault(targetProduct.id, newKeysArray);
+      }
+
+      // Recalcul automatique strict du stock = nombre de clés disponibles
+      const keys = this.data.vault[targetProduct.id].keys;
+      targetProduct.stock = keys.filter(k => !k.used).length;
+
+      this.persist();
+      return targetProduct;
+    } else {
+      // CRÉATION D'UN NOUVEAU PRODUIT
+      const newId = this.data.products.length > 0 ? Math.max(...this.data.products.map(p => p.id)) + 1 : 1;
+      const newProd = {
+        id: newId,
+        name: cleanName,
+        category: prod.category || 'Général',
+        price: parseFloat(prod.price) || 0,
+        stock: 0,
+        description: prod.description || '',
+        image: prod.image || null,
+        published: prod.published !== undefined ? prod.published : true,
+        created_at: now,
+        updated_at: now
+      };
+
+      this.data.products.push(newProd);
+
+      this.data.vault[newId] = {
+        type: 'text',
+        keys: []
+      };
+
+      let newKeysArray = options.newKeys || prod.newKeys;
+      if (typeof newKeysArray === 'string') {
+        newKeysArray = newKeysArray.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      }
+      if (Array.isArray(newKeysArray) && newKeysArray.length > 0) {
+        this._addKeysToProductVault(newId, newKeysArray);
+      }
+
+      newProd.stock = this.data.vault[newId].keys.filter(k => !k.used).length;
+      this.persist();
+      return newProd;
+    }
+  }
+
+  _addKeysToProductVault(productId, keysList) {
+    if (!this.data.vault[productId]) {
+      this.data.vault[productId] = { type: 'text', keys: [] };
+    }
+    if (!Array.isArray(this.data.vault[productId].keys)) {
+      this.data.vault[productId].keys = [];
+    }
+    const currentKeys = this.data.vault[productId].keys;
+    const existingSet = new Set(currentKeys.map(k => (k.content || '').trim().toLowerCase()));
+
+    for (const raw of keysList) {
+      const clean = (raw || '').trim();
+      if (!clean) continue;
+      const cleanLower = clean.toLowerCase();
+      if (existingSet.has(cleanLower)) {
+        throw new Error(`La clé '${clean}' est déjà présente dans le produit (doublon refusé).`);
+      }
+      existingSet.add(cleanLower);
+      currentKeys.push({
+        id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+        content: clean,
+        used: false,
+        orderId: null,
+        soldTo: null,
+        userId: null,
+        soldAt: null
+      });
+    }
+  }
+
+  addKeysToProduct(productId, keysList) {
+    return this.mutex.runExclusive(() => {
+      const p = this.getProductById(productId);
+      if (!p) throw new Error('Produit introuvable.');
+
+      let list = keysList;
+      if (typeof list === 'string') {
+        list = list.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      }
+      if (!Array.isArray(list) || list.length === 0) {
+        throw new Error('Veuillez insérer au moins une clé.');
+      }
+
+      this._addKeysToProductVault(p.id, list);
+      p.stock = this.data.vault[p.id].keys.filter(k => !k.used).length;
+      p.updated_at = new Date().toISOString();
+      this.persist();
+
+      return {
+        product: p,
+        addedCount: list.length,
+        stock: p.stock
+      };
+    });
+  }
+
+  // ALLOCATION ATOMIQUE TRANSACTIONNELLE DES N CLÉS
+  allocateKeysForProduct(productId, quantity, { orderId, userId, userEmail }) {
+    return this.mutex.runExclusive(() => {
+      const p = this.getProductById(productId);
+      if (!p) {
+        throw new Error('Produit introuvable.');
+      }
+
+      const qty = parseInt(quantity, 10);
+      if (isNaN(qty) || qty < 1) {
+        throw new Error('Quantité invalide.');
+      }
+
+      if (!this.data.vault[p.id] || !Array.isArray(this.data.vault[p.id].keys)) {
+        throw new Error(`Rupture de stock : aucune clé disponible pour ${p.name}.`);
+      }
+
+      const keys = this.data.vault[p.id].keys;
+      const availableKeys = keys.filter(k => !k.used);
+
+      if (availableKeys.length < qty) {
+        const err = new Error(`Stock insuffisant pour ${p.name} : ${availableKeys.length} disponible(s), ${qty} demandée(s).`);
+        err.code = 'INSUFFICIENT_STOCK';
+        err.availableStock = availableKeys.length;
+        throw err;
+      }
+
+      // Attribution stricte et atomique des N premières clés disponibles
+      const allocated = availableKeys.slice(0, qty);
+      const now = new Date().toISOString();
+
+      allocated.forEach(k => {
+        k.used = true;
+        k.orderId = orderId;
+        k.soldTo = userEmail || userId;
+        k.userId = userId;
+        k.soldAt = now;
+      });
+
+      // Recalcul automatique et immédiat du stock
+      p.stock = keys.filter(k => !k.used).length;
+      p.updated_at = now;
+
+      this.persist();
+
+      return {
+        product: p,
+        allocatedKeys: allocated,
+        remainingStock: p.stock
+      };
+    });
+  }
+
+  getProductVaultKeys(productId) {
+    const p = this.getProductById(productId);
+    if (!p) return null;
+    const v = this.data.vault[p.id] || { keys: [] };
+    const keys = Array.isArray(v.keys) ? v.keys : [];
+    return {
+      productId: p.id,
+      productName: p.name,
+      stock: keys.filter(k => !k.used).length,
+      sold: keys.filter(k => k.used).length,
+      total: keys.length,
+      keys: keys.map(k => ({
+        id: k.id,
+        content: k.content,
+        used: !!k.used,
+        soldTo: k.soldTo || null,
+        orderId: k.orderId || null,
+        soldAt: k.soldAt || null
+      }))
+    };
   }
 
   deleteProduct(id) {
-    this.data.products = this.data.products.filter(p => p.id !== id);
+    this.data.products = this.data.products.filter(p => p.id !== id && p.id !== parseInt(id, 10));
     if (this.data.vault && this.data.vault[id]) {
       delete this.data.vault[id];
+    }
+    const numId = parseInt(id, 10);
+    if (this.data.vault && this.data.vault[numId]) {
+      delete this.data.vault[numId];
     }
     this.persist();
   }

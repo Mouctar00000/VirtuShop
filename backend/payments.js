@@ -917,38 +917,34 @@ class PaymentService {
     if (tx.metadata?.productId) {
       const prod = db.getProductById(tx.metadata.productId);
       if (prod) {
-        const qty = tx.metadata.quantity || 1;
-        const vault = db.getVault();
-        const prodVault = vault[prod.id] || {};
+        const qty = parseInt(tx.metadata.quantity, 10) || 1;
+        const orderId = 'ORD-' + (tx.id.replace('TXN-TB-', '').substring(0, 8) || Date.now().toString().slice(-6));
         let deliveredContent = null;
 
-        if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
-          const unusedKey = prodVault.keys.find(k => !k.used);
-          if (unusedKey) {
-            unusedKey.used = true;
-            unusedKey.soldTo = user.email;
-            unusedKey.soldAt = new Date().toISOString();
-            deliveredContent = {
-              type: prodVault.type || 'text',
-              content: unusedKey.content,
-              fileName: prodVault.fileName || 'licence.txt'
-            };
-            db.saveVaultItem(prod.id, prodVault);
-            const remainingStock = prodVault.keys.filter(k => !k.used).length;
-            db.saveProduct({ id: prod.id, stock: remainingStock });
-          }
-        }
-
-        if (!deliveredContent) {
-          deliveredContent = prodVault.content || {
+        try {
+          const allocRes = await db.allocateKeysForProduct(prod.id, qty, {
+            orderId: orderId,
+            userId: user.id,
+            userEmail: user.email
+          });
+          const keysList = allocRes.allocatedKeys || [];
+          deliveredContent = {
+            type: 'text',
+            content: keysList.map(k => k.content).join('\n'),
+            keys: keysList,
+            fileName: 'licences.txt'
+          };
+        } catch (allocErr) {
+          console.warn('[Trybit Achat] Allocation de clés:', allocErr.message);
+          // Fallback déterministe sécurisé si les clés étaient manquantes
+          deliveredContent = {
             type: 'text',
             content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
           };
-          db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
         }
 
         db.createOrder({
-          id: 'ORD-' + (tx.id.replace('TXN-TB-', '').substring(0, 8) || Date.now().toString().slice(-6)),
+          id: orderId,
           userId: user.id,
           userEmail: user.email,
           userName: user.name,

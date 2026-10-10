@@ -42,6 +42,25 @@ module.exports = async function handler(req, res) {
     // 2. PRODUITS
     if (resource === 'products') {
       if (req.method === 'GET') {
+        const prodId = req.query?.productId || (req.url && req.url.includes('productId=') ? req.url.split('productId=')[1].split('&')[0] : null);
+        const checkName = req.query?.checkName || (req.url && req.url.includes('checkName=') ? decodeURIComponent(req.url.split('checkName=')[1].split('&')[0]) : null);
+        const withKeys = req.query?.keys === '1' || (req.url && req.url.includes('keys=1'));
+
+        // Inspection des clés du coffre-fort réservée à l'administrateur
+        if (withKeys && prodId) {
+          if (!auth || auth.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+          }
+          const keysData = db.getProductVaultKeys(prodId);
+          return res.status(200).json(keysData || { error: 'Produit introuvable.' });
+        }
+
+        // Vérification / autocomplétion par nom existant
+        if (checkName) {
+          const match = db.findProductByNormalizedName(checkName);
+          return res.status(200).json({ exists: !!match, product: match || null });
+        }
+
         const prods = db.getProducts();
         return res.status(200).json({ products: prods });
       }
@@ -50,8 +69,12 @@ module.exports = async function handler(req, res) {
         if (!auth || auth.user.role !== 'admin') {
           return res.status(403).json({ error: 'Action réservée à l\'administrateur.' });
         }
-        db.saveProduct(body);
-        return res.status(200).json({ success: true, products: db.getProducts() });
+        try {
+          const savedProd = db.saveProduct(body, { newKeys: body.newKeys || body.keys });
+          return res.status(200).json({ success: true, product: savedProd, products: db.getProducts() });
+        } catch (err) {
+          return res.status(400).json({ error: err.message });
+        }
       }
 
       if (req.method === 'DELETE') {
@@ -82,58 +105,62 @@ module.exports = async function handler(req, res) {
         if (!auth) {
           return res.status(401).json({ error: 'Veuillez vous connecter pour passer commande.' });
         }
+
         // Validation commande côté serveur
         const prod = db.getProductById(body.productId);
         if (!prod) {
           return res.status(404).json({ error: 'Produit introuvable.' });
         }
+
         const qty = parseInt(body.quantity, 10) || 1;
-        if (qty < 1 || prod.stock < qty) {
-          return res.status(400).json({ error: 'Quantité invalide ou stock insuffisant.' });
+        if (qty < 1) {
+          return res.status(400).json({ error: 'La quantité doit être supérieure ou égale à 1.' });
         }
-        const total = Math.round(prod.price * qty * 100) / 100;
-        if ((auth.user.balance || 0) < total) {
-          return res.status(400).json({ error: 'Solde insuffisant pour cet achat.' });
+        if (prod.stock < qty) {
+          return res.status(400).json({
+            error: prod.stock <= 0
+              ? `Ce produit est actuellement en rupture de stock.`
+              : `Stock insuffisant : maximum ${prod.stock} unité(s) disponible(s).`,
+            availableStock: prod.stock
+          });
         }
 
-        // Déduction du solde côté serveur
+        const total = Math.round(prod.price * qty * 100) / 100;
+        if ((auth.user.balance || 0) < total) {
+          return res.status(400).json({ error: 'Solde insuffisant pour cet achat. Veuillez recharger votre compte.' });
+        }
+
+        const orderId = 'ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+        // Attribution atomique transactionnelle de N clés via le Mutex de la base
+        let allocatedResult = null;
+        try {
+          allocatedResult = await db.allocateKeysForProduct(prod.id, qty, {
+            orderId: orderId,
+            userId: auth.user.id,
+            userEmail: auth.user.email
+          });
+        } catch (err) {
+          return res.status(400).json({ error: err.message, code: err.code });
+        }
+
+        // Déduction sécurisée du solde côté serveur
         const newBalance = Math.round((auth.user.balance - total) * 100) / 100;
         db.updateUser(auth.user.id, { balance: newBalance });
 
-        // Récupération du coffre-fort et attribution de clé strictement unique
-        const vault = db.getVault();
-        const prodVault = vault[prod.id] || {};
-        let deliveredContent = null;
+        // Formatage clair des N clés attribuées
+        const deliveredKeysList = allocatedResult.allocatedKeys || [];
+        const deliveredString = deliveredKeysList.map(k => k.content).join('\n');
 
-        if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
-          const unusedKey = prodVault.keys.find(k => !k.used);
-          if (unusedKey) {
-            unusedKey.used = true;
-            unusedKey.soldTo = auth.user.email;
-            unusedKey.soldAt = new Date().toISOString();
-            deliveredContent = {
-              type: prodVault.type || 'text',
-              content: unusedKey.content,
-              fileName: prodVault.fileName || 'licence.txt'
-            };
-            db.saveVaultItem(prod.id, prodVault);
-            const remainingStock = prodVault.keys.filter(k => !k.used).length;
-            db.saveProduct({ id: prod.id, stock: remainingStock });
-          }
-        } else if (prodVault.content) {
-          deliveredContent = prodVault;
-          db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
-        }
-
-        if (!deliveredContent) {
-          deliveredContent = {
-            type: 'text',
-            content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
-          };
-          db.saveProduct({ id: prod.id, stock: Math.max(0, prod.stock - qty) });
-        }
+        const deliveredContent = {
+          type: 'text',
+          content: deliveredString,
+          keys: deliveredKeysList,
+          fileName: 'licences.txt'
+        };
 
         const newOrder = db.createOrder({
+          id: orderId,
           userId: auth.user.id,
           userEmail: auth.user.email,
           userName: auth.user.name,
@@ -152,14 +179,17 @@ module.exports = async function handler(req, res) {
 
         db.createTransaction({
           userId: auth.user.id,
+          userEmail: auth.user.email,
+          userName: auth.user.name,
           amount: total,
           currency: 'USD',
           paymentMethod: 'Solde GetVirtu',
           provider: 'balance',
-          status: 'completed'
+          status: 'completed',
+          notes: `Achat ${prod.name} (x${qty})`
         });
 
-        return res.status(201).json({ success: true, order: newOrder, newBalance });
+        return res.status(201).json({ success: true, order: newOrder, newBalance, remainingStock: allocatedResult.remainingStock });
       }
     }
 

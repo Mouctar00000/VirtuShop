@@ -90,3 +90,6 @@ console.log('✓ Test 4 Réussi: Toutes les modifications UI, CSS et boutons de 
 console.log('=== TEST 5: Role Isolation & Permissions ===');
 require('./test_role_isolation');
 
+console.log('=== TEST 6: Validation des 10 Scénarios de Gestion du Stock & Clés ===');
+require('./test_scenarios_1_to_10');
+
