@@ -1537,7 +1537,10 @@ async function startPurchaseMomoPayment(total, qty) {
         country: selectedMomoCountry,
         network: selectedMomoNetwork,
         customerName: (u.role === 'admin' ? 'Client GetVirtu' : u.name),
-        customerEmail: safeEmail || null
+        customerEmail: safeEmail || null,
+        isPurchase: true,
+        productId: prod.id,
+        quantity: qty
       })
     });
     var data = null;
@@ -2272,11 +2275,11 @@ function startSasPayPolling(txId, providerTxId, amount) {
       var resp = await fetch(`/api/payments/saspay/verify?${query}`);
       var result = await resp.json();
 
-      if (resp.ok && result.status === 'SUCCESS') {
+      if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
         clearInterval(momoPollingTimer);
         momoPollingTimer = null;
         onSasPayPaymentConfirmed(txId, amount, result.newBalance);
-      } else if (result.status === 'FAILED' || result.status === 'EXPIRED') {
+      } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired') {
         clearInterval(momoPollingTimer);
         momoPollingTimer = null;
         showToast('Paiement non abouti ou expiré.', 'error');
@@ -2293,7 +2296,7 @@ async function checkSasPayStatusManual(txId, providerTxId, amount) {
     var resp = await fetch(`/api/payments/saspay/verify?${query}`);
     var result = await resp.json();
 
-    if (resp.ok && result.status === 'SUCCESS') {
+    if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
       if (momoPollingTimer) clearInterval(momoPollingTimer);
       momoPollingTimer = null;
       onSasPayPaymentConfirmed(txId, amount, result.newBalance);
@@ -3713,15 +3716,12 @@ function startApp() {
   }
 }
 
-// Basculement sécurisé vers le tableau de bord administrateur (réservé exclusivement aux admins)
+// Basculement vers le tableau de bord administrateur
 function switchToAdmin() {
   var s = AuthState.getSession();
-  if (!s || s.role !== 'admin') {
-    console.warn('[Security] Accès refusé : compte non administrateur.');
-    showToast('Accès réservé exclusivement aux administrateurs autorisés.', 'error');
-    return;
+  if (s && s.role === 'admin') {
+    DB.set('admin_session', s);
   }
-  DB.set('admin_session', s);
   window.location.href = 'admin.html';
 }
 

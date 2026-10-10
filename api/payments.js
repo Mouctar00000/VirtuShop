@@ -122,7 +122,10 @@ module.exports = async function handler(req, res) {
           phone: body.phone,
           customerName: body.customerName,
           customerEmail: body.customerEmail,
-          returnUrl: body.returnUrl
+          returnUrl: body.returnUrl,
+          isPurchase: body.isPurchase,
+          productId: body.productId,
+          quantity: body.quantity
         });
 
         return res.status(201).json(result);

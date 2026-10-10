@@ -7,8 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=20261009_v20_all_prompts_complete">
-  <script src="security.js"></script>
+  <link rel="stylesheet" href="style.css?v=20261010_v27_instant_fix">
+  <script src="security.js?v=20261010_v27_instant_fix"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -1263,14 +1263,25 @@
       </div>
 
       <form id="admin-direct-login-form" onsubmit="handleAdminDirectLogin(event)">
+        <!-- BOUTON CONNEXION 1-CLIC OFFICIEL -->
+        <button type="button" id="btn-admin-instant-1click" onclick="autoLoginAdminDirect()" style="width: 100%; padding: 13px; margin-bottom: 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: none; border-radius: var(--radius-md); font-size: 14.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); transition: transform 0.15s ease;">
+          ⚡ Connexion Instantanée 1-Clic
+        </button>
+
+        <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 10px;">
+          <div style="flex: 1; height: 1px; background: var(--border-subtle);"></div>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">ou par saisie manuelle</span>
+          <div style="flex: 1; height: 1px; background: var(--border-subtle);"></div>
+        </div>
+
         <div class="field">
           <label for="admin-direct-email">Identifiant administrateur</label>
-          <input type="text" id="admin-direct-email" required placeholder="admin@getvirtu.shop" autocomplete="username">
+          <input type="text" id="admin-direct-email" required value="admin@getvirtu.shop" placeholder="admin@getvirtu.shop" autocomplete="username">
         </div>
 
         <div class="field">
           <label for="admin-direct-pass">Mot de passe</label>
-          <input type="password" id="admin-direct-pass" required placeholder="••••••••" autocomplete="current-password">
+          <input type="password" id="admin-direct-pass" required value="admin123" placeholder="••••••••" autocomplete="current-password">
         </div>
 
         <button type="submit" class="btn-primary" style="width: 100%; padding: 11px; margin-top: 8px; font-size: 14px;">
@@ -2235,6 +2246,15 @@
       window.location.href = 'index.html';
     }
 
+    // Connexion automatique 1-clic pour l'administrateur
+    function autoLoginAdminDirect() {
+      var emailEl = document.getElementById('admin-direct-email');
+      var passEl = document.getElementById('admin-direct-pass');
+      if (emailEl) emailEl.value = 'admin@getvirtu.shop';
+      if (passEl) passEl.value = 'admin123';
+      handleAdminDirectLogin(null);
+    }
+
     async function handleAdminDirectLogin(e) {
       if (e) e.preventDefault();
       var email = document.getElementById('admin-direct-email').value.trim().toLowerCase();
@@ -2290,7 +2310,8 @@
         email === 'admin@virtushop.com' ||
         email === 'admin@getvirtu.shop' ||
         email === 'admin' ||
-        email === 'admin@admin.com'
+        email === 'admin@admin.com' ||
+        email === 'mouctar@getvirtu.shop'
       );
       var isCorrectPassword = isKnownAdminPassword;
 
@@ -2656,10 +2677,6 @@
     function closeAdminKeysModal() {
       var m = document.getElementById('admin-keys-modal');
       if (m) m.classList.remove('active');
-    }
-        DB.set('products', prods);
-        showToast('Stock mis à jour avec succès.', 'success');
-      }
     }
 
     function toggleProductVisibility(id) {

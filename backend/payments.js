@@ -107,7 +107,7 @@ class PaymentService {
    * Crée une transaction en statut STRICT 'pending' dans la base de données.
    * Le solde du client n'est JAMAIS crédité à cette étape.
    */
-  async createSasPayDeposit({ userId, amountUsd, country, network, phone, customerName, customerEmail, returnUrl }) {
+  async createSasPayDeposit({ userId, amountUsd, country, network, phone, customerName, customerEmail, returnUrl, isPurchase, productId, quantity }) {
     if (!userId) throw new Error('Utilisateur non authentifié.');
 
     let user = db.getUserById(userId);
@@ -125,10 +125,13 @@ class PaymentService {
     }
 
     const parsedUsd = parseFloat(amountUsd);
-    const minRecharge = db.data.settings?.min_recharge || 5.0;
+    const isDirectPurchase = Boolean(isPurchase || productId);
+    const minRequired = isDirectPurchase ? 0.50 : (db.data.settings?.min_recharge || 5.0);
 
-    if (isNaN(parsedUsd) || parsedUsd < minRecharge) {
-      throw new Error(`Le montant minimum de recharge est de ${minRecharge.toFixed(2)} USD.`);
+    if (isNaN(parsedUsd) || parsedUsd < minRequired) {
+      throw new Error(isDirectPurchase 
+        ? `Le montant minimum pour un paiement est de $${minRequired.toFixed(2)} USD.` 
+        : `Le montant minimum de recharge est de $${minRequired.toFixed(2)} USD.`);
     }
 
     if (!SASPAY_API_KEY) {

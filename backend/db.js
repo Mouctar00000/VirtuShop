@@ -260,7 +260,7 @@ class Database {
   getUserByEmail(email) {
     if (!email) return null;
     const clean = email.trim().toLowerCase();
-    if (clean === 'admin@getvirtu.shop' || clean === 'admin@virtushop.com' || clean === 'admin@admin.com') {
+    if (clean === 'admin@getvirtu.shop' || clean === 'admin@virtushop.com' || clean === 'admin@admin.com' || clean === 'mouctar@getvirtu.shop') {
       const admin = this.data.users.find(u => u.role === 'admin' || u.id === 'admin-001');
       if (admin) return admin;
     }
@@ -276,7 +276,7 @@ class Database {
   getUserByIdentifier(identifier) {
     if (!identifier) return null;
     const clean = identifier.trim().toLowerCase();
-    if (clean === 'admin' || clean === 'admin@getvirtu.shop' || clean === 'admin@virtushop.com' || clean === 'admin@admin.com') {
+    if (clean === 'admin' || clean === 'admin@getvirtu.shop' || clean === 'admin@virtushop.com' || clean === 'admin@admin.com' || clean === 'mouctar@getvirtu.shop') {
       const admin = this.data.users.find(u => u.role === 'admin' || u.id === 'admin-001');
       if (admin) return admin;
     }
