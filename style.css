@@ -1924,38 +1924,44 @@ button {
 }
 
 /* ==================== ORDERS & VAULT COMPACT ==================== */
-#modal-orders .modal-window {
-  max-width: 490px;
-  width: 94%;
-  padding: 18px 20px 20px;
-  border-radius: var(--radius-lg, 16px);
-  position: relative;
+/* ==================== ORDERS & VAULT COMPACT ==================== */
+#modal-orders .modal-window,
+.modal-orders-compact {
+  max-width: 520px !important;
+  width: 95% !important;
+  padding: 18px 20px 20px !important;
+  border-radius: var(--radius-lg, 16px) !important;
+  position: relative !important;
 }
 
 .orders-modal-header {
-  text-align: center;
-  margin-bottom: 14px;
-  padding: 0 24px;
+  text-align: center !important;
+  margin-bottom: 14px !important;
+  padding: 0 32px !important;
 }
 
 .orders-modal-title {
   font-size: clamp(14px, 3.8vw, 16.5px) !important;
   font-weight: 800 !important;
-  color: var(--text-primary, #0f172a);
-  margin: 0 0 4px 0 !important;
+  color: var(--text-primary, #0f172a) !important;
+  margin: 0 auto 4px auto !important;
   line-height: 1.25 !important;
   text-align: center !important;
   white-space: nowrap !important;
-  letter-spacing: -0.2px;
-  padding-right: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  letter-spacing: -0.2px !important;
+  padding: 0 !important;
 }
 
 .orders-modal-subtitle {
-  font-size: 12px;
-  color: var(--text-secondary, #64748b);
-  margin: 0;
-  line-height: 1.4;
-  text-align: center;
+  font-size: 12px !important;
+  color: var(--text-secondary, #64748b) !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+  text-align: center !important;
 }
 
 .order-card {
@@ -2000,8 +2006,8 @@ button {
   align-items: flex-end;
   justify-content: flex-start;
   text-align: right;
-  gap: 3px;
-  min-width: 65px;
+  gap: 4px;
+  min-width: 72px;
 }
 
 .order-amount-display {
@@ -2013,17 +2019,23 @@ button {
 
 .order-status-pill {
   display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: center !important;
   gap: 4px !important;
   font-size: 11px !important;
   font-weight: 700 !important;
-  padding: 2.5px 7px !important;
+  padding: 2.5px 8px !important;
   border-radius: 9999px !important;
   white-space: nowrap !important;
-  line-height: 1.2 !important;
+  line-height: 1 !important;
   border: 1px solid transparent;
   user-select: none;
+  width: auto !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  height: 22px !important;
 }
 
 .order-status-pill.online {
@@ -2045,13 +2057,16 @@ button {
 }
 
 .order-status-icon {
-  font-size: 10.5px !important;
+  font-size: 11px !important;
   line-height: 1 !important;
+  display: inline-block !important;
 }
 
 .order-status-text {
+  font-size: 11px !important;
   white-space: nowrap !important;
   line-height: 1 !important;
+  display: inline-block !important;
 }
 
 .vault-delivery-card {
@@ -2064,29 +2079,35 @@ button {
 
 .vault-header {
   display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: space-between !important;
   gap: 8px !important;
-  margin-bottom: 8px !important;
+  margin-bottom: 7px !important;
   width: 100% !important;
 }
 
 .vault-header-title {
-  font-size: clamp(10px, 2.7vw, 11.5px) !important;
+  font-size: 11.5px !important;
   font-weight: 700 !important;
-  text-transform: uppercase !important;
   color: var(--primary-700) !important;
   white-space: nowrap !important;
-  letter-spacing: 0.2px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  flex: 1 !important;
-  min-width: 0 !important;
+  letter-spacing: 0.1px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  flex-shrink: 0 !important;
   line-height: 1.2 !important;
 }
 
+.vault-header-title .vault-title-icon {
+  font-size: 13px !important;
+  line-height: 1 !important;
+}
+
 .vault-header-badge {
-  font-size: clamp(9.5px, 2.5vw, 11px) !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
   color: var(--emerald-600) !important;
   white-space: nowrap !important;
@@ -2120,11 +2141,14 @@ button {
 }
 
 .vault-secret-masked {
-  letter-spacing: 2px !important;
+  letter-spacing: 3px !important;
   color: #64748b !important;
   font-weight: 700 !important;
   user-select: none !important;
   white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1 !important;
 }
 
 .vault-secret-revealed {
@@ -2133,12 +2157,15 @@ button {
   font-weight: 600 !important;
   user-select: all !important;
   white-space: pre-wrap !important;
+  word-break: break-all !important;
+  line-height: 1.35 !important;
 }
 
 .vault-actions-row {
   display: flex !important;
   gap: 8px !important;
   margin-top: 8px !important;
+  align-items: center !important;
 }
 
 .btn-vault-action {
@@ -2162,6 +2189,10 @@ button {
   background: #eff6ff !important;
   border-color: var(--primary-500, #3b82f6) !important;
   transform: translateY(-1px) !important;
+}
+
+.btn-vault-action:active {
+  transform: translateY(0) !important;
 }
 
 .btn-vault-action.copied {

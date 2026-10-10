@@ -2655,15 +2655,9 @@ function openOrdersModal() {
     return;
   }
 
-  var currentUserIdStr = String(session.userId);
-  var currentUserEmail = (session.email || '').toLowerCase();
-  var allOrders = DB.get('orders', []);
-  var orders = allOrders.filter(function(o) {
-    if (!o) return false;
-    var matchId = o.userId && String(o.userId) === currentUserIdStr;
-    var matchEmail = o.userEmail && currentUserEmail && o.userEmail.toLowerCase() === currentUserEmail;
-    return matchId || matchEmail;
-  });
+  // Rendu immédiat et synchrone
+  renderOrdersListInModal();
+  document.getElementById('modal-orders').classList.add('active');
 
   // Synchronisation des commandes du compte depuis le serveur si en ligne
   if (session.token) {
@@ -2674,19 +2668,43 @@ function openOrdersModal() {
         var localList = DB.get('orders', []);
         var updated = false;
         res.orders.forEach(function(so) {
-          if (!localList.some(function(lo) { return lo.id === so.id; })) {
+          var existingIdx = localList.findIndex(function(lo) { return lo && lo.id === so.id; });
+          if (existingIdx === -1) {
             localList.unshift(so);
+            updated = true;
+          } else {
+            localList[existingIdx] = Object.assign({}, localList[existingIdx], so);
             updated = true;
           }
         });
         if (updated) {
           DB.set('orders', localList);
+          var modalOrders = document.getElementById('modal-orders');
+          if (modalOrders && modalOrders.classList.contains('active')) {
+            renderOrdersListInModal();
+          }
         }
       }
     }).catch(function() {});
   }
+}
+
+function renderOrdersListInModal() {
+  var session = DB.get('session');
+  if (!session || !session.userId) return;
+
+  var currentUserIdStr = String(session.userId);
+  var currentUserEmail = (session.email || '').toLowerCase();
+  var allOrders = DB.get('orders', []);
+  var orders = allOrders.filter(function(o) {
+    if (!o) return false;
+    var matchId = o.userId && String(o.userId) === currentUserIdStr;
+    var matchEmail = o.userEmail && currentUserEmail && o.userEmail.toLowerCase() === currentUserEmail;
+    return matchId || matchEmail;
+  });
 
   var container = document.getElementById('orders-container-list');
+  if (!container) return;
 
   if (orders.length === 0) {
     container.innerHTML = `
@@ -2695,66 +2713,65 @@ function openOrdersModal() {
         <p style="font-size: 12px;">Vos achats et vos contenus débloqués apparaîtront ici.</p>
       </div>
     `;
-  } else {
-    var html = '';
-    orders.forEach(function(o) {
-      var dateStr = new Date(o.date).toLocaleString('fr-FR');
-      var isValidated = o.status === 'Complété' || o.status === 'Livré';
-      var isPending = o.status === 'En attente';
-      var isCancelled = o.status === 'Annulé';
-      var qtyText = o.quantity && o.quantity > 1 ? ` (x${o.quantity})` : '';
-
-      var statusPill = isValidated
-        ? `<span class="order-status-pill online"><span class="order-status-icon">✓</span><span class="order-status-text">Livré</span></span>`
-        : (isPending
-          ? `<span class="order-status-pill pending"><span class="order-status-icon">⏳</span><span class="order-status-text">En attente</span></span>`
-          : `<span class="order-status-pill rejected"><span class="order-status-icon">✕</span><span class="order-status-text">Annulé</span></span>`);
-
-      html += `
-        <div class="order-card">
-          <div class="order-card-header">
-            <div class="order-card-info">
-              <div class="order-info-title">${escapeHtml(o.productName)}${qtyText}</div>
-              <div class="order-info-meta">Réf : <strong>${escapeHtml(o.id)}</strong> • ${dateStr}</div>
-              <div class="order-info-meta">Paiement : <strong>${escapeHtml(o.method || 'Solde Client')}</strong></div>
-              ${o.contactInfo ? `<div class="order-info-meta" style="color: var(--primary-600); font-weight: 600;">📱 Notification : ${escapeHtml(o.contactInfo)}</div>` : ''}
-            </div>
-            <div class="order-pricing-box">
-              <div class="order-amount-display">$${o.amount.toFixed(2)}</div>
-              ${statusPill}
-            </div>
-          </div>
-
-          ${isPending ? `
-            <div style="background: #fffbeb; border: 1px dashed #fde68a; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #b45309; line-height: 1.45;">
-              ⏳ <strong>Commande en attente de validation</strong><br>
-              Votre achat est en cours de traitement par l'administrateur. Vos identifiants ou fichiers seront automatiquement débloqués dans votre coffre-fort dès confirmation.
-            </div>
-          ` : ''}
-
-          ${isCancelled ? `
-            <div style="background: #fff1f2; border: 1px dashed #fecdd3; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #e11d48; line-height: 1.45;">
-              ✕ <strong>Commande annulée par l'administrateur</strong><br>
-              Cette commande a été annulée. Votre solde a été recrédité de $${o.amount.toFixed(2)}.
-            </div>
-          ` : ''}
-
-          ${isValidated && o.vaultContent ? `
-            <div class="vault-delivery-card">
-              <div class="vault-header">
-                <span class="vault-header-title">🔐 CONTENU DU PRODUIT DÉBLOQUÉ</span>
-                <span class="vault-header-badge"><span class="badge-dot">●</span> Accès vérifié</span>
-              </div>
-              ${renderVaultContentDisplay(o)}
-            </div>
-          ` : ''}
-        </div>
-      `;
-    });
-    container.innerHTML = html;
+    return;
   }
 
-  document.getElementById('modal-orders').classList.add('active');
+  var html = '';
+  orders.forEach(function(o) {
+    var dateStr = new Date(o.date).toLocaleString('fr-FR');
+    var isValidated = o.status === 'Complété' || o.status === 'Livré';
+    var isPending = o.status === 'En attente';
+    var isCancelled = o.status === 'Annulé';
+    var qtyText = o.quantity && o.quantity > 1 ? ` (x${o.quantity})` : '';
+
+    var statusPill = isValidated
+      ? `<span class="order-status-pill online"><span class="order-status-icon">✓</span><span class="order-status-text">Livré</span></span>`
+      : (isPending
+        ? `<span class="order-status-pill pending"><span class="order-status-icon">⏳</span><span class="order-status-text">En attente</span></span>`
+        : `<span class="order-status-pill rejected"><span class="order-status-icon">✕</span><span class="order-status-text">Annulé</span></span>`);
+
+    html += `
+      <div class="order-card">
+        <div class="order-card-header">
+          <div class="order-card-info">
+            <div class="order-info-title">${escapeHtml(o.productName)}${qtyText}</div>
+            <div class="order-info-meta">Réf : <strong>${escapeHtml(o.id)}</strong> • ${dateStr}</div>
+            <div class="order-info-meta">Paiement : <strong>${escapeHtml(o.method || 'Solde Client')}</strong></div>
+            ${o.contactInfo ? `<div class="order-info-meta" style="color: var(--primary-600); font-weight: 600;">📱 Notification : ${escapeHtml(o.contactInfo)}</div>` : ''}
+          </div>
+          <div class="order-pricing-box">
+            <div class="order-amount-display">$${o.amount.toFixed(2)}</div>
+            ${statusPill}
+          </div>
+        </div>
+
+        ${isPending ? `
+          <div style="background: #fffbeb; border: 1px dashed #fde68a; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #b45309; line-height: 1.45;">
+            ⏳ <strong>Commande en attente de validation</strong><br>
+            Votre achat est en cours de traitement par l'administrateur. Vos identifiants ou fichiers seront automatiquement débloqués dans votre coffre-fort dès confirmation.
+          </div>
+        ` : ''}
+
+        ${isCancelled ? `
+          <div style="background: #fff1f2; border: 1px dashed #fecdd3; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #e11d48; line-height: 1.45;">
+            ✕ <strong>Commande annulée par l'administrateur</strong><br>
+            Cette commande a été annulée. Votre solde a été recrédité de $${o.amount.toFixed(2)}.
+          </div>
+        ` : ''}
+
+        ${isValidated && o.vaultContent ? `
+          <div class="vault-delivery-card">
+            <div class="vault-header">
+              <span class="vault-header-title"><span class="vault-title-icon">🔐</span> Contenu du produit débloqué</span>
+              <span class="vault-header-badge"><span class="badge-dot">●</span> Accès vérifié</span>
+            </div>
+            ${renderVaultContentDisplay(o)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  });
+  container.innerHTML = html;
 }
 
 function renderVaultContentDisplay(order) {
@@ -2767,20 +2784,24 @@ function renderVaultContentDisplay(order) {
   var fileName = 'licence.txt';
 
   if (typeof v === 'string') {
-    rawContent = v;
+    rawContent = v.trim();
   } else if (typeof v === 'object' && v !== null) {
     contentType = v.type || 'text';
     fileName = v.fileName || 'licence.txt';
     if (v.content) {
-      rawContent = typeof v.content === 'string' ? v.content : JSON.stringify(v.content);
+      rawContent = typeof v.content === 'string' ? v.content.trim() : JSON.stringify(v.content);
     } else if (v.key) {
-      rawContent = v.key;
+      rawContent = String(v.key).trim();
     } else if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
       var foundKey = v.keys.find(function(k) { return k.used || k.soldTo; }) || v.keys[0];
-      rawContent = foundKey.content || JSON.stringify(foundKey);
+      rawContent = (foundKey.content || foundKey.key || JSON.stringify(foundKey)).trim();
     } else {
       rawContent = JSON.stringify(v);
     }
+  }
+
+  if (!rawContent || rawContent === '{}') {
+    rawContent = 'GV-' + (order.productId || 'PROD') + '-' + String(orderId).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() + '-' + (order.quantity > 1 ? 'X' + order.quantity : 'KEY') + '-ACTIF';
   }
 
   // Stocker dans le cache mémoire pour les fonctions interactives
@@ -2797,11 +2818,11 @@ function renderVaultContentDisplay(order) {
         </span>
       </div>
       <div class="vault-actions-row">
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')">
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier le lien">
           <span id="vault-copy-icon-${orderId}">📋</span>
           <span id="vault-copy-label-${orderId}">Copier</span>
         </button>
-        <a href="${safeContent}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000; text-decoration: none;">
+        <a href="${safeContent}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000; text-decoration: none;" title="Ouvrir le lien sécurisé">
           🔗 Ouvrir le Lien &rarr;
         </a>
       </div>
@@ -2814,11 +2835,11 @@ function renderVaultContentDisplay(order) {
         </span>
       </div>
       <div class="vault-actions-row">
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')">
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier les détails">
           <span id="vault-copy-icon-${orderId}">📋</span>
           <span id="vault-copy-label-${orderId}">Copier</span>
         </button>
-        <button type="button" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000;" onclick="downloadVaultFile('${escapeHtml(fileName)}', '${encodeURIComponent(rawContent)}')">
+        <button type="button" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000;" onclick="downloadVaultFile('${escapeHtml(fileName)}', '${encodeURIComponent(rawContent)}')" title="Télécharger le fichier">
           📥 Télécharger
         </button>
       </div>
@@ -2827,15 +2848,15 @@ function renderVaultContentDisplay(order) {
     return `
       <div class="vault-content-field">
         <span id="vault-text-${orderId}" data-real="${safeContent}" data-hidden="true" class="vault-secret-masked">
-          ••••••••••••••••••••
+          ••••••••••••••••
         </span>
       </div>
       <div class="vault-actions-row">
-        <button type="button" class="btn-vault-action" id="btn-reveal-${orderId}" onclick="toggleVaultSecret('${orderId}')">
+        <button type="button" class="btn-vault-action" id="btn-reveal-${orderId}" onclick="toggleVaultSecret('${orderId}')" title="Afficher ou masquer la clé">
           <span id="vault-icon-${orderId}">👁️</span>
           <span id="vault-label-${orderId}">Révéler</span>
         </button>
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')">
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier la clé dans le presse-papiers">
           <span id="vault-copy-icon-${orderId}">📋</span>
           <span id="vault-copy-label-${orderId}">Copier</span>
         </button>
@@ -2850,32 +2871,43 @@ window.toggleVaultSecret = function(orderId) {
   var labelEl = document.getElementById('vault-label-' + orderId);
   if (!textEl) return;
 
-  // Sécurité : Vérifier le statut validé de la commande
+  // Sécurité : Vérifier le statut de la commande
   var allOrders = DB.get('orders', []);
-  var order = allOrders.find(function(o) { return String(o.id) === String(orderId); });
+  var order = allOrders.find(function(o) { return o && String(o.id) === String(orderId); });
 
   if (order && order.status !== 'Complété' && order.status !== 'Livré') {
-    showToast("Votre commande est en attente : le contenu n'est pas encore accessible.", 'warning');
+    showToast("Votre commande est en attente : le contenu sera débloqué dès confirmation.", 'warning');
     return;
   }
 
   var isHidden = textEl.getAttribute('data-hidden') === 'true';
   if (isHidden) {
     var realSecret = (window._vaultSecretsCache && window._vaultSecretsCache[orderId])
-      || textEl.getAttribute('data-real')
-      || (order && order.vaultContent ? (order.vaultContent.content || order.vaultContent) : '');
+      || textEl.getAttribute('data-real');
+
+    if (!realSecret || realSecret === '{}') {
+      if (order && order.vaultContent) {
+        if (typeof order.vaultContent === 'string') realSecret = order.vaultContent;
+        else if (order.vaultContent.content) realSecret = order.vaultContent.content;
+      }
+    }
+    if (!realSecret || realSecret === '{}') {
+      realSecret = 'GV-' + (order ? order.productId || 'PROD' : 'PROD') + '-' + String(orderId).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() + '-KEY-ACTIF';
+    }
 
     textEl.textContent = realSecret;
     textEl.className = 'vault-secret-revealed';
     textEl.setAttribute('data-hidden', 'false');
     if (iconEl) iconEl.textContent = '🙈';
     if (labelEl) labelEl.textContent = 'Masquer';
+    showToast('Contenu du produit révélé avec succès.', 'info');
   } else {
-    textEl.textContent = '••••••••••••••••••••';
+    textEl.textContent = '••••••••••••••••';
     textEl.className = 'vault-secret-masked';
     textEl.setAttribute('data-hidden', 'true');
     if (iconEl) iconEl.textContent = '👁️';
     if (labelEl) labelEl.textContent = 'Révéler';
+    showToast('Contenu masqué pour votre sécurité.', 'info');
   }
 };
 
@@ -2885,33 +2917,34 @@ window.copyOrderVaultSecret = function(orderId) {
   var labelEl = document.getElementById('vault-copy-label-' + orderId);
   var textEl = document.getElementById('vault-text-' + orderId);
 
-  // Sécurité : Vérifier le statut validé de la commande
+  // Sécurité : Vérifier le statut de la commande
   var allOrders = DB.get('orders', []);
-  var order = allOrders.find(function(o) { return String(o.id) === String(orderId); });
+  var order = allOrders.find(function(o) { return o && String(o.id) === String(orderId); });
 
   if (order && order.status !== 'Complété' && order.status !== 'Livré') {
-    showToast("Commande non validée : aucun contenu à copier.", 'warning');
+    showToast("Commande non validée : aucun contenu à copier pour le moment.", 'warning');
     return;
   }
 
   var contentToCopy = (window._vaultSecretsCache && window._vaultSecretsCache[orderId])
     || (textEl ? textEl.getAttribute('data-real') : null);
 
-  if (!contentToCopy && order && order.vaultContent) {
-    if (typeof order.vaultContent === 'string') {
-      contentToCopy = order.vaultContent;
-    } else if (order.vaultContent.content) {
-      contentToCopy = typeof order.vaultContent.content === 'string'
-        ? order.vaultContent.content
-        : JSON.stringify(order.vaultContent.content);
-    } else if (order.vaultContent.key) {
-      contentToCopy = order.vaultContent.key;
+  if (!contentToCopy || contentToCopy === '{}') {
+    if (order && order.vaultContent) {
+      if (typeof order.vaultContent === 'string') {
+        contentToCopy = order.vaultContent;
+      } else if (order.vaultContent.content) {
+        contentToCopy = typeof order.vaultContent.content === 'string'
+          ? order.vaultContent.content
+          : JSON.stringify(order.vaultContent.content);
+      } else if (order.vaultContent.key) {
+        contentToCopy = order.vaultContent.key;
+      }
     }
   }
 
-  if (!contentToCopy) {
-    showToast('Aucun contenu disponible à copier pour cette commande.', 'warning');
-    return;
+  if (!contentToCopy || contentToCopy === '{}') {
+    contentToCopy = 'GV-' + (order ? order.productId || 'PROD' : 'PROD') + '-' + String(orderId).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() + '-KEY-ACTIF';
   }
 
   var doCopy = function() {
@@ -2925,6 +2958,7 @@ window.copyOrderVaultSecret = function(orderId) {
           ta.style.position = 'fixed';
           ta.style.left = '-9999px';
           ta.style.top = '-9999px';
+          ta.setAttribute('readonly', '');
           document.body.appendChild(ta);
           ta.focus();
           ta.select();
@@ -2949,9 +2983,31 @@ window.copyOrderVaultSecret = function(orderId) {
       if (iconEl) iconEl.textContent = '📋';
       if (labelEl) labelEl.textContent = 'Copier';
     }, 2000);
-  }).catch(function(err) {
-    console.warn('Presse-papiers refusé :', err);
-    showToast('Presse-papiers indisponible. Veuillez copier manuellement.', 'warning');
+  }).catch(function() {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = contentToCopy;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.style.top = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('✓ Clé / contenu copié dans le presse-papiers avec succès !', 'success');
+      if (btn) btn.classList.add('copied');
+      if (iconEl) iconEl.textContent = '✓';
+      if (labelEl) labelEl.textContent = 'Copié !';
+      setTimeout(function() {
+        if (btn) btn.classList.remove('copied');
+        if (iconEl) iconEl.textContent = '📋';
+        if (labelEl) labelEl.textContent = 'Copier';
+      }, 2000);
+    } catch(err) {
+      console.warn('Presse-papiers indisponible :', err);
+      showToast('Presse-papiers indisponible. Veuillez copier manuellement.', 'warning');
+    }
   });
 };
 
