@@ -77,8 +77,16 @@ assert(appJs.includes('Recharger mon solde ⚡'), 'Recharge mon solde button wit
 
 // Admin toggle button
 assert(adminHtml.includes('switchToShop()'), 'switchToShop function present in admin.html');
-assert(appJs.includes('switchToAdmin()'), 'switchToAdmin function present in app.js');
-assert(appJs.includes('Espace Admin'), 'Espace Admin button present in app.js');
+// Header Connected Navigation & Role isolation assertions
+const indexHtml = fs.readFileSync('index.html', 'utf8');
+assert(styleCss.includes('.nav-tab-connected'), '.nav-tab-connected must be present in style.css');
+assert(styleCss.includes('.nav-links-connected'), '.nav-links-connected must be present in style.css');
+assert(indexHtml.includes('nav-tab-connected'), 'nav-tab-connected must be present in index.html');
+assert(indexHtml.includes('id="nav-admin-link-li"'), 'nav-admin-link-li must be present in index.html');
+assert(appJs.includes("var isAdmin = Boolean(session && session.userId && session.role === 'admin');"), 'Strict role isolation check in app.js');
 
 console.log('✓ Test 4 Réussi: Toutes les modifications UI, CSS et boutons de bascule validées.');
-console.log('\n🎉 TOUS LES TESTS FONCTIONNELS ET DE RÉGRESSION ONT RÉUSSI À 100% !');
+
+console.log('=== TEST 5: Role Isolation & Permissions ===');
+require('./test_role_isolation');
+

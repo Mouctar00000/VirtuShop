@@ -68,11 +68,32 @@
         <li><a href="#faq" class="nav-link">FAQ</a></li>
       </ul>
 
-      <!-- Liens Mode Connecté -->
-      <ul class="nav-links hidden" id="nav-connected-links">
-        <li><a href="#catalog" onclick="showConnectedCatalog()" class="nav-link active">⚡ Boutique</a></li>
-        <li><a href="javascript:void(0)" onclick="openOrdersModal()" class="nav-link">📦 Mes Commandes</a></li>
-        <li><a href="javascript:void(0)" onclick="openDepositModal()" class="nav-link">💳 Recharger</a></li>
+      <!-- Liens Mode Connecté (Disposition et style fidèles à la Capture 2) -->
+      <ul class="nav-links nav-links-connected hidden" id="nav-connected-links">
+        <li>
+          <a href="#catalog" onclick="showConnectedCatalog()" class="nav-tab-connected active" id="nav-tab-boutique">
+            <span class="nav-tab-icon">⚡</span>
+            <span class="nav-tab-label">Boutique</span>
+          </a>
+        </li>
+        <li>
+          <a href="javascript:void(0)" onclick="openOrdersModal()" class="nav-tab-connected" id="nav-tab-orders">
+            <span class="nav-tab-icon">📦</span>
+            <span class="nav-tab-label">Mes Commandes</span>
+          </a>
+        </li>
+        <li>
+          <a href="javascript:void(0)" onclick="openDepositModal()" class="nav-tab-connected" id="nav-tab-deposit">
+            <span class="nav-tab-icon">💳</span>
+            <span class="nav-tab-label">Recharger</span>
+          </a>
+        </li>
+        <li id="nav-admin-link-li" class="hidden">
+          <a href="javascript:void(0)" onclick="switchToAdmin()" class="nav-tab-connected nav-tab-admin" id="nav-tab-admin" title="Tableau de bord administrateur">
+            <span class="nav-tab-icon">⚡</span>
+            <span class="nav-tab-label">Espace Admin</span>
+          </a>
+        </li>
       </ul>
 
       <!-- Actions Utilisateur & Profil (Solde, Commandes & Profil injectés dynamiquement) -->

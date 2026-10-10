@@ -52,8 +52,8 @@ var AuthState = {
 
   getSession: function() {
     if (!this._session) {
-      // Auto-restauration de la session depuis session ou admin_session
-      this._session = DB.get('session') || DB.get('admin_session');
+      // Auto-restauration de la session depuis session uniquement
+      this._session = DB.get('session');
       if (this._session && typeof Security !== 'undefined') {
         if (!Security.isSessionValid(this._session)) {
           if (this._session.userId && (!this._session.expiresAt || Date.now() < this._session.expiresAt)) {
@@ -83,6 +83,10 @@ var AuthState = {
     if (!u) {
       u = { id: s.userId, name: s.name, email: s.email, role: s.role || 'client', balance: s.balance || 0 };
     }
+    // Garantie stricte de cohérence : le rôle de la session fait foi
+    if (s.role && u.role !== s.role) {
+      u.role = s.role;
+    }
     this._user = u;
     return u;
   },
@@ -102,13 +106,28 @@ var AuthState = {
       session.token = (typeof Security !== 'undefined') ? Security.generateSecureToken(32) : ('tok_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10));
     }
 
+    // Détermination stricte et sécurisée du rôle utilisateur
+    if (user && user.role) {
+      session.role = user.role;
+    } else if (!session.role) {
+      session.role = 'client';
+    }
+
     this._session = session;
     DB.set('session', session);
+
     if (session.role === 'admin') {
       DB.set('admin_session', session);
+    } else {
+      // Pour les clients : suppression définitive et immédiate de tout reliquat admin
+      DB.del('admin_session');
+      try {
+        localStorage.removeItem('vs_admin_session');
+      } catch (e) {}
     }
 
     if (user) {
+      if (session.role) user.role = session.role;
       this._user = user;
       var users = DB.get('users', []);
       var idx = users.findIndex(function(u) {
@@ -122,7 +141,7 @@ var AuthState = {
       DB.set('users', users);
     }
 
-    console.log('[AuthState] Session établie avec succès (' + (source || 'direct') + ') pour :', session.email);
+    console.log('[AuthState] Session établie (' + (source || 'direct') + ') pour :', session.email, '| Rôle :', session.role);
 
     this.notify();
     routeUserExperience();
@@ -134,6 +153,10 @@ var AuthState = {
     this._user = null;
     DB.del('session');
     DB.del('admin_session');
+    try {
+      localStorage.removeItem('vs_session');
+      localStorage.removeItem('vs_admin_session');
+    } catch (e) {}
     this.notify();
     routeUserExperience();
     updateNavbar();
@@ -389,7 +412,13 @@ async function syncUserSessionAndBalance() {
     if (res.ok) {
       var data = await res.json();
       if (data && data.user) {
-        AuthState.setAuthenticatedSession(data.session || s, data.user, 'server_sync');
+        var serverSession = data.session || s;
+        serverSession.role = data.user.role || serverSession.role || 'client';
+        if (serverSession.role !== 'admin') {
+          DB.del('admin_session');
+          try { localStorage.removeItem('vs_admin_session'); } catch (e) {}
+        }
+        AuthState.setAuthenticatedSession(serverSession, data.user, 'server_sync');
       }
     } else if (res.status === 401) {
       console.warn('[Auth] Session révoquée côté serveur.');
@@ -475,9 +504,10 @@ function updateNavbar() {
   var container = document.getElementById('nav-user-actions');
   var navPublic = document.getElementById('nav-public-links');
   var navConnected = document.getElementById('nav-connected-links');
+  var navAdminLi = document.getElementById('nav-admin-link-li');
   if (!container) return;
 
-  // Garantir la cohérence des liens de navigation
+  // Cohérence des liens de navigation
   if (navPublic && navConnected) {
     if (isAuth) {
       navPublic.classList.add('hidden');
@@ -490,17 +520,19 @@ function updateNavbar() {
 
   if (isAuth) {
     var bal = getUserBalance();
-    var isAdmin = session && (session.role === 'admin' || (DB.get('admin_session') && DB.get('admin_session').role === 'admin'));
+    // Séparation stricte : Seul un utilisateur authentifié avec role === 'admin' est administrateur
+    var isAdmin = Boolean(session && session.userId && session.role === 'admin');
+
+    // Afficher ou masquer l'onglet "Espace Admin" dans la barre de navigation centrale (Capture 2)
+    if (navAdminLi) {
+      if (isAdmin) {
+        navAdminLi.classList.remove('hidden');
+      } else {
+        navAdminLi.classList.add('hidden');
+      }
+    }
 
     container.innerHTML = `
-      <!-- Bouton Bascule Espace Admin (Prompt 9) -->
-      ${isAdmin ? `
-        <button type="button" class="btn-secondary btn-sm btn-admin-toggle-btn btn-light-sweep" onclick="switchToAdmin()" title="Basculer vers le tableau de bord administrateur" style="color: #1d4ed8; font-weight: 700; background: #eff6ff; border: 1px solid #bfdbfe; margin-right: 4px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; padding: 4px 10px; border-radius: 6px;">
-          <span>⚡</span>
-          <span>Espace Admin</span>
-        </button>
-      ` : ''}
-
       <!-- Capsule Solde avec bouton + -->
       <div class="balance-pill" title="Votre solde disponible">
         <span class="balance-label">Solde :</span>
@@ -547,6 +579,7 @@ function updateNavbar() {
       </div>
     `;
   } else {
+    if (navAdminLi) navAdminLi.classList.add('hidden');
     container.innerHTML = `
       <button type="button" class="btn-secondary btn-sm btn-nav-auth btn-nav-login" onclick="openAuthModal('login')">Connexion</button>
       <button type="button" class="btn-primary btn-sm btn-nav-auth btn-nav-register" onclick="openAuthModal('register')"><span>S'inscrire</span><span class="auth-bolt-icon"> ⚡</span></button>
@@ -3534,12 +3567,11 @@ function startApp() {
   try {
     initDB();
 
-    // Nettoyage de sécurité : si la session courante en stockage est celle d'un admin, la détacher du client
+    // Vérification d'intégrité : si la session active est un compte client, purger tout reliquat d'admin_session
     var currentS = DB.get('session');
-    if (currentS && (currentS.role === 'admin' || (currentS.email && currentS.email.toLowerCase().includes('admin@')))) {
-      DB.del('session');
-      AuthState._session = null;
-      AuthState._user = null;
+    if (currentS && currentS.role !== 'admin') {
+      DB.del('admin_session');
+      try { localStorage.removeItem('vs_admin_session'); } catch (e) {}
     }
 
     // Nettoyage fluide du paramètre URL après retour Google OAuth
@@ -3587,13 +3619,15 @@ function startApp() {
   }
 }
 
-// Basculement instantané vers le tableau de bord administrateur (Prompt 9)
+// Basculement sécurisé vers le tableau de bord administrateur (réservé exclusivement aux admins)
 function switchToAdmin() {
-  var s = AuthState.getSession() || DB.get('admin_session');
-  if (s) {
-    DB.set('admin_session', s);
-    DB.set('session', s);
+  var s = AuthState.getSession();
+  if (!s || s.role !== 'admin') {
+    console.warn('[Security] Accès refusé : compte non administrateur.');
+    showToast('Accès réservé exclusivement aux administrateurs autorisés.', 'error');
+    return;
   }
+  DB.set('admin_session', s);
   window.location.href = 'admin.html';
 }
 

@@ -2162,11 +2162,19 @@
     var ADMIN_LEGACY_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256
 
     function checkAdminAuth() {
-      var s = DB.get('admin_session') || DB.get('session');
+      var s = DB.get('admin_session');
+      if (!s || s.role !== 'admin') {
+        var mainS = DB.get('session');
+        if (mainS && mainS.role === 'admin') {
+          s = mainS;
+        } else {
+          s = null;
+        }
+      }
       var loginScreen = document.getElementById('admin-login-screen');
       var dashboard = document.getElementById('admin-dashboard-container');
 
-      // Vérification cryptographique de la session et de son expiration
+      // Vérification cryptographique de la session et de son rôle
       var isValid = s && s.role === 'admin' && (typeof Security !== 'undefined' ? Security.isSessionValid(s) : true);
 
       if (!isValid) {
@@ -2174,21 +2182,18 @@
         if (dashboard) dashboard.classList.add('hidden');
         return false;
       } else {
-        // Garder synchronisé pour pouvoir basculer sur la boutique en 1 clic sans déconnexion
         DB.set('admin_session', s);
-        DB.set('session', s);
         if (loginScreen) loginScreen.classList.add('hidden');
         if (dashboard) dashboard.classList.remove('hidden');
         return true;
       }
     }
 
-    // Basculement instantané vers la boutique publique en tant que client (Prompt 9)
+    // Basculement vers la boutique publique en conservant la session admin
     function switchToShop() {
-      var s = DB.get('admin_session') || DB.get('session');
-      if (s) {
+      var s = DB.get('admin_session');
+      if (s && s.role === 'admin') {
         DB.set('session', s);
-        DB.set('admin_session', s);
       }
       window.location.href = 'index.html';
     }
