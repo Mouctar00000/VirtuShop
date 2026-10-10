@@ -719,12 +719,14 @@
 
   <!-- ==================== MODAL COMMANDES & COFFRE-FORT ==================== -->
   <div id="modal-orders" class="modal-backdrop">
-    <div class="modal-window" style="max-width: 600px;">
+    <div class="modal-window modal-orders-compact" style="max-width: 490px;">
       <button type="button" class="modal-close-btn" onclick="closeOrdersModal()">✕</button>
-      <h2 class="modal-title">📦 Mon Coffre-Fort & Commandes</h2>
-      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 16px;">
-        Tous vos produits achetés et leurs accès sécurisés sont conservés ici.
-      </p>
+      <div class="orders-modal-header">
+        <h2 class="modal-title orders-modal-title">📦 Mon Coffre-Fort & Commandes</h2>
+        <p class="orders-modal-subtitle">
+          Tous vos produits achetés et leurs accès sécurisés sont conservés ici.
+        </p>
+      </div>
 
       <div id="orders-container-list"></div>
     </div>

@@ -2672,22 +2672,22 @@ function openOrdersModal() {
       var qtyText = o.quantity && o.quantity > 1 ? ` (x${o.quantity})` : '';
 
       var statusPill = isValidated
-        ? `<span class="status-indicator-pill online">✓ Livré</span>`
+        ? `<span class="order-status-pill online"><span class="order-status-icon">✓</span><span class="order-status-text">Livré</span></span>`
         : (isPending
-          ? `<span class="status-indicator-pill pending">⏳ En attente</span>`
-          : `<span class="status-indicator-pill rejected">✕ Annulé</span>`);
+          ? `<span class="order-status-pill pending"><span class="order-status-icon">⏳</span><span class="order-status-text">En attente</span></span>`
+          : `<span class="order-status-pill rejected"><span class="order-status-icon">✕</span><span class="order-status-text">Annulé</span></span>`);
 
       html += `
         <div class="order-card">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
-            <div>
+          <div class="order-card-header">
+            <div class="order-card-info">
               <div class="order-info-title">${escapeHtml(o.productName)}${qtyText}</div>
-              <div class="order-info-meta">Réf : <strong>${o.id}</strong> • ${dateStr}</div>
+              <div class="order-info-meta">Réf : <strong>${escapeHtml(o.id)}</strong> • ${dateStr}</div>
               <div class="order-info-meta">Paiement : <strong>${escapeHtml(o.method || 'Solde Client')}</strong></div>
               ${o.contactInfo ? `<div class="order-info-meta" style="color: var(--primary-600); font-weight: 600;">📱 Notification : ${escapeHtml(o.contactInfo)}</div>` : ''}
             </div>
-            <div style="text-align: right;">
-              <div style="color: var(--primary-600); font-weight: 800; font-size: 16px;">$${o.amount.toFixed(2)}</div>
+            <div class="order-pricing-box">
+              <div class="order-amount-display">$${o.amount.toFixed(2)}</div>
               ${statusPill}
             </div>
           </div>
@@ -2709,8 +2709,8 @@ function openOrdersModal() {
           ${isValidated && o.vaultContent ? `
             <div class="vault-delivery-card">
               <div class="vault-header">
-                <span>🔐 CONTENU DU PRODUIT DÉBLOQUÉ</span>
-                <span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">● Accès vérifié</span>
+                <span class="vault-header-title">🔐 CONTENU DU PRODUIT DÉBLOQUÉ</span>
+                <span class="vault-header-badge"><span class="badge-dot">●</span> Accès vérifié</span>
               </div>
               ${renderVaultContentDisplay(o)}
             </div>
@@ -2726,77 +2726,213 @@ function openOrdersModal() {
 
 function renderVaultContentDisplay(order) {
   var v = order.vaultContent;
-  if (!v) return '<p style="color: var(--text-muted); font-size: 11px;">En attente de livraison.</p>';
-  var orderId = order.id;
+  if (!v) return '<p style="color: var(--text-muted); font-size: 11px; margin: 0;">En attente de livraison.</p>';
+  var orderId = String(order.id);
 
-  if (v.type === 'link') {
+  var rawContent = '';
+  var contentType = 'text';
+  var fileName = 'licence.txt';
+
+  if (typeof v === 'string') {
+    rawContent = v;
+  } else if (typeof v === 'object' && v !== null) {
+    contentType = v.type || 'text';
+    fileName = v.fileName || 'licence.txt';
+    if (v.content) {
+      rawContent = typeof v.content === 'string' ? v.content : JSON.stringify(v.content);
+    } else if (v.key) {
+      rawContent = v.key;
+    } else if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
+      var foundKey = v.keys.find(function(k) { return k.used || k.soldTo; }) || v.keys[0];
+      rawContent = foundKey.content || JSON.stringify(foundKey);
+    } else {
+      rawContent = JSON.stringify(v);
+    }
+  }
+
+  // Stocker dans le cache mémoire pour les fonctions interactives
+  if (!window._vaultSecretsCache) window._vaultSecretsCache = {};
+  window._vaultSecretsCache[orderId] = rawContent;
+
+  var safeContent = escapeHtml(rawContent);
+
+  if (contentType === 'link' || rawContent.startsWith('http://') || rawContent.startsWith('https://')) {
     return `
       <div class="vault-content-field">
-        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(v.content)}</span>
-        <button type="button" class="btn-vault-action" onclick="copyText('${escapeHtml(v.content)}')">Copier</button>
+        <span id="vault-text-${orderId}" data-real="${safeContent}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+          ${safeContent}
+        </span>
       </div>
-      <div style="margin-top: 8px;">
-        <a href="${escapeHtml(v.content)}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="background: var(--gold-500); color: #000; text-decoration: none;">
-          🔗 Ouvrir le Lien Sécurisé &rarr;
+      <div class="vault-actions-row">
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')">
+          <span id="vault-copy-icon-${orderId}">📋</span>
+          <span id="vault-copy-label-${orderId}">Copier</span>
+        </button>
+        <a href="${safeContent}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000; text-decoration: none;">
+          🔗 Ouvrir le Lien &rarr;
         </a>
       </div>
     `;
-  } else if (v.type === 'file') {
+  } else if (contentType === 'file') {
     return `
       <div class="vault-content-field">
-        <span>📄 Fichier : <strong>${escapeHtml(v.fileName || 'livraison.txt')}</strong></span>
+        <span id="vault-text-${orderId}" data-real="${safeContent}">
+          📄 Fichier : <strong>${escapeHtml(fileName)}</strong>
+        </span>
       </div>
-      <div style="margin-top: 8px;">
-        <button type="button" class="btn-vault-action" style="background: var(--gold-500); color: #000;" onclick="downloadVaultFile('${escapeHtml(v.fileName || 'fichier.txt')}', '${encodeURIComponent(v.content)}')">
-          📥 Télécharger le Fichier
+      <div class="vault-actions-row">
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')">
+          <span id="vault-copy-icon-${orderId}">📋</span>
+          <span id="vault-copy-label-${orderId}">Copier</span>
+        </button>
+        <button type="button" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000;" onclick="downloadVaultFile('${escapeHtml(fileName)}', '${encodeURIComponent(rawContent)}')">
+          📥 Télécharger
         </button>
       </div>
     `;
   } else {
     return `
       <div class="vault-content-field">
-        <span id="vault-text-${orderId}" data-real="${escapeHtml(v.content)}" data-hidden="true" style="letter-spacing: 2px;">
-          ••••••••••••••••••••••••••••••••••••
+        <span id="vault-text-${orderId}" data-real="${safeContent}" data-hidden="true" class="vault-secret-masked">
+          ••••••••••••••••••••
         </span>
       </div>
-      <div style="display: flex; gap: 6px; margin-top: 8px;">
-        <button type="button" class="btn-vault-action" onclick="toggleVaultSecret('${orderId}')">
+      <div class="vault-actions-row">
+        <button type="button" class="btn-vault-action" id="btn-reveal-${orderId}" onclick="toggleVaultSecret('${orderId}')">
           <span id="vault-icon-${orderId}">👁️</span>
           <span id="vault-label-${orderId}">Révéler</span>
         </button>
-        <button type="button" class="btn-vault-action" onclick="copyText('${escapeHtml(v.content)}')">
-          📋 Copier
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')">
+          <span id="vault-copy-icon-${orderId}">📋</span>
+          <span id="vault-copy-label-${orderId}">Copier</span>
         </button>
       </div>
     `;
   }
 }
 
-function toggleVaultSecret(orderId) {
+window.toggleVaultSecret = function(orderId) {
   var textEl = document.getElementById('vault-text-' + orderId);
   var iconEl = document.getElementById('vault-icon-' + orderId);
   var labelEl = document.getElementById('vault-label-' + orderId);
   if (!textEl) return;
 
+  // Sécurité : Vérifier le statut validé de la commande
+  var allOrders = DB.get('orders', []);
+  var order = allOrders.find(function(o) { return String(o.id) === String(orderId); });
+
+  if (order && order.status !== 'Complété' && order.status !== 'Livré') {
+    showToast("Votre commande est en attente : le contenu n'est pas encore accessible.", 'warning');
+    return;
+  }
+
   var isHidden = textEl.getAttribute('data-hidden') === 'true';
   if (isHidden) {
-    textEl.textContent = textEl.getAttribute('data-real');
-    textEl.style.letterSpacing = 'normal';
+    var realSecret = (window._vaultSecretsCache && window._vaultSecretsCache[orderId])
+      || textEl.getAttribute('data-real')
+      || (order && order.vaultContent ? (order.vaultContent.content || order.vaultContent) : '');
+
+    textEl.textContent = realSecret;
+    textEl.className = 'vault-secret-revealed';
     textEl.setAttribute('data-hidden', 'false');
     if (iconEl) iconEl.textContent = '🙈';
     if (labelEl) labelEl.textContent = 'Masquer';
   } else {
-    textEl.textContent = '••••••••••••••••••••••••••••••••••••';
-    textEl.style.letterSpacing = '2px';
+    textEl.textContent = '••••••••••••••••••••';
+    textEl.className = 'vault-secret-masked';
     textEl.setAttribute('data-hidden', 'true');
     if (iconEl) iconEl.textContent = '👁️';
     if (labelEl) labelEl.textContent = 'Révéler';
   }
-}
+};
 
-function copyText(val) {
-  navigator.clipboard.writeText(val).then(function() { showToast('Copié dans le presse-papiers !', 'success'); });
-}
+window.copyOrderVaultSecret = function(orderId) {
+  var btn = document.getElementById('btn-copy-' + orderId);
+  var iconEl = document.getElementById('vault-copy-icon-' + orderId);
+  var labelEl = document.getElementById('vault-copy-label-' + orderId);
+  var textEl = document.getElementById('vault-text-' + orderId);
+
+  // Sécurité : Vérifier le statut validé de la commande
+  var allOrders = DB.get('orders', []);
+  var order = allOrders.find(function(o) { return String(o.id) === String(orderId); });
+
+  if (order && order.status !== 'Complété' && order.status !== 'Livré') {
+    showToast("Commande non validée : aucun contenu à copier.", 'warning');
+    return;
+  }
+
+  var contentToCopy = (window._vaultSecretsCache && window._vaultSecretsCache[orderId])
+    || (textEl ? textEl.getAttribute('data-real') : null);
+
+  if (!contentToCopy && order && order.vaultContent) {
+    if (typeof order.vaultContent === 'string') {
+      contentToCopy = order.vaultContent;
+    } else if (order.vaultContent.content) {
+      contentToCopy = typeof order.vaultContent.content === 'string'
+        ? order.vaultContent.content
+        : JSON.stringify(order.vaultContent.content);
+    } else if (order.vaultContent.key) {
+      contentToCopy = order.vaultContent.key;
+    }
+  }
+
+  if (!contentToCopy) {
+    showToast('Aucun contenu disponible à copier pour cette commande.', 'warning');
+    return;
+  }
+
+  var doCopy = function() {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(contentToCopy);
+    } else {
+      return new Promise(function(resolve, reject) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = contentToCopy;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.top = '-9999px';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) resolve(); else reject(new Error('execCommand copy failed'));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
+  };
+
+  doCopy().then(function() {
+    showToast('✓ Clé / contenu copié dans le presse-papiers avec succès !', 'success');
+    if (btn) btn.classList.add('copied');
+    if (iconEl) iconEl.textContent = '✓';
+    if (labelEl) labelEl.textContent = 'Copié !';
+
+    setTimeout(function() {
+      if (btn) btn.classList.remove('copied');
+      if (iconEl) iconEl.textContent = '📋';
+      if (labelEl) labelEl.textContent = 'Copier';
+    }, 2000);
+  }).catch(function(err) {
+    console.warn('Presse-papiers refusé :', err);
+    showToast('Presse-papiers indisponible. Veuillez copier manuellement.', 'warning');
+  });
+};
+
+window.copyText = function(val) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(function() {
+      showToast('✓ Copié dans le presse-papiers !', 'success');
+    }).catch(function() {
+      showToast('✓ Copié !', 'success');
+    });
+  } else {
+    showToast('✓ Copié !', 'success');
+  }
+};
 
 function downloadVaultFile(filename, encodedContent) {
   var content = decodeURIComponent(encodedContent);
