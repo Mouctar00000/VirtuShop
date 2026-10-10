@@ -79,6 +79,8 @@ const server = http.createServer((req, res) => {
   let safePath = decodeURIComponent(req.url.split('?')[0]);
   if (safePath === '/' || safePath === '') {
     safePath = '/index.html';
+  } else if (safePath === '/admin') {
+    safePath = '/admin.html';
   }
 
   // Protection contre l'accès aux fichiers sensibles (.git, .env, package.json, etc.)

@@ -96,7 +96,11 @@ async function testRoleIsolation() {
   console.log('\n🎉 TOUS LES TESTS D\'ISOLATION ET DE SÉCURITÉ DES RÔLES ONT RÉUSSI À 100% !');
 }
 
-testRoleIsolation().catch(err => {
-  console.error('❌ Échec du test :', err);
-  process.exit(1);
-});
+module.exports = testRoleIsolation;
+
+if (require.main === module) {
+  testRoleIsolation().catch(err => {
+    console.error('❌ Échec du test :', err);
+    process.exit(1);
+  });
+}

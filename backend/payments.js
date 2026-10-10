@@ -240,6 +240,11 @@ class PaymentService {
         };
       } else {
         // Option B : Softpay direct (push sur téléphone ou lien direct opérateur comme Wave)
+        let cleanNetwork = (network || '').trim().toLowerCase();
+        if (cleanNetwork && !cleanNetwork.includes('_') && countryCode && cleanNetwork !== 'card' && cleanNetwork !== 'crypto' && cleanNetwork !== 'direct') {
+          cleanNetwork = `${cleanNetwork}_${countryCode.toLowerCase()}`;
+        }
+
         const nameParts = (customerName || user.name || 'Client GetVirtu').trim().split(' ');
         const firstName = nameParts[0] || 'Client';
         const lastName = nameParts.slice(1).join(' ') || 'GetVirtu';
@@ -248,7 +253,7 @@ class PaymentService {
           amount: formattedAmount,
           currency: currency,
           country: countryCode,
-          network: network,
+          network: cleanNetwork,
           customer: {
             email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : (user.role !== 'admin' && !user.email.includes('admin@') ? user.email.trim() : `client_${user.id}@getvirtu.shop`),
             first_name: firstName,
@@ -269,6 +274,42 @@ class PaymentService {
         });
 
         if (!res.ok || !res.data?.success) {
+          console.warn(`[SasPay Softpay] Échec direct (${cleanNetwork}): ${res.data?.message || res.data?.error?.message}. Bascule vers session de paiement hébergée...`);
+          // Repli transparent et automatique vers guichet SasPay officiel
+          const sessionPayload = {
+            amount: formattedAmount,
+            currency: currency,
+            description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD - ${user.email}`,
+            country: countryCode,
+            customer_email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : (user.role !== 'admin' && !user.email.includes('admin@') ? user.email.trim() : `client_${user.id}@getvirtu.shop`),
+            customer_name: customerName || user.name,
+            customer_phone: cleanPhone || '',
+            return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
+            metadata: {
+              internalTxId: txId,
+              userId: user.id,
+              amountUsd: parsedUsd.toFixed(2)
+            }
+          };
+
+          const fallbackRes = await this.requestSasPay('/checkout-sessions/', 'POST', sessionPayload);
+          if (fallbackRes.ok && fallbackRes.data?.success) {
+            saspayResult = fallbackRes.data.data;
+            db.updateTransaction(txId, { providerTxId: saspayResult.id });
+            return {
+              success: true,
+              transactionId: txId,
+              providerTxId: saspayResult.id,
+              status: 'pending',
+              checkoutUrl: saspayResult.checkout_url,
+              mode: 'checkout',
+              amountUsd: parsedUsd,
+              localAmount: formattedAmount,
+              currency: currency,
+              instructions: 'Paiement sécurisé via le guichet officiel SasPay.'
+            };
+          }
+
           const errMsg = res.data?.error?.message || res.data?.message || 'Erreur lors de l\'initiation Mobile Money.';
           db.updateTransaction(txId, { status: 'failed', failureReason: errMsg });
           throw new Error(errMsg);
@@ -803,7 +844,7 @@ class PaymentService {
     console.log(`[Trybit Verify] Statut pour ${tx.id} (${effectiveUuid}) : status=${invStatus}, invoice_status=${invInvoiceStatus}`);
 
     if (invStatus === 'paid' || invStatus === 'overpaid' || invInvoiceStatus === 'success' || invStatus === 'success') {
-      return this._creditUserForTransaction(tx, effectiveUuid, invoiceData);
+      return await this._creditUserForTransaction(tx, effectiveUuid, invoiceData);
     } else if (invStatus === 'canceled' || invStatus === 'cancelled' || invStatus === 'expired') {
       const failedTx = db.updateTransaction(tx.id, {
         status: 'failed',
@@ -880,7 +921,7 @@ class PaymentService {
     const invoiceStatus = (invoiceInfo.invoice_status || '').toLowerCase();
 
     if (status === 'success' || status === 'paid' || status === 'overpaid' || invoiceStatus === 'success' || invoiceStatus === 'paid') {
-      return this._creditUserForTransaction(tx, uuid || tx.providerTxId, { ...invoiceInfo, payload });
+      return await this._creditUserForTransaction(tx, uuid || tx.providerTxId, { ...invoiceInfo, payload });
     } else if (status === 'canceled' || status === 'cancelled' || status === 'expired') {
       db.updateTransaction(tx.id, {
         status: 'failed',
@@ -895,7 +936,7 @@ class PaymentService {
   /**
    * Crédit atomique et sécurisé du solde utilisateur ou livraison directe de commande
    */
-  _creditUserForTransaction(tx, providerTxId, extraData = {}) {
+  async _creditUserForTransaction(tx, providerTxId, extraData = {}) {
     const freshTx = db.getTransactionById(tx.id);
     if (freshTx && freshTx.status === 'completed') {
       const u = db.getUserById(freshTx.userId);

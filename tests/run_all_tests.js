@@ -87,9 +87,30 @@ assert(appJs.includes("var isAdmin = Boolean(session && session.userId && sessio
 
 console.log('✓ Test 4 Réussi: Toutes les modifications UI, CSS et boutons de bascule validées.');
 
-console.log('=== TEST 5: Role Isolation & Permissions ===');
-require('./test_role_isolation');
+async function runAsyncTests() {
+  console.log('\n=== TEST 5: Role Isolation & Permissions ===');
+  const testRoleIsolation = require('./test_role_isolation');
+  await testRoleIsolation();
 
-console.log('=== TEST 6: Validation des 10 Scénarios de Gestion du Stock & Clés ===');
-require('./test_scenarios_1_to_10');
+  console.log('\n=== TEST 6: Validation des 10 Scénarios de Gestion du Stock & Clés ===');
+  const run10Scenarios = require('./test_scenarios_1_to_10');
+  await run10Scenarios();
+
+  console.log('\n=== TEST 7: Admin Authentication & Dashboard Access ===');
+  const runAdminAuthTests = require('./test_admin_auth');
+  await runAdminAuthTests();
+
+  console.log('\n=== TEST 8: Mobile Money & Crypto Payment Gateway ===');
+  const runPaymentTests = require('./test_payments');
+  await runPaymentTests();
+
+  console.log('\n======================================================');
+  console.log('🏆 TOUS LES 8 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('======================================================\n');
+}
+
+runAsyncTests().catch(err => {
+  console.error('❌ Échec de la suite de tests :', err);
+  process.exit(1);
+});
 

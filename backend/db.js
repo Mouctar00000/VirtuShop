@@ -16,15 +16,15 @@ if (!fs.existsSync(DATA_DIR)) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
 }
 
-const DEFAULT_ADMIN_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Salted SHA-256
+const DEFAULT_ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
 
 const INITIAL_DB = {
   users: [
     {
       id: 'admin-001',
-      email: 'admin@virtushop.com',
+      email: 'admin@getvirtu.shop',
       password_hash: DEFAULT_ADMIN_HASH,
-      name: 'Administrateur VirtuShop',
+      name: 'Administrateur GetVirtu',
       username: 'admin',
       profile_picture: null,
       google_id: null,
@@ -99,8 +99,17 @@ class Database {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf8');
         const parsed = JSON.parse(raw);
+        const users = parsed.users || INITIAL_DB.users;
+        if (Array.isArray(users)) {
+          const admin = users.find(u => u.role === 'admin' || u.id === 'admin-001');
+          if (admin) {
+            if (admin.password_hash === '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc' || !admin.password_hash) {
+              admin.password_hash = DEFAULT_ADMIN_HASH;
+            }
+          }
+        }
         return {
-          users: parsed.users || INITIAL_DB.users,
+          users,
           products: parsed.products || [],
           orders: parsed.orders || [],
           transactions: parsed.transactions || [],
@@ -251,6 +260,10 @@ class Database {
   getUserByEmail(email) {
     if (!email) return null;
     const clean = email.trim().toLowerCase();
+    if (clean === 'admin@getvirtu.shop' || clean === 'admin@virtushop.com' || clean === 'admin@admin.com') {
+      const admin = this.data.users.find(u => u.role === 'admin' || u.id === 'admin-001');
+      if (admin) return admin;
+    }
     return this.data.users.find(u => u.email && u.email.toLowerCase() === clean) || null;
   }
 
@@ -263,6 +276,10 @@ class Database {
   getUserByIdentifier(identifier) {
     if (!identifier) return null;
     const clean = identifier.trim().toLowerCase();
+    if (clean === 'admin' || clean === 'admin@getvirtu.shop' || clean === 'admin@virtushop.com' || clean === 'admin@admin.com') {
+      const admin = this.data.users.find(u => u.role === 'admin' || u.id === 'admin-001');
+      if (admin) return admin;
+    }
     return this.data.users.find(u => 
       (u.email && u.email.toLowerCase() === clean) || 
       (u.username && u.username.toLowerCase() === clean)

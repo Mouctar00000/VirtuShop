@@ -164,13 +164,14 @@ var AuthState = {
 };
 
 var ADMIN_SALT = 'getvirtu_sec_salt_2026';
-var ADMIN_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Salted SHA-256
-var ADMIN_LEGACY_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256
+var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
+var ADMIN_LEGACY_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Ancien hash
+var ADMIN_SHORT_HASH = '78c3dc6ad802ec87ba0b8333e41869ef13b168d63c8e09f189b34c4906dd5771'; // Salted SHA-256 de admin
 
 var ADMIN = {
   id: 'admin-001',
-  name: 'Administrateur VirtuShop',
-  email: 'admin@virtushop.com',
+  name: 'Administrateur GetVirtu',
+  email: 'admin@getvirtu.shop',
   passwordHash: ADMIN_HASH,
   role: 'admin'
 };
@@ -317,10 +318,10 @@ function initDB() {
     }
   ]);
 
-  // Admin par défaut VirtuShop
+  // Admin par défaut GetVirtu
   var users = DB.get('users', []);
   if (!Array.isArray(users)) users = [];
-  var existingAdmin = users.find(function(u) { return u && (u.role === 'admin' || (u.email && u.email.toLowerCase() === 'admin@virtushop.com')); });
+  var existingAdmin = users.find(function(u) { return u && (u.role === 'admin' || (u.email && (u.email.toLowerCase() === 'admin@virtushop.com' || u.email.toLowerCase() === 'admin@getvirtu.shop'))); });
   if (!existingAdmin) {
     users.push({
       id: ADMIN.id,
@@ -333,8 +334,6 @@ function initDB() {
     });
     DB.set('users', users);
   } else {
-    existingAdmin.email = ADMIN.email;
-    existingAdmin.name = ADMIN.name;
     existingAdmin.passwordHash = ADMIN_HASH;
     existingAdmin.role = 'admin';
     DB.set('users', users);
@@ -1541,7 +1540,12 @@ async function startPurchaseMomoPayment(total, qty) {
         customerEmail: safeEmail || null
       })
     });
-    var data = await res.json();
+    var data = null;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      throw new Error('Erreur de communication avec le serveur de paiement.');
+    }
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Erreur lors de l\'initiation Mobile Money.');
     }
@@ -2176,7 +2180,12 @@ async function submitSasPayDeposit() {
       })
     });
 
-    var data = await resp.json();
+    var data = null;
+    try {
+      data = await resp.json();
+    } catch (parseErr) {
+      throw new Error('Erreur de communication avec le serveur de paiement.');
+    }
 
     if (!resp.ok || !data.success) {
       throw new Error(data.error || 'Erreur lors de l\'initialisation du paiement SasPay.');

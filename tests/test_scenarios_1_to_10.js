@@ -173,7 +173,11 @@ async function run10Scenarios() {
   console.log('\n🎉 TOUS LES 10 SCÉNARIOS ONT ÉTÉ EXÉCUTÉS ET VALIDÉS AVEC 100% DE SUCCÈS !\n');
 }
 
-run10Scenarios().catch(err => {
-  console.error('\n❌ Échec du test :', err);
-  process.exit(1);
-});
+module.exports = run10Scenarios;
+
+if (require.main === module) {
+  run10Scenarios().catch(err => {
+    console.error('\n❌ Échec du test :', err);
+    process.exit(1);
+  });
+}
