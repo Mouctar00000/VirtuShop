@@ -5904,7 +5904,7 @@ html, body {
 /* ==================== TABLE DES TICKETS DE SUPPORT CLIENT & MESSAGES ==================== */
 .admin-tickets-table {
   width: 100%;
-  min-width: 880px;
+  min-width: 980px;
   table-layout: fixed;
 }
 
@@ -5915,12 +5915,42 @@ html, body {
 .admin-tickets-table td {
   vertical-align: top;
   padding: 14px 12px;
+  box-sizing: border-box;
+}
+
+.admin-ticket-subject-cell {
+  width: 190px;
+  max-width: 190px;
+  box-sizing: border-box;
+  vertical-align: top;
+  padding-right: 8px !important;
+}
+
+.admin-ticket-subject-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  max-width: 100% !important;
+  width: auto !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  padding: 0 8px !important;
+  height: 24px !important;
+  border-radius: 5px !important;
+  margin-top: 1px !important;
 }
 
 .admin-ticket-msg-cell {
   width: 280px;
-  min-width: 230px;
-  max-width: 310px;
+  min-width: 240px;
+  max-width: 280px;
+  box-sizing: border-box;
+  vertical-align: top;
+  padding-left: 8px !important;
 }
 
 .admin-ticket-msg-box {
