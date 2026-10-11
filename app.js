@@ -1651,24 +1651,11 @@ function openDepositModal(suggestedAmount) {
   document.getElementById('modal-deposit').classList.add('active');
 }
 
-var selectedMomoCountry = 'CI';
-var selectedMomoNetwork = 'wave_ci';
+var selectedMomoCountry = 'CM';
+var selectedMomoNetwork = 'orange_cm';
 var momoPollingTimer = null;
 
 var MOMO_COUNTRIES = [
-  {
-    code: 'CI',
-    name: "Côte d'Ivoire 🇨🇮",
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+225',
-    networks: [
-      { id: 'wave_ci', name: 'Wave', icon: '🌊' },
-      { id: 'orange_ci', name: 'Orange Money', icon: '🍊' },
-      { id: 'mtn_ci', name: 'MTN MoMo', icon: '🟡' },
-      { id: 'moov_ci', name: 'Moov Money', icon: '🔵' }
-    ]
-  },
   {
     code: 'CM',
     name: 'Cameroun 🇨🇲',
@@ -1676,8 +1663,22 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+237',
     networks: [
-      { id: 'orange_cm', name: 'Orange Money', icon: '🍊' },
-      { id: 'mtn_cm', name: 'MTN MoMo', icon: '🟡' }
+      { id: 'orange_cm', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Composez le #150*50# ou #150*4*4# sur votre téléphone si le pop-up USSD n\'apparaît pas automatiquement.' },
+      { id: 'mtn_cm', name: 'MTN MoMo', icon: '🟡', otp_required: false, instruction: 'Validez la notification USSD sur votre écran ou composez *126#.' }
+    ]
+  },
+  {
+    code: 'CI',
+    name: "Côte d'Ivoire 🇨🇮",
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+225',
+    networks: [
+      { id: 'wave_ci', name: 'Wave', icon: '🌊', otp_required: false, instruction: 'Ouvrez votre application Wave pour valider le paiement.' },
+      { id: 'orange_ci', name: 'Orange Money', icon: '🍊', otp_required: true, otp_prompt: '#144*82# option 2', instruction: 'Composez #144*82# puis l\'option 2 sur votre téléphone pour générer votre code OTP à 4 chiffres.' },
+      { id: 'mtn_ci', name: 'MTN MoMo', icon: '🟡', otp_required: false, instruction: 'Validez l\'invite USSD sur votre écran ou composez *133#.' },
+      { id: 'moov_ci', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez la demande de débit avec votre code PIN Moov.' },
+      { id: 'djamo_ci', name: 'Djamo', icon: '💳', otp_required: false, instruction: 'Confirmez la transaction dans l\'application Djamo.' }
     ]
   },
   {
@@ -1687,9 +1688,10 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+221',
     networks: [
-      { id: 'wave_sn', name: 'Wave', icon: '🌊' },
-      { id: 'orange_sn', name: 'Orange Money', icon: '🍊' },
-      { id: 'freemoney_sn', name: 'Free Money', icon: '🟢' }
+      { id: 'wave_sn', name: 'Wave', icon: '🌊', otp_required: false, instruction: 'Ouvrez votre application Wave pour confirmer le paiement.' },
+      { id: 'orange_sn', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Validez la notification sur votre mobile ou composez #144#.' },
+      { id: 'freemoney_sn', name: 'Free Money', icon: '🟢', otp_required: false, instruction: 'Approuvez la demande sur votre compte Free Money.' },
+      { id: 'expresso_sn', name: 'Expresso Sénégal', icon: '🔵', otp_required: false, instruction: 'Validez le paiement sur votre mobile Expresso.' }
     ]
   },
   {
@@ -1699,9 +1701,9 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+229',
     networks: [
-      { id: 'mtn_bj', name: 'MTN MoMo', icon: '🟡' },
-      { id: 'moov_bj', name: 'Moov Money', icon: '🔵' },
-      { id: 'celtiis_bj', name: 'Celtiis', icon: '🟣' }
+      { id: 'mtn_bj', name: 'MTN MoMo', icon: '🟡', otp_required: false, instruction: 'Validez l\'invite USSD sur votre écran MTN MoMo ou composez *880#.' },
+      { id: 'moov_bj', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez la demande avec votre code PIN Moov.' },
+      { id: 'celtiis_bj', name: 'Celtiis Cash', icon: '🟣', otp_required: false, instruction: 'Validez la transaction sur votre compte Celtiis Cash.' }
     ]
   },
   {
@@ -1711,8 +1713,8 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+226',
     networks: [
-      { id: 'orange_bf', name: 'Orange Money', icon: '🍊' },
-      { id: 'moov_bf', name: 'Moov Money', icon: '🔵' }
+      { id: 'orange_bf', name: 'Orange Money', icon: '🍊', otp_required: true, otp_prompt: '*144*4*6*{montant}#', instruction: 'Composez *144*4*6*{amount}# sur votre mobile pour générer votre code de paiement.' },
+      { id: 'moov_bf', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez la notification USSD sur votre mobile Moov.' }
     ]
   },
   {
@@ -1722,8 +1724,53 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+228',
     networks: [
-      { id: 'moov_tg', name: 'Moov Money', icon: '🔵' },
-      { id: 'togocel', name: 'TMoney / Mixx', icon: '🟡' }
+      { id: 'moov_tg', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez l\'invite USSD sur votre mobile Moov.' },
+      { id: 'togocel', name: 'TMoney / Togocel', icon: '🟡', otp_required: false, instruction: 'Validez la notification TMoney avec votre code PIN.' }
+    ]
+  },
+  {
+    code: 'GA',
+    name: 'Gabon 🇬🇦',
+    currency: 'XAF',
+    rate: 620,
+    prefix: '+241',
+    networks: [
+      { id: 'airtel_ga', name: 'Airtel Gabon', icon: '🔴', otp_required: false, instruction: 'Validez la demande de débit sur votre mobile Airtel Money.' },
+      { id: 'moov_ga', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez l\'invite sur votre mobile Moov.' }
+    ]
+  },
+  {
+    code: 'CG',
+    name: 'Congo-Brazzaville 🇨🇬',
+    currency: 'XAF',
+    rate: 620,
+    prefix: '+242',
+    networks: [
+      { id: 'airtel_cg', name: 'Airtel Congo', icon: '🔴', otp_required: false, instruction: 'Validez le paiement sur votre mobile Airtel Money.' },
+      { id: 'mtn_cg', name: 'MTN MoMo', icon: '🟡', otp_required: false, instruction: 'Validez l\'invite USSD sur votre écran MTN MoMo.' }
+    ]
+  },
+  {
+    code: 'ML',
+    name: 'Mali 🇲🇱',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+223',
+    networks: [
+      { id: 'orange_ml', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Validez la demande avec votre code secret Orange Money.' },
+      { id: 'moov_ml', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez l\'invite sur votre téléphone Moov.' },
+      { id: 'wave_ml', name: 'Wave Mali', icon: '🌊', otp_required: false, instruction: 'Ouvrez votre application Wave pour valider.' },
+      { id: 'mobi_cash_ml', name: 'Mobi Cash', icon: '🟣', otp_required: false, instruction: 'Validez la transaction sur votre compte Mobi Cash.' }
+    ]
+  },
+  {
+    code: 'NE',
+    name: 'Niger 🇳🇪',
+    currency: 'XOF',
+    rate: 620,
+    prefix: '+227',
+    networks: [
+      { id: 'airtel_ne', name: 'Airtel Niger', icon: '🔴', otp_required: false, instruction: 'Validez l\'invite de prélèvement sur votre téléphone Airtel.' }
     ]
   },
   {
@@ -1733,17 +1780,108 @@ var MOMO_COUNTRIES = [
     rate: 8600,
     prefix: '+224',
     networks: [
-      { id: 'mtn_gn', name: 'MTN MoMo', icon: '🟡' }
+      { id: 'mtn_gn', name: 'MTN MoMo Guinea', icon: '🟡', otp_required: false, instruction: 'Validez l\'invite USSD reçue sur votre téléphone MTN MoMo.' }
+    ]
+  },
+  {
+    code: 'GH',
+    name: 'Ghana 🇬🇭',
+    currency: 'GHS',
+    rate: 15.5,
+    prefix: '+233',
+    networks: [
+      { id: 'mtn_gh', name: 'MTN MoMo Ghana', icon: '🟡', otp_required: false, instruction: 'Approve the prompt on your phone or dial *170#.' },
+      { id: 'vodafone_gh', name: 'Telecel / Vodafone', icon: '🔴', otp_required: false, instruction: 'Approve the payment request on your mobile.' },
+      { id: 'tigo_gh', name: 'AirtelTigo Ghana', icon: '🔵', otp_required: false, instruction: 'Approve the prompt on your phone.' }
+    ]
+  },
+  {
+    code: 'KE',
+    name: 'Kenya 🇰🇪',
+    currency: 'KES',
+    rate: 130,
+    prefix: '+254',
+    networks: [
+      { id: 'mpesa_ke', name: 'M-Pesa Kenya', icon: '🟢', otp_required: false, instruction: 'Enter your secret M-Pesa PIN on the prompt.' },
+      { id: 'airtel_ke', name: 'Airtel Money Kenya', icon: '🔴', otp_required: false, instruction: 'Approve the Airtel Money prompt.' }
+    ]
+  },
+  {
+    code: 'CD',
+    name: 'Rép. Dém. du Congo 🇨🇩',
+    currency: 'CDF',
+    rate: 2850,
+    prefix: '+243',
+    networks: [
+      { id: 'orange_cd', name: 'Orange RDC', icon: '🍊', otp_required: false, instruction: 'Validez la demande sur votre mobile Orange Money.' },
+      { id: 'vodacom_cd', name: 'Vodacom M-Pesa', icon: '🔴', otp_required: false, instruction: 'Validez l\'invite M-Pesa avec votre code secret.' },
+      { id: 'airtel_cd', name: 'Airtel RDC', icon: '🔴', otp_required: false, instruction: 'Validez le prélèvement Airtel Money.' },
+      { id: 'afrimoney_cd', name: 'Afrimoney', icon: '🟣', otp_required: false, instruction: 'Validez la transaction sur votre compte Afrimoney.' }
+    ]
+  },
+  {
+    code: 'RW',
+    name: 'Rwanda 🇷🇼',
+    currency: 'RWF',
+    rate: 1350,
+    prefix: '+250',
+    networks: [
+      { id: 'mtn_rw', name: 'MTN MoMo Rwanda', icon: '🟡', otp_required: false, instruction: 'Enter your MoMo PIN to complete payment.' },
+      { id: 'airtel_rw', name: 'Airtel Rwanda', icon: '🔴', otp_required: false, instruction: 'Approve the Airtel Money prompt.' }
+    ]
+  },
+  {
+    code: 'UG',
+    name: 'Ouganda 🇺🇬',
+    currency: 'UGX',
+    rate: 3700,
+    prefix: '+256',
+    networks: [
+      { id: 'mtn_ug', name: 'MTN MoMo Uganda', icon: '🟡', otp_required: false, instruction: 'Approve the USSD prompt on your phone.' },
+      { id: 'airtel_ug', name: 'Airtel Uganda', icon: '🔴', otp_required: false, instruction: 'Approve the Airtel Money prompt.' }
+    ]
+  },
+  {
+    code: 'TZ',
+    name: 'Tanzanie 🇹🇿',
+    currency: 'TZS',
+    rate: 2600,
+    prefix: '+255',
+    networks: [
+      { id: 'mpesa_tz', name: 'Vodacom M-Pesa', icon: '🔴', otp_required: false, instruction: 'Enter your M-Pesa PIN on your phone.' },
+      { id: 'tigo_tz', name: 'Tigo Pesa', icon: '🔵', otp_required: false, instruction: 'Approve the Tigo Pesa prompt.' },
+      { id: 'airtel_tz', name: 'Airtel Money', icon: '🔴', otp_required: false, instruction: 'Approve the Airtel Money prompt.' },
+      { id: 'halopesa_tz', name: 'Halopesa', icon: '🟠', otp_required: false, instruction: 'Approve the Halopesa prompt.' }
+    ]
+  },
+  {
+    code: 'SL',
+    name: 'Sierra Leone 🇸🇱',
+    currency: 'SLE',
+    rate: 23,
+    prefix: '+232',
+    networks: [
+      { id: 'orange_sl', name: 'Orange Sierra Leone', icon: '🍊', otp_required: false, instruction: 'Approve the Orange Money prompt on your phone.' }
+    ]
+  },
+  {
+    code: 'NG',
+    name: 'Nigeria 🇳🇬',
+    currency: 'NGN',
+    rate: 1600,
+    prefix: '+234',
+    networks: [
+      { id: 'allbanks_ng', name: 'Virement bancaire (Swychr)', icon: '🏦', otp_required: false, instruction: 'Suivez les instructions bancaires sécurisées.' }
     ]
   },
   {
     code: 'ALL',
-    name: 'Tous Pays (Passerelle SasPay) 🌍',
-    currency: 'XOF',
-    rate: 620,
+    name: 'Tous Pays & Cartes Bancaires 🌍',
+    currency: 'USD',
+    rate: 1,
     prefix: '',
     networks: [
-      { id: 'checkout_hosted', name: 'SasPay Hosted Checkout', icon: '⚡' }
+      { id: 'checkout_hosted', name: 'Guichet SasPay (Cartes, Visa/Mastercard & Mobile Money)', icon: '⚡', otp_required: false, instruction: 'Accédez au guichet sécurisé officiel SasPay pour choisir librement votre mode de règlement.' }
     ]
   }
 ];
@@ -1990,7 +2128,7 @@ function renderSasPayDepositContent(container) {
   var formattedLocal = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
 
   var countryOptionsHtml = MOMO_COUNTRIES.map(function(c) {
-    return `<option value="${c.code}" ${c.code === selectedMomoCountry ? 'selected' : ''}>${c.name}</option>`;
+    return `<option value="${c.code}" ${c.code === selectedMomoCountry ? 'selected' : ''}>${c.name} (${c.currency})</option>`;
   }).join('');
 
   var networksHtml = country.networks.map(function(net) {
@@ -2006,22 +2144,40 @@ function renderSasPayDepositContent(container) {
   var currentNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || country.networks[0];
   var isHosted = selectedMomoNetwork === 'checkout_hosted';
 
+  var otpFieldHtml = (currentNet && currentNet.otp_required) ? `
+    <div class="field" style="margin-top: 4px; margin-bottom: 4px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; padding: 6px 8px;">
+      <label class="momo-phone-label" style="color: #92400e; font-weight: 700; font-size: 11.5px;">
+        🔑 Code d'autorisation temporaire / OTP (Requis)
+      </label>
+      <input type="text" id="momo-otp-input" placeholder="Ex: 1234" autocomplete="one-time-code" style="height: 32px; font-size: 13px; font-weight: 700; letter-spacing: 2px;">
+      <p class="momo-phone-hint" style="color: #b45309; font-size: 10px; margin-top: 2px;">
+        ${escapeHtml(currentNet.instruction || 'Composez le code USSD sur votre téléphone pour générer votre code.')}
+      </p>
+    </div>
+  ` : '';
+
+  var cmTipHtml = (country.code === 'CM' && selectedMomoNetwork === 'orange_cm') ? `
+    <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; font-size: 10.5px; color: #9a3412; line-height: 1.35;">
+      💡 <strong>Cameroun Orange Money :</strong> Si la notification automatique ne s'affiche pas sur votre mobile après validation, composez directement le <strong>#150*50#</strong> ou <strong>#150*4*4#</strong> pour autoriser le paiement.
+    </div>
+  ` : '';
+
   var phoneFieldHtml = isHosted ? '' : `
     <div class="field" style="margin-top: 4px; margin-bottom: 4px;">
       <label class="momo-phone-label">Numéro Mobile Money (${country.name})</label>
       <div class="phone-input-group">
-        <span class="phone-prefix">${country.prefix}</span>
-        <input type="tel" id="momo-phone-input" placeholder="Ex: 0701020304" autocomplete="tel">
+        <span class="phone-prefix">${country.prefix || '+'}</span>
+        <input type="tel" id="momo-phone-input" placeholder="Ex: 692960840" autocomplete="tel">
       </div>
       <p class="momo-phone-hint">
-        Notification automatique ou invite USSD push envoyée sur ce numéro.
+        ${escapeHtml(currentNet?.instruction || 'Notification automatique ou invite USSD push envoyée sur ce numéro.')}
       </p>
     </div>
   `;
 
   container.innerHTML = `
     <div class="momo-country-wrapper">
-      <label class="momo-networks-label">1. Choisissez votre Pays</label>
+      <label class="momo-networks-label">1. Choisissez votre Pays (${MOMO_COUNTRIES.length} pays supportés)</label>
       <select id="momo-country-select" class="momo-select" onchange="onMomoCountryChange(this.value)">
         ${countryOptionsHtml}
       </select>
@@ -2033,6 +2189,8 @@ function renderSasPayDepositContent(container) {
         ${networksHtml}
       </div>
     </div>
+
+    ${cmTipHtml}
 
     <div class="momo-convert-card">
       <div class="momo-convert-left">
@@ -2049,6 +2207,7 @@ function renderSasPayDepositContent(container) {
     </div>
 
     ${phoneFieldHtml}
+    ${otpFieldHtml}
 
     <div class="momo-ticker-box">
       <span class="momo-ticker-icon">🔒</span>
@@ -2060,6 +2219,12 @@ function renderSasPayDepositContent(container) {
     <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" onclick="submitSasPayDeposit()">
       Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
     </button>
+
+    <div style="text-align: center; margin-top: 6px;">
+      <a href="javascript:void(0)" onclick="submitSasPayDeposit('checkout')" style="font-size: 11px; color: var(--primary-600); text-decoration: underline;">
+        🌐 Préférer le Guichet Sécurisé SasPay (Toutes devises, Cartes & Portefeuilles) ↗
+      </a>
+    </div>
   `;
 }
 
@@ -2097,7 +2262,7 @@ async function handleDepositProofSelected(event) {
   reader.readAsDataURL(file);
 }
 
-async function submitSasPayDeposit() {
+async function submitSasPayDeposit(forcedMode) {
   var u = getCurrentUser();
   if (!u) {
     openAuthModal('login', 'Veuillez vous connecter pour recharger votre solde.');
@@ -2115,15 +2280,25 @@ async function submitSasPayDeposit() {
   }
 
   var country = getSelectedMomoCountry();
+  var isCheckoutMode = (forcedMode === 'checkout' || selectedMomoNetwork === 'checkout_hosted');
   var phoneInput = document.getElementById('momo-phone-input');
   var rawPhone = phoneInput ? phoneInput.value.trim() : '';
 
-  if (selectedMomoNetwork !== 'checkout_hosted') {
+  if (!isCheckoutMode) {
     if (!rawPhone || rawPhone.length < 6) {
       showToast('Veuillez renseigner un numéro de téléphone valide.', 'error');
       if (phoneInput) phoneInput.focus();
       return;
     }
+  }
+
+  var currentNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; });
+  var otpInput = document.getElementById('momo-otp-input');
+  var otpVal = otpInput ? otpInput.value.trim() : '';
+  if (!isCheckoutMode && currentNet && currentNet.otp_required && !otpVal) {
+    showToast('Veuillez renseigner votre code d\'autorisation / OTP généré sur votre mobile.', 'error');
+    if (otpInput) otpInput.focus();
+    return;
   }
 
   var fullPhone = rawPhone;
@@ -2146,9 +2321,13 @@ async function submitSasPayDeposit() {
   var session = DB.get('session');
   var token = session ? session.token : null;
 
+  var controller = new AbortController();
+  var timeoutId = setTimeout(function() { controller.abort(); }, 18000);
+
   try {
     var resp = await fetch('/api/payments/saspay/create', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': 'Bearer ' + token } : {})
@@ -2156,14 +2335,17 @@ async function submitSasPayDeposit() {
       body: JSON.stringify({
         userId: u.id,
         amount: amount,
-        country: selectedMomoCountry,
-        network: selectedMomoNetwork,
+        country: country.code,
+        network: isCheckoutMode ? 'checkout_hosted' : selectedMomoNetwork,
+        preferredMode: isCheckoutMode ? 'checkout' : 'push',
         phone: fullPhone,
+        otp: otpVal,
         customerName: u.name,
         customerEmail: u.email,
         returnUrl: window.location.origin
       })
     });
+    clearTimeout(timeoutId);
 
     var data = null;
     try {
@@ -2194,10 +2376,11 @@ async function submitSasPayDeposit() {
         <div class="deposit-active-flow" id="deposit-momo-status-box" style="text-align: center; padding: 10px 6px;">
           <div class="pulse-spinner"></div>
           <div class="pulse-indicator">● En attente de confirmation</div>
-          <h3 style="font-size: 15px; margin: 0 0 4px 0; color: var(--text-primary);">Paiement Mobile Money Initié ⚡</h3>
-          <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.4;">
+          <h3 style="font-size: 15px; margin: 0 0 4px 0; color: var(--text-primary);">Paiement Initié auprès de l'Opérateur ⚡</h3>
+          
+          <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.45;">
             ${escapeHtml(instructionsText)}
-          </p>
+          </div>
 
           <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; text-align: left; font-size: 11.5px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -2210,7 +2393,7 @@ async function submitSasPayDeposit() {
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--text-secondary);">Opérateur :</span>
-              <span>${escapeHtml(netObj.name)}</span>
+              <span>${escapeHtml(netObj.name)} (${country.name})</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="color: var(--text-secondary);">Réf. Transaction :</span>
@@ -2221,12 +2404,15 @@ async function submitSasPayDeposit() {
           ${checkoutBtnHtml}
 
           <div style="display: flex; gap: 6px;">
-            <button type="button" class="btn-secondary" onclick="checkSasPayStatusManual('${data.transactionId}', '${data.providerTxId || ''}', ${amount})" style="flex: 1; padding: 7px; font-size: 12px;">
+            <button type="button" class="btn-secondary" id="btn-manual-verify-momo" onclick="checkSasPayStatusManual('${data.transactionId}', '${data.providerTxId || ''}', ${amount})" style="flex: 1; padding: 7px; font-size: 12px;">
               Vérifier le statut 🔄
             </button>
             <button type="button" class="btn-secondary" onclick="renderDepositMethodContent()" style="padding: 7px 10px; font-size: 12px;" title="Changer d'opérateur">
               Modifier
             </button>
+          </div>
+          <div id="momo-polling-countdown" style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
+            Vérification en temps réel active...
           </div>
         </div>
       `;
@@ -2235,7 +2421,11 @@ async function submitSasPayDeposit() {
     startSasPayPolling(data.transactionId, data.providerTxId, amount);
 
   } catch (err) {
-    showToast(err.message || 'Impossible d\'initier le paiement.', 'error');
+    clearTimeout(timeoutId);
+    var errMsg = err.name === 'AbortError' 
+      ? 'Délai d\'attente dépassé. Veuillez réessayer ou utiliser le Guichet Sécurisé SasPay.' 
+      : (err.message || 'Impossible d\'initier le paiement.');
+    showToast(errMsg, 'error');
     if (submitBtn) {
       submitBtn.disabled = false;
       var cNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || country.networks[0];
@@ -2271,13 +2461,24 @@ function showSasPayFailedState(message) {
 function startSasPayPolling(txId, providerTxId, amount) {
   if (momoPollingTimer) clearInterval(momoPollingTimer);
   var attempts = 0;
-  var maxAttempts = 50;
+  var maxAttempts = 60; // 60 x 3.5s = ~3.5 minutes
 
   momoPollingTimer = setInterval(async function() {
     attempts++;
+    var countdownEl = document.getElementById('momo-polling-countdown');
+    if (countdownEl) {
+      var remainingSec = Math.max(0, Math.round((maxAttempts - attempts) * 3.5));
+      var min = Math.floor(remainingSec / 60);
+      var sec = remainingSec % 60;
+      countdownEl.textContent = `En attente de validation opérateur (${min}:${sec < 10 ? '0' : ''}${sec})...`;
+    }
+
     if (attempts > maxAttempts) {
       clearInterval(momoPollingTimer);
       momoPollingTimer = null;
+      if (countdownEl) {
+        countdownEl.innerHTML = '<span style="color: var(--amber-600);">Validation toujours en attente. Cliquez sur "Vérifier le statut" dès que validé sur votre téléphone.</span>';
+      }
       return;
     }
 
@@ -2301,6 +2502,8 @@ function startSasPayPolling(txId, providerTxId, amount) {
 }
 
 async function checkSasPayStatusManual(txId, providerTxId, amount) {
+  var btn = document.getElementById('btn-manual-verify-momo');
+  if (btn) btn.textContent = 'Vérification en cours... 🔄';
   try {
     showToast('Vérification auprès de SasPay...', 'info');
     var query = `transactionId=${encodeURIComponent(txId)}`;
@@ -2315,10 +2518,12 @@ async function checkSasPayStatusManual(txId, providerTxId, amount) {
     } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired' || result.status === 'cancelled') {
       showSasPayFailedState(result.message);
     } else {
-      showToast(result.message || 'Paiement en attente de validation sur votre mobile.', 'info');
+      showToast(result.message || 'Paiement toujours en attente de validation sur votre mobile.', 'info');
     }
   } catch (err) {
     showToast('Erreur lors de la vérification : ' + err.message, 'error');
+  } finally {
+    if (btn) btn.textContent = 'Vérifier le statut 🔄';
   }
 }
 

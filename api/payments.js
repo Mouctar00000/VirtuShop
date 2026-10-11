@@ -34,6 +34,14 @@ module.exports = async function handler(req, res) {
     }
     body = body || {};
 
+    // 0. Liste officielle des pays et opérateurs SasPay
+    if (req.method === 'GET' && (action === 'countries' || rawUrl.includes('/countries'))) {
+      return res.status(200).json({
+        success: true,
+        countries: paymentService.getCountries()
+      });
+    }
+
     // 1. Liste des moyens de paiement actifs
     if (req.method === 'GET' && (action === 'methods' || action === 'payments')) {
       const methods = db.getPaymentMethods().filter(m => m.enabled);
@@ -124,6 +132,8 @@ module.exports = async function handler(req, res) {
           country: body.country,
           network: body.network,
           phone: body.phone,
+          otp: body.otp,
+          preferredMode: body.preferredMode || body.mode,
           customerName: body.customerName,
           customerEmail: body.customerEmail,
           returnUrl: body.returnUrl,
