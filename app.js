@@ -1663,7 +1663,7 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+237',
     networks: [
-      { id: 'orange_cm', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Composez le #150*50# ou #150*4*4# sur votre téléphone si le pop-up USSD n\'apparaît pas automatiquement.' },
+      { id: 'orange_cm', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Tapez *150*10#' },
       { id: 'mtn_cm', name: 'MTN MoMo', icon: '🟡', otp_required: false, instruction: 'Validez la notification USSD sur votre écran ou composez *126#.' }
     ]
   },
@@ -1900,18 +1900,14 @@ function onMomoCountryChange(code) {
 }
 
 function onSelectMomoNetwork(netId) {
+  var prevPhone = document.getElementById('momo-phone-input')?.value;
+  var prevOtp = document.getElementById('momo-otp-input')?.value;
   selectedMomoNetwork = netId;
-  var btns = document.querySelectorAll('.momo-network-btn');
-  btns.forEach(function(b) {
-    if (b.getAttribute('data-net') === netId) b.classList.add('active');
-    else b.classList.remove('active');
-  });
-  var c = getSelectedMomoCountry();
-  var net = c.networks.find(function(n) { return n.id === netId; });
-  var submitBtn = document.getElementById('btn-submit-momo');
-  if (submitBtn && net) {
-    submitBtn.innerHTML = `Payer avec ${net.icon} ${escapeHtml(net.name)} ⚡`;
-  }
+  renderDepositMethodContent();
+  var phoneEl = document.getElementById('momo-phone-input');
+  if (phoneEl && prevPhone) phoneEl.value = prevPhone;
+  var otpEl = document.getElementById('momo-otp-input');
+  if (otpEl && prevOtp) otpEl.value = prevOtp;
 }
 
 function updateDepositCalculation() {
@@ -2151,16 +2147,13 @@ function renderSasPayDepositContent(container) {
       <label class="momo-phone-label" style="color: #92400e; font-weight: 700; font-size: 11.5px;">
         🔑 Code d'autorisation temporaire / OTP (Requis)
       </label>
-      <input type="text" id="momo-otp-input" placeholder="Ex: 1234" autocomplete="one-time-code" style="height: 32px; font-size: 13px; font-weight: 700; letter-spacing: 2px;">
-      <p class="momo-phone-hint" style="color: #b45309; font-size: 10px; margin-top: 2px;">
-        ${escapeHtml(currentNet.instruction || 'Composez le code USSD sur votre téléphone pour générer votre code.')}
-      </p>
+      <input type="text" id="momo-otp-input" placeholder="" autocomplete="one-time-code" style="height: 32px; font-size: 13px; font-weight: 700; letter-spacing: 2px;">
     </div>
   ` : '';
 
   var cmTipHtml = (country.code === 'CM' && selectedMomoNetwork === 'orange_cm') ? `
-    <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; font-size: 10.5px; color: #9a3412; line-height: 1.35;">
-      💡 <strong>Cameroun Orange Money :</strong> Si la notification automatique ne s'affiche pas sur votre mobile après validation, composez directement le <strong>#150*50#</strong> ou <strong>#150*4*4#</strong> pour autoriser le paiement.
+    <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; font-size: 12px; color: #9a3412; text-align: center; font-weight: 700;">
+      Tapez *150*10#
     </div>
   ` : '';
 
@@ -2169,17 +2162,14 @@ function renderSasPayDepositContent(container) {
       <label class="momo-phone-label">Numéro Mobile Money (${country.name})</label>
       <div class="phone-input-group">
         <span class="phone-prefix">${country.prefix || '+'}</span>
-        <input type="tel" id="momo-phone-input" placeholder="Ex: 692960840" autocomplete="tel">
+        <input type="tel" id="momo-phone-input" placeholder="" autocomplete="tel">
       </div>
-      <p class="momo-phone-hint">
-        ${escapeHtml(currentNet?.instruction || 'Notification automatique ou invite USSD push envoyée sur ce numéro.')}
-      </p>
     </div>
   `;
 
   container.innerHTML = `
     <div class="momo-country-wrapper">
-      <label class="momo-networks-label">1. Choisissez votre Pays (${MOMO_COUNTRIES.length} pays supportés)</label>
+      <label class="momo-networks-label">1. Choisissez votre Pays</label>
       <select id="momo-country-select" class="momo-select" onchange="onMomoCountryChange(this.value)">
         ${countryOptionsHtml}
       </select>
@@ -2211,23 +2201,10 @@ function renderSasPayDepositContent(container) {
     ${phoneFieldHtml}
     ${otpFieldHtml}
 
-    <div class="momo-ticker-box">
-      <span class="momo-ticker-icon">🔒</span>
-      <div class="momo-ticker-track">
-        <span class="momo-ticker-text">Passerelle officielle SasPay : votre solde est automatiquement crédité dès confirmation de votre opérateur • Sécurité 100% garantie</span>
-      </div>
-    </div>
-
-    <div style="display: flex; justify-content: center; width: 100%; margin-top: 6px;">
+    <div style="display: flex; justify-content: center; width: 100%; margin-top: 8px;">
       <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" onclick="submitSasPayDeposit()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; height: 38px; font-size: 13px; font-weight: 700; border-radius: 8px; margin: 0 auto;">
         Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
       </button>
-    </div>
-
-    <div style="text-align: center; margin-top: 6px; width: 100%; display: flex; justify-content: center;">
-      <a href="javascript:void(0)" onclick="submitSasPayDeposit('checkout')" style="font-size: 11px; color: var(--primary-600); text-decoration: underline; text-align: center;">
-        🌐 Préférer le Guichet Sécurisé SasPay (Toutes devises, Cartes & Portefeuilles) ↗
-      </a>
     </div>
   `;
 }
@@ -2427,7 +2404,7 @@ async function submitSasPayDeposit(forcedMode) {
   } catch (err) {
     clearTimeout(timeoutId);
     var errMsg = err.name === 'AbortError' 
-      ? 'Délai d\'attente dépassé. Veuillez réessayer ou utiliser le Guichet Sécurisé SasPay.' 
+      ? 'Délai d\'attente dépassé. Veuillez réessayer.' 
       : (err.message || 'Impossible d\'initier le paiement.');
     showToast(errMsg, 'error');
     if (submitBtn) {
@@ -4124,7 +4101,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610111854_16b7d3',
+  currentVersion: 'v202610111957_61c7c9',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

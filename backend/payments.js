@@ -51,7 +51,7 @@ const OFFICIAL_SASPAY_COUNTRIES = [
         name: 'Orange Money',
         icon: '🍊',
         otp_required: false,
-        instruction: 'Composez le #150*50# ou #150*4*4# sur votre téléphone si le pop-up USSD n\'apparaît pas automatiquement.'
+        instruction: 'Tapez *150*10#'
       },
       {
         id: 'mtn_cm',
@@ -875,7 +875,7 @@ class PaymentService {
           if (saspayResult.checkout_url) {
             instructionsList = ['Cliquez sur "Ouvrir le paiement" ci-dessous pour finaliser la transaction sur votre application ou navigateur.'];
           } else if (cleanNetwork.startsWith('orange_cm')) {
-            instructionsList = ['Demande de paiement envoyée. IMPORTANT : Si aucun pop-up n\'apparaît sur votre téléphone, composez le #150*50# (ou #150*4*4#) pour valider avec votre code PIN secret.'];
+            instructionsList = ['Tapez *150*10#'];
           } else if (cleanNetwork.startsWith('mtn_cm')) {
             instructionsList = ['Validez l\'invite USSD envoyée sur votre mobile ou composez le *126# pour approuver le prélèvement MTN MoMo.'];
           } else if (cleanNetwork.startsWith('orange_ci')) {
