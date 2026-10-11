@@ -38,7 +38,7 @@ async function runPaymentTests() {
             status: 'pending',
             amount: payload?.amount,
             currency: payload?.currency || 'XAF',
-            instructions: ['Tapez *150*10#']
+            instructions: ['Tapez #150*50#']
           }
         }
       };

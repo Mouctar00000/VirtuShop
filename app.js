@@ -1663,7 +1663,7 @@ var MOMO_COUNTRIES = [
     rate: 620,
     prefix: '+237',
     networks: [
-      { id: 'orange_cm', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Tapez *150*10#' },
+      { id: 'orange_cm', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Tapez #150*50#' },
       { id: 'mtn_cm', name: 'MTN MoMo', icon: '🟡', otp_required: false, instruction: 'Validez la notification USSD sur votre écran ou composez *126#.' }
     ]
   },
@@ -2153,7 +2153,7 @@ function renderSasPayDepositContent(container) {
 
   var cmTipHtml = (country.code === 'CM' && selectedMomoNetwork === 'orange_cm') ? `
     <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; font-size: 12px; color: #9a3412; text-align: center; font-weight: 700;">
-      Tapez *150*10#
+      Tapez #150*50#
     </div>
   ` : '';
 
