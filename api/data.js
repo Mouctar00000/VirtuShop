@@ -16,7 +16,13 @@ module.exports = async function handler(req, res) {
   }
 
   const urlParts = (req.url || '').split('?')[0].split('/').filter(Boolean);
-  const resource = urlParts[urlParts.length - 1]; // 'products', 'orders', 'stats', 'vault'
+  let resource = urlParts[urlParts.length - 1]; // 'products', 'orders', 'stats', 'vault', 'version'
+  if (req.query && req.query.resource) {
+    resource = req.query.resource;
+  }
+  if ((req.url || '').includes('/version')) {
+    resource = 'version';
+  }
 
   try {
     let body = req.body;
@@ -33,6 +39,15 @@ module.exports = async function handler(req, res) {
     try {
       await db.syncFromRemote();
     } catch (e) {}
+
+    // 0. VÉRIFICATION DE LA VERSION DU DÉPLOIEMENT EN DIRECT
+    if (resource === 'version') {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      const vInfo = db.getDeploymentVersion();
+      return res.status(200).json(vInfo);
+    }
 
     // 1. STATISTIQUES RÉELLES DYNAMIQUES AVEC FILTRES
     if (req.method === 'GET' && resource === 'stats') {

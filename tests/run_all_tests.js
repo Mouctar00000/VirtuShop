@@ -105,8 +105,12 @@ async function runAsyncTests() {
   console.log('\n=== TEST 9: Payment Methods Administration & API ===');
   require('./test_payment_methods');
 
+  console.log('\n=== TEST 10: Versioning, Cache-Control & Auto-Update System ===');
+  const testVersionCache = require('./test_version_cache');
+  await testVersionCache();
+
   console.log('\n======================================================');
-  console.log('🏆 TOUS LES 9 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('🏆 TOUS LES 10 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
   console.log('======================================================\n');
 }
 

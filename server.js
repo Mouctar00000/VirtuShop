@@ -122,6 +122,10 @@ const server = http.createServer((req, res) => {
         if (safePath.startsWith('/api/payments') || safePath.startsWith('/api/trybit')) {
           return await require('./api/payments')(req, res);
         }
+        if (safePath === '/api/version') {
+          req.url = '/api/data/version';
+          return await require('./api/data')(req, res);
+        }
         if (safePath.startsWith('/api/data')) {
           return await require('./api/data')(req, res);
         }

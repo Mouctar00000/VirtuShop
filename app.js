@@ -411,14 +411,15 @@ function updateUserBalance(newBalance) {
   return true;
 }
 
-// Synchronisation du solde et de la session en direct avec le serveur
+// Synchronisation du solde, des commandes et de la session en direct avec le serveur
 async function syncUserSessionAndBalance() {
   var s = AuthState.getSession();
   if (!s || !s.userId) return;
   try {
     var token = s.token || '';
-    var res = await fetch('/api/auth/me', {
-      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    var res = await fetch('/api/auth/me?_t=' + Date.now(), {
+      cache: 'no-store',
+      headers: token ? { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' } : { 'Cache-Control': 'no-cache' }
     });
     if (res.ok) {
       var data = await res.json();
@@ -434,6 +435,42 @@ async function syncUserSessionAndBalance() {
     } else if (res.status === 401) {
       console.warn('[Auth] Session révoquée côté serveur.');
       AuthState.clearSession();
+    }
+  } catch (e) {}
+
+  // Synchronisation des commandes du client en arrière-plan
+  if (s.token) {
+    syncUserOrdersFromServer(s.token);
+  }
+}
+
+// Synchronisation des commandes du client depuis le serveur
+async function syncUserOrdersFromServer(token) {
+  if (!token) return;
+  try {
+    var res = await fetch('/api/data/orders?_t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' }
+    });
+    if (res.ok) {
+      var data = await res.json();
+      if (data && Array.isArray(data.orders)) {
+        var localList = DB.get('orders', []);
+        var updated = false;
+        data.orders.forEach(function(so) {
+          var existingIdx = localList.findIndex(function(lo) { return lo && lo.id === so.id; });
+          if (existingIdx === -1) {
+            localList.unshift(so);
+            updated = true;
+          } else {
+            localList[existingIdx] = Object.assign({}, localList[existingIdx], so);
+            updated = true;
+          }
+        });
+        if (updated) {
+          DB.set('orders', localList);
+        }
+      }
     }
   } catch (e) {}
 }
@@ -3649,6 +3686,9 @@ function startApp() {
       } catch (e) {}
     }
 
+    // Nettoyage proactif des caches et vérification de la dernière version
+    VersionManager.init();
+
     // Traçabilité des visites réelles (Prompt 8)
     trackVisitor();
 
@@ -3699,6 +3739,73 @@ function switchToAdmin() {
   }
   window.location.href = 'admin.html';
 }
+
+// GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
+var VersionManager = {
+  currentVersion: 'v20261011_0910_live',
+  checkIntervalMs: 60 * 1000,
+  _toastShown: false,
+
+  init: function() {
+    this.cleanLegacyCaches();
+    this.checkForUpdates();
+
+    var self = this;
+    window.addEventListener('visibilitychange', function() {
+      if (!document.hidden) self.checkForUpdates();
+    });
+    window.addEventListener('focus', function() {
+      self.checkForUpdates();
+    });
+    setInterval(function() {
+      self.checkForUpdates();
+    }, this.checkIntervalMs);
+  },
+
+  cleanLegacyCaches: function() {
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var reg of registrations) reg.unregister();
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+    } catch (e) {}
+  },
+
+  checkForUpdates: async function() {
+    try {
+      var res = await fetch('/api/version?_t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' }
+      });
+      if (res.ok) {
+        var data = await res.json();
+        if (data && data.version && data.version !== this.currentVersion) {
+          console.log('[VersionManager] Nouvelle version déployée en ligne :', data.version);
+          this.onNewVersionAvailable(data.version);
+        }
+      }
+    } catch (e) {}
+  },
+
+  onNewVersionAvailable: function(newVer) {
+    if (this._toastShown) return;
+    this._toastShown = true;
+    var banner = document.createElement('div');
+    banner.id = 'gv-update-banner';
+    banner.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#ffffff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,0.35);z-index:999999;border:1px solid rgba(255,255,255,0.18);';
+    banner.innerHTML = '<span>⚡ Mise à jour GetVirtu disponible</span><button style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">Actualiser</button>';
+    banner.querySelector('button').onclick = function() {
+      window.location.reload(true);
+    };
+    document.body.appendChild(banner);
+  }
+};
 
 // Traçabilité des visites réelles et visiteurs uniques
 function trackVisitor() {

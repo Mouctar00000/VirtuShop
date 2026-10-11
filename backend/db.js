@@ -1159,6 +1159,21 @@ class Database {
       chartVolume
     };
   }
+
+  getDeploymentVersion() {
+    try {
+      const vFile = path.join(__dirname, '..', 'version.json');
+      if (fs.existsSync(vFile)) {
+        return JSON.parse(fs.readFileSync(vFile, 'utf8'));
+      }
+    } catch (e) {}
+    return {
+      version: 'v20261011_0910_live',
+      buildTime: new Date().toISOString(),
+      timestamp: Date.now(),
+      env: 'production'
+    };
+  }
 }
 
 module.exports = new Database();

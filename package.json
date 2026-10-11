@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node -c server.js && node -c app.js"
+    "test": "node tests/run_all_tests.js"
   },
   "keywords": [
     "ecommerce",

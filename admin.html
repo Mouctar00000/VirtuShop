@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GetVirtu 🔒 Administration</title>
+
+  <!-- Contrôle de Cache Strict & Revalidation Immédiate -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
@@ -4497,10 +4502,155 @@
       if (e.key && e.key.indexOf('vs_') === 0) renderDashboard();
     });
 
+    // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
+    var VersionManager = {
+      currentVersion: 'v20261011_0910_live',
+      checkIntervalMs: 60 * 1000,
+      _toastShown: false,
+
+      init: function() {
+        this.cleanLegacyCaches();
+        this.checkForUpdates();
+
+        var self = this;
+        window.addEventListener('visibilitychange', function() {
+          if (!document.hidden) self.checkForUpdates();
+        });
+        window.addEventListener('focus', function() {
+          self.checkForUpdates();
+        });
+        setInterval(function() {
+          self.checkForUpdates();
+        }, this.checkIntervalMs);
+      },
+
+      cleanLegacyCaches: function() {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for (var reg of registrations) reg.unregister();
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              names.forEach(function(name) { caches.delete(name); });
+            });
+          }
+        } catch (e) {}
+      },
+
+      checkForUpdates: async function() {
+        try {
+          var res = await fetch('/api/version?_t=' + Date.now(), {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' }
+          });
+          if (res.ok) {
+            var data = await res.json();
+            if (data && data.version && data.version !== this.currentVersion) {
+              console.log('[VersionManager] Nouvelle version d\'administration disponible :', data.version);
+              this.onNewVersionAvailable(data.version);
+            }
+          }
+        } catch (e) {}
+      },
+
+      onNewVersionAvailable: function(newVer) {
+        if (this._toastShown) return;
+        this._toastShown = true;
+        var banner = document.createElement('div');
+        banner.id = 'gv-admin-update-banner';
+        banner.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#0f172a;color:#ffffff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,0.35);z-index:999999;border:1px solid rgba(255,255,255,0.18);';
+        banner.innerHTML = '<span>⚡ Nouvelle version du panneau Admin disponible</span><button style="background:#2563eb;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;">Actualiser</button>';
+        banner.querySelector('button').onclick = function() {
+          window.location.reload(true);
+        };
+        document.body.appendChild(banner);
+      }
+    };
+
+    // Synchronisation complète des données administrateur en direct depuis le serveur
+    async function syncAdminDataFromServer() {
+      var s = DB.get('admin_session') || DB.get('session');
+      var token = s ? (s.token || '') : '';
+      var headers = token ? { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' } : { 'Cache-Control': 'no-cache' };
+
+      // 1. Vérification session admin & rôle frais
+      if (token) {
+        try {
+          var meRes = await fetch('/api/auth/me?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
+          if (meRes.ok) {
+            var meData = await meRes.json();
+            if (meData && meData.user && meData.user.role === 'admin') {
+              s.role = 'admin';
+              DB.set('admin_session', s);
+              DB.set('session', s);
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 2. Synchronisation des statistiques réelles
+      try {
+        var statsRes = await fetch('/api/data/stats?period=' + (currentPeriod || 'day') + '&_t=' + Date.now(), { headers: headers, cache: 'no-store' });
+        if (statsRes.ok) {
+          var stats = await statsRes.json();
+          if (stats && typeof updateStatsDisplay === 'function') updateStatsDisplay(stats);
+        }
+      } catch (e) {}
+
+      // 3. Synchronisation des produits
+      try {
+        var prodsRes = await fetch('/api/data/products?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
+        if (prodsRes.ok) {
+          var prodsData = await prodsRes.json();
+          if (prodsData && Array.isArray(prodsData.products)) {
+            DB.set('products', prodsData.products);
+          }
+        }
+      } catch (e) {}
+
+      // 4. Synchronisation des méthodes de paiement
+      try {
+        var mRes = await fetch('/api/data/methods?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
+        if (mRes.ok) {
+          var mData = await mRes.json();
+          if (mData && Array.isArray(mData.methods)) {
+            DB.set('payment_methods', mData.methods);
+          }
+        }
+      } catch (e) {}
+
+      // 5. Synchronisation des commandes
+      try {
+        var oRes = await fetch('/api/data/orders?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
+        if (oRes.ok) {
+          var oData = await oRes.json();
+          if (oData && Array.isArray(oData.orders)) {
+            DB.set('orders', oData.orders);
+          }
+        }
+      } catch (e) {}
+
+      // 6. Synchronisation des utilisateurs et soldes
+      try {
+        var uRes = await fetch('/api/data/users?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
+        if (uRes.ok) {
+          var uData = await uRes.json();
+          if (uData && Array.isArray(uData.users)) {
+            DB.set('users', uData.users);
+          }
+        }
+      } catch (e) {}
+
+      renderDashboard();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+      VersionManager.init();
       checkAdminAuth();
       renderDashboard();
-      syncMethodsFromServer();
+      syncAdminDataFromServer();
       setupDropzone();
 
       // Fermeture des modales au clic sur le fond (backdrop)
