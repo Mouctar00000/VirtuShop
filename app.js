@@ -292,31 +292,43 @@ function initDB() {
     }
   }
 
-  // Méthodes de paiement officielles de production (SasPay Mobile Money & Trybit Crypto Automatique)
-  DB.set('payment_methods', [
-    {
-      id: 1,
-      name: "Mobile Money (Wave, Orange, MTN, Moov)",
-      type: "mobile_money",
-      provider: "saspay",
-      network: "all",
-      isBinance: false,
-      address: "Passerelle SasPay Officielle",
-      instructions: "Paiement direct sécurisé : validation automatique par Wave, Orange Money ou notification USSD push instantanée sur votre smartphone.",
-      enabled: true
-    },
-    {
-      id: 2,
-      name: "Crypto Instantané (Trybit - USDT, BTC, ETH, SOL...)",
-      type: "crypto_trybit",
-      provider: "trybit",
-      network: "multi",
-      isBinance: false,
-      address: "Passerelle Trybit Officielle",
-      instructions: "Paiement crypto automatisé instantané avec génération d'adresse et validation blockchain automatique en temps réel.",
-      enabled: true
-    }
-  ]);
+  // Méthodes de paiement officielles : initialisation sécurisée sans écraser les ajouts admin
+  var currentMethods = DB.get('payment_methods', null);
+  if (!currentMethods || !Array.isArray(currentMethods) || currentMethods.length === 0) {
+    DB.set('payment_methods', [
+      {
+        id: 1,
+        name: "Mobile Money (Wave, Orange, MTN, Moov)",
+        type: "mobile_money",
+        provider: "saspay",
+        network: "all",
+        isBinance: false,
+        address: "Passerelle SasPay Officielle",
+        instructions: "Paiement direct sécurisé : validation automatique par Wave, Orange Money ou notification USSD push instantanée sur votre smartphone.",
+        enabled: true
+      },
+      {
+        id: 2,
+        name: "Crypto Instantané (Trybit - USDT, BTC, ETH, SOL...)",
+        type: "crypto_trybit",
+        provider: "trybit",
+        network: "multi",
+        isBinance: false,
+        address: "Passerelle Trybit Officielle",
+        instructions: "Paiement crypto automatisé instantané avec génération d'adresse et validation blockchain automatique en temps réel.",
+        enabled: true
+      }
+    ]);
+  }
+
+  // Synchronisation asynchrone avec les moyens de paiement configurés sur le serveur
+  try {
+    fetch('/api/data/methods').then(function(r) { return r.json(); }).then(function(d) {
+      if (d && Array.isArray(d.methods) && d.methods.length > 0) {
+        DB.set('payment_methods', d.methods);
+      }
+    }).catch(function() {});
+  } catch (e) {}
 
   // Admin par défaut GetVirtu
   var users = DB.get('users', []);
@@ -532,25 +544,19 @@ function updateNavbar() {
     }
 
     container.innerHTML = `
-      <!-- Capsule Solde avec bouton + -->
+      <!-- Capsule Solde avec bouton + : 1 ligne nette -->
       <div class="balance-pill" title="Votre solde disponible">
         <span class="balance-label">Solde :</span>
         <strong class="balance-amount">$${bal.toFixed(2)}</strong>
         <button type="button" class="btn-add-balance" title="Recharger mon solde (+)" onclick="openDepositModal()">+</button>
       </div>
 
-      <!-- Un seul bouton Mes commandes dans l'en-tête, positionné à côté du solde -->
-      <button type="button" class="btn-secondary btn-sm nav-orders-btn" onclick="openOrdersModal()">
-        <span>📦</span>
-        <span>Mes commandes</span>
-      </button>
-
       <!-- Profil Utilisateur & Menu Déroulant (Sans Scrollbar, Pleine Hauteur) -->
       <div class="user-profile-wrapper">
         <button type="button" class="btn-user-profile" onclick="toggleUserDropdown(event)" aria-label="Menu profil">
           <span class="user-avatar-circle">${escapeHtml(session.name.charAt(0).toUpperCase())}</span>
-          <span>${escapeHtml(session.name)}</span>
-          <span style="font-size: 10px; color: var(--text-muted);">▾</span>
+          <span class="user-profile-name">${escapeHtml(session.name)}</span>
+          <span class="user-profile-chevron" style="font-size: 10px; color: var(--text-muted); margin-left: 2px;">▾</span>
         </button>
 
         <div class="user-dropdown-menu" id="user-dropdown">

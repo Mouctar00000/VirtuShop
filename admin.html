@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=20261010_v27_instant_fix">
+  <link rel="stylesheet" href="style.css?v=20261011_v29_clean_header_and_methods">
   <script src="security.js?v=20261010_v27_instant_fix"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
@@ -1813,6 +1813,7 @@
           <button type="submit" class="btn-primary" style="flex: 1.5;">Enregistrer</button>
         </div>
       </form>
+    </div>
   </div>
 
   <!-- ==================== MODAL INVENTAIRE DÉTAILLÉ DES CLÉS ==================== -->
@@ -2041,6 +2042,8 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
   <!-- ==================== MODAL AJUSTEMENT MANUEL DU SOLDE CLIENT ==================== -->
   <div id="admin-adjust-balance-modal" class="modal-backdrop">
     <div class="modal-window" style="max-width: 480px;">
@@ -2201,7 +2204,16 @@
 
       // Re-rendre le tableau de bord pour garder les données fraîches
       renderDashboard();
+      if (tabName === 'methods') {
+        syncMethodsFromServer();
+      }
+      try {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', '#' + tabName);
+        }
+      } catch (e) {}
     }
+    window.switchAdminTab = switchAdminTab;
 
     // ========== AUTHENTIFICATION ADMIN SÉCURISÉE (HASH SHA-256 + SESSIONS + ANTI BRUTE-FORCE) ==========
     var ADMIN_SALT = 'getvirtu_sec_salt_2026';
@@ -3931,7 +3943,7 @@
       showToast(`Solde de ${u.name} mis à jour : $${newBal.toFixed(2)} (${reason}).`, 'success');
     }
 
-    // ========== 5. TABLE DES MOYENS DE PAIEMENT ==========
+    // ========== 5. TABLE DES MOYENS DE PAIEMENT (SERVEUR + LOCAL) ==========
     function renderMethodsTable() {
       var methods = DB.get('payment_methods', []);
       var tbody = document.getElementById('admin-methods-tbody');
@@ -3939,27 +3951,28 @@
       var html = '';
 
       methods.forEach(function(m) {
-        var qr = m.qrCode ? `<img src="${m.qrCode}" style="width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-subtle); background: #fff;">` : `<span style="font-size: 11px; color: var(--text-muted);">-</span>`;
+        var qr = m.qrCode ? `<img src="${m.qrCode}" style="width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border-subtle); background: #fff; object-fit: contain;">` : `<span style="font-size: 11px; color: var(--text-muted);">-</span>`;
+        var isEnabled = m.enabled !== false;
         html += `
           <tr>
             <td>${qr}</td>
             <td>
-              <strong>${escapeHtml(m.name)}</strong>
+              <strong>${escapeHtml(m.name || '')}</strong>
               ${m.isBinance ? '<span class="status-indicator-pill online" style="font-size: 10px; margin-left: 4px;">Binance</span>' : ''}
             </td>
             <td>
-              <span class="status-indicator-pill offline">${escapeHtml(m.type)}</span>
+              <span class="status-indicator-pill offline">${escapeHtml(m.type || 'autre')}</span>
               ${m.network ? `<span class="network-badge" style="font-size: 10px; margin-left: 2px;">${escapeHtml(m.network)}</span>` : ''}
             </td>
-            <td><code style="font-size: 11.5px; color: var(--primary-600);">${escapeHtml(m.address)}</code></td>
+            <td><code style="font-size: 11.5px; color: var(--primary-600); word-break: break-all;">${escapeHtml(m.address || '-')}</code></td>
             <td>
               <span style="font-size: 11.5px; color: var(--text-secondary); max-width: 250px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(m.instructions || '')}">
                 ${escapeHtml(m.instructions || 'Aucune consigne')}
               </span>
             </td>
             <td>
-              <span class="status-indicator-pill ${m.enabled ? 'online' : 'offline'}" onclick="toggleMethod(${m.id})">
-                ${m.enabled ? '● Activé' : '○ Désactivé'}
+              <span class="status-indicator-pill ${isEnabled ? 'online' : 'offline'}" style="cursor: pointer;" title="Cliquer pour basculer l'activation" onclick="toggleMethod(${m.id})">
+                ${isEnabled ? '● Activé' : '○ Désactivé'}
               </span>
             </td>
             <td>
@@ -3975,8 +3988,23 @@
       tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center; padding: 20px;">Aucun moyen configuré.</td></tr>';
     }
 
+    function syncMethodsFromServer() {
+      fetch('/api/data/methods').then(function(res) {
+        return res.json();
+      }).then(function(data) {
+        if (data && Array.isArray(data.methods) && data.methods.length > 0) {
+          DB.set('payment_methods', data.methods);
+          renderMethodsTable();
+        }
+      }).catch(function(e) {
+        console.warn('Sync methods failed:', e);
+      });
+    }
+
     function handleMethodTypeChange() {
-      var t = document.getElementById('admin-method-type').value;
+      var sel = document.getElementById('admin-method-type');
+      if (!sel) return;
+      var t = sel.value;
       var isCrypto = t === 'crypto';
       var fieldQr = document.getElementById('field-method-qr');
       var fieldBinance = document.getElementById('field-is-binance');
@@ -3984,16 +4012,22 @@
 
       if (fieldQr) fieldQr.style.display = isCrypto ? 'block' : 'none';
       if (fieldBinance) fieldBinance.style.display = isCrypto ? 'block' : 'none';
-      if (addrLabel) addrLabel.textContent = isCrypto ? 'Adresse de portefeuille' : 'Numéro de transfert (ex: Orange Money)';
+      if (addrLabel) addrLabel.textContent = isCrypto ? 'Adresse de portefeuille' : 'Numéro de transfert (ex: Orange Money / Wave)';
     }
 
     function openNewPaymentMethodModal() {
-      document.getElementById('method-modal-title').textContent = 'Nouveau Moyen de Paiement';
-      document.getElementById('admin-method-id').value = '';
-      document.getElementById('admin-method-form').reset();
+      var modal = document.getElementById('admin-method-modal');
+      var form = document.getElementById('admin-method-form');
+      var title = document.getElementById('method-modal-title');
+      var idField = document.getElementById('admin-method-id');
+      if (title) title.textContent = 'Nouveau Moyen de Paiement';
+      if (idField) idField.value = '';
+      if (form) form.reset();
       editingMethodQr = null;
       handleMethodTypeChange();
-      document.getElementById('admin-method-modal').classList.add('active');
+      if (modal) {
+        modal.classList.add('active');
+      }
     }
 
     function editPaymentMethod(id) {
@@ -4001,27 +4035,38 @@
       var m = methods.find(function(x) { return x.id === id; });
       if (!m) return;
 
-      document.getElementById('method-modal-title').textContent = 'Modifier le Moyen : ' + m.name;
-      document.getElementById('admin-method-id').value = m.id;
-      document.getElementById('admin-method-name').value = m.name;
-      document.getElementById('admin-method-type').value = m.type || 'crypto';
-      document.getElementById('admin-method-network').value = m.network || '';
-      document.getElementById('admin-method-is-binance').checked = !!m.isBinance;
-      document.getElementById('admin-method-addr').value = m.address || '';
-      document.getElementById('admin-method-instructions').value = m.instructions || '';
+      var modal = document.getElementById('admin-method-modal');
+      var title = document.getElementById('method-modal-title');
+      if (title) title.textContent = 'Modifier le Moyen : ' + (m.name || '');
+      var elId = document.getElementById('admin-method-id');
+      var elName = document.getElementById('admin-method-name');
+      var elType = document.getElementById('admin-method-type');
+      var elNet = document.getElementById('admin-method-network');
+      var elBin = document.getElementById('admin-method-is-binance');
+      var elAddr = document.getElementById('admin-method-addr');
+      var elInst = document.getElementById('admin-method-instructions');
+
+      if (elId) elId.value = m.id;
+      if (elName) elName.value = m.name || '';
+      if (elType) elType.value = m.type || 'crypto';
+      if (elNet) elNet.value = m.network || '';
+      if (elBin) elBin.checked = Boolean(m.isBinance);
+      if (elAddr) elAddr.value = m.address || '';
+      if (elInst) elInst.value = m.instructions || '';
 
       editingMethodQr = m.qrCode || null;
       handleMethodTypeChange();
 
-      document.getElementById('admin-method-modal').classList.add('active');
+      if (modal) modal.classList.add('active');
     }
 
     function closeAdminMethodModal() {
-      document.getElementById('admin-method-modal').classList.remove('active');
+      var modal = document.getElementById('admin-method-modal');
+      if (modal) modal.classList.remove('active');
     }
 
     async function handleMethodQrFile(event) {
-      var file = event.target.files[0];
+      var file = event.target.files && event.target.files[0];
       if (!file) return;
 
       if (typeof Security !== 'undefined') {
@@ -4043,8 +4088,8 @@
       return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="160" height="160"><rect width="200" height="200" fill="%23ffffff"/><rect x="20" y="20" width="45" height="45" fill="%230f172a"/><rect x="28" y="28" width="29" height="29" fill="%23ffffff"/><rect x="34" y="34" width="17" height="17" fill="%230f172a"/><rect x="135" y="20" width="45" height="45" fill="%230f172a"/><rect x="143" y="28" width="29" height="29" fill="%23ffffff"/><rect x="149" y="34" width="17" height="17" fill="%230f172a"/><rect x="20" y="135" width="45" height="45" fill="%230f172a"/><rect x="28" y="143" width="29" height="29" fill="%23ffffff"/><rect x="34" y="149" width="17" height="17" fill="%230f172a"/><rect x="85" y="25" width="12" height="25" fill="%230f172a"/><rect x="105" y="45" width="15" height="15" fill="%230f172a"/><rect x="85" y="85" width="30" height="30" fill="%232563eb"/><rect x="135" y="90" width="15" height="25" fill="%230f172a"/><rect x="30" y="90" width="20" height="15" fill="%230f172a"/><rect x="80" y="135" width="25" height="15" fill="%230f172a"/><rect x="115" y="130" width="20" height="45" fill="%230f172a"/><rect x="145" y="145" width="30" height="30" fill="%230f172a"/><text x="100" y="192" font-family="sans-serif" font-size="8" font-weight="bold" text-anchor="middle" fill="%230f172a">${encoded}</text></svg>`;
     }
 
-    function savePaymentMethod(e) {
-      e.preventDefault();
+    async function savePaymentMethod(e) {
+      if (e && e.preventDefault) e.preventDefault();
       var idVal = document.getElementById('admin-method-id').value;
       var name = document.getElementById('admin-method-name').value.trim();
       var type = document.getElementById('admin-method-type').value;
@@ -4053,54 +4098,140 @@
       var addr = document.getElementById('admin-method-addr').value.trim();
       var instructions = document.getElementById('admin-method-instructions').value.trim();
 
+      if (!name) {
+        showToast('Veuillez renseigner un nom pour le moyen de paiement.', 'error');
+        return;
+      }
+
       var methods = DB.get('payment_methods', []);
       var qr = editingMethodQr;
       if (!qr && type === 'crypto') {
         qr = generateQrSvg(name + ' ' + (network || ''));
       } else if (type === 'mobile_money') {
-        qr = null; // Pas de QR code pour mobile money
+        qr = null;
       }
+
+      var payload = {
+        name: name,
+        type: type,
+        network: network,
+        isBinance: isBinance,
+        address: addr,
+        instructions: instructions,
+        qrCode: qr,
+        enabled: true
+      };
 
       if (idVal) {
-        var mId = parseInt(idVal, 10);
-        var m = methods.find(function(x) { return x.id === mId; });
-        if (m) {
-          m.name = name; m.type = type; m.network = network; m.isBinance = isBinance;
-          m.address = addr; m.instructions = instructions;
-          if (editingMethodQr !== undefined) m.qrCode = qr;
+        payload.id = parseInt(idVal, 10);
+      }
+
+      // 1. Optimistic update in localStorage
+      if (payload.id) {
+        var mIdx = methods.findIndex(function(x) { return x.id === payload.id; });
+        if (mIdx !== -1) {
+          methods[mIdx] = Object.assign({}, methods[mIdx], payload);
         }
       } else {
-        var newId = methods.length > 0 ? Math.max.apply(null, methods.map(function(x) { return x.id; })) + 1 : 1;
-        methods.push({
-          id: newId, name: name, type: type, network: network, isBinance: isBinance,
-          address: addr, instructions: instructions, qrCode: qr, enabled: true
-        });
+        var newTempId = methods.length > 0 ? Math.max.apply(null, methods.map(function(x) { return x.id || 0; })) + 1 : 1;
+        methods.push(Object.assign({}, payload, { id: newTempId }));
       }
-
       DB.set('payment_methods', methods);
+      renderMethodsTable();
       closeAdminMethodModal();
-      renderDashboard();
-      showToast('Moyen de paiement enregistré !', 'success');
+      showToast('Enregistrement en cours...', 'info');
+
+      // 2. Persistance serveur via /api/data/methods
+      try {
+        var session = DB.get('session');
+        var res = await fetch('/api/data/methods', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erreur lors de l\'enregistrement sur le serveur.');
+        }
+        if (data.methods && Array.isArray(data.methods)) {
+          DB.set('payment_methods', data.methods);
+          renderMethodsTable();
+        }
+        showToast('Moyen de paiement enregistré avec succès !', 'success');
+      } catch (err) {
+        console.error('Save method error:', err);
+        showToast('Sauvegardé localement (erreur serveur : ' + err.message + ')', 'warning');
+      }
     }
 
-    function toggleMethod(id) {
+    async function toggleMethod(id) {
       var methods = DB.get('payment_methods', []);
       var m = methods.find(function(x) { return x.id === id; });
-      if (m) {
-        m.enabled = !m.enabled;
-        DB.set('payment_methods', methods);
-        renderDashboard();
-        showToast('Statut du moyen de paiement mis à jour.', 'success');
+      if (!m) return;
+      m.enabled = !m.enabled;
+      DB.set('payment_methods', methods);
+      renderMethodsTable();
+
+      try {
+        var session = DB.get('session');
+        var res = await fetch('/api/data/methods', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+          },
+          body: JSON.stringify({ id: m.id, enabled: m.enabled })
+        });
+        var data = await res.json();
+        if (data.methods && Array.isArray(data.methods)) {
+          DB.set('payment_methods', data.methods);
+          renderMethodsTable();
+        }
+        showToast('Statut mis à jour (' + (m.enabled ? 'Activé' : 'Désactivé') + ').', 'success');
+      } catch (e) {
+        showToast('Statut mis à jour localement.', 'info');
       }
     }
 
-    function deleteMethod(id) {
-      if (!confirm('Supprimer ce moyen de paiement ?')) return;
+    async function deleteMethod(id) {
+      if (!confirm('Supprimer définitivement ce moyen de paiement ?')) return;
       var methods = DB.get('payment_methods', []).filter(function(x) { return x.id !== id; });
       DB.set('payment_methods', methods);
-      renderDashboard();
-      showToast('Moyen supprimé.', 'success');
+      renderMethodsTable();
+
+      try {
+        var session = DB.get('session');
+        var res = await fetch('/api/data/methods?id=' + id, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+          }
+        });
+        var data = await res.json();
+        if (data.methods && Array.isArray(data.methods)) {
+          DB.set('payment_methods', data.methods);
+          renderMethodsTable();
+        }
+        showToast('Moyen de paiement supprimé avec succès.', 'success');
+      } catch (e) {
+        showToast('Moyen supprimé localement.', 'info');
+      }
     }
+
+    // Bind payment method handlers explicitly on window
+    window.openNewPaymentMethodModal = openNewPaymentMethodModal;
+    window.editPaymentMethod = editPaymentMethod;
+    window.closeAdminMethodModal = closeAdminMethodModal;
+    window.savePaymentMethod = savePaymentMethod;
+    window.deleteMethod = deleteMethod;
+    window.toggleMethod = toggleMethod;
+    window.handleMethodTypeChange = handleMethodTypeChange;
+    window.handleMethodQrFile = handleMethodQrFile;
+    window.syncMethodsFromServer = syncMethodsFromServer;
 
     // ========== 7. TABLE DES TICKETS DE SUPPORT CLIENT (MESSAGES ROUTÉS DEPUIS LE FORMULAIRE) ==========
     function renderTicketsTable(tickets) {
@@ -4369,6 +4500,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       checkAdminAuth();
       renderDashboard();
+      syncMethodsFromServer();
       setupDropzone();
 
       // Fermeture des modales au clic sur le fond (backdrop)
@@ -4391,6 +4523,16 @@
             if (chip) chip.setAttribute('aria-expanded', 'false');
           }
         }
+      });
+
+      // Prise en charge des onglets via l'ancre URL (#methods, #orders, #recharges, etc.)
+      var initialHashTab = (window.location.hash || '').replace('#', '').trim();
+      if (initialHashTab && tabInfo[initialHashTab]) {
+        switchAdminTab(initialHashTab);
+      }
+      window.addEventListener('hashchange', function() {
+        var hTab = (window.location.hash || '').replace('#', '').trim();
+        if (hTab && tabInfo[hTab]) switchAdminTab(hTab);
       });
     });
   </script>

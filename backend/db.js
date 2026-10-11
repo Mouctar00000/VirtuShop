@@ -790,19 +790,30 @@ class Database {
   }
 
   savePaymentMethod(method) {
-    if (method.id) {
-      const idx = this.data.payment_methods.findIndex(m => m.id === method.id);
-      if (idx !== -1) this.data.payment_methods[idx] = { ...this.data.payment_methods[idx], ...method };
-    } else {
-      const newId = this.data.payment_methods.length > 0 ? Math.max(...this.data.payment_methods.map(m => m.id)) + 1 : 1;
-      this.data.payment_methods.push({ ...method, id: newId });
+    if (!this.data.payment_methods) this.data.payment_methods = [];
+    const parsedId = method.id ? parseInt(method.id, 10) : null;
+    let saved = null;
+    if (parsedId) {
+      const idx = this.data.payment_methods.findIndex(m => m.id === parsedId);
+      if (idx !== -1) {
+        this.data.payment_methods[idx] = { ...this.data.payment_methods[idx], ...method, id: parsedId };
+        saved = this.data.payment_methods[idx];
+      }
+    }
+    if (!saved) {
+      const newId = this.data.payment_methods.length > 0 ? Math.max(...this.data.payment_methods.map(m => m.id || 0)) + 1 : 1;
+      saved = { ...method, id: newId, enabled: method.enabled !== false };
+      this.data.payment_methods.push(saved);
     }
     this.persist();
+    return saved;
   }
 
   deletePaymentMethod(id) {
-    this.data.payment_methods = this.data.payment_methods.filter(m => m.id !== id);
+    const numId = parseInt(id, 10);
+    this.data.payment_methods = (this.data.payment_methods || []).filter(m => m.id !== numId);
     this.persist();
+    return true;
   }
 
   // ========== TRACKING DES VISITEURS (PRODUCTION) ==========

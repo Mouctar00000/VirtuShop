@@ -104,8 +104,11 @@ async function runAsyncTests() {
   const runPaymentTests = require('./test_payments');
   await runPaymentTests();
 
+  console.log('\n=== TEST 9: Payment Methods Administration & API ===');
+  require('./test_payment_methods');
+
   console.log('\n======================================================');
-  console.log('🏆 TOUS LES 8 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('🏆 TOUS LES 9 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
   console.log('======================================================\n');
 }
 

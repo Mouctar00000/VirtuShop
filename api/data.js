@@ -282,6 +282,31 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // 7. MOYENS DE PAIEMENT POUR LA RECHARGE (GESTION ADMINISTRATEUR & LECTURE BOUTIQUE)
+    if (resource === 'methods' || resource === 'payment-methods') {
+      if (req.method === 'GET') {
+        const methods = db.getPaymentMethods();
+        return res.status(200).json({ methods });
+      }
+
+      if (req.method === 'POST' || req.method === 'PUT') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+        }
+        const saved = db.savePaymentMethod(body);
+        return res.status(200).json({ success: true, method: saved, methods: db.getPaymentMethods() });
+      }
+
+      if (req.method === 'DELETE') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+        }
+        const mId = parseInt(body.id || req.query?.id, 10);
+        db.deletePaymentMethod(mId);
+        return res.status(200).json({ success: true, methods: db.getPaymentMethods() });
+      }
+    }
+
     return res.status(404).json({ error: 'Ressource non trouvée.' });
   } catch (error) {
     console.error('[API Data Error]', error.message);
