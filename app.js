@@ -3776,6 +3776,7 @@ async function syncProductsFromServer() {
       var data = await res.json();
       if (data && Array.isArray(data.products) && data.products.length > 0) {
         DB.set('products', data.products);
+        if (typeof renderLandingShowcase === 'function') renderLandingShowcase();
         if (typeof renderLandingCatalog === 'function') renderLandingCatalog();
         if (typeof renderConnectedCatalog === 'function') renderConnectedCatalog();
       }
@@ -3807,7 +3808,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610111239_613efa',
+  currentVersion: 'v202610111304_37ac90',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 
