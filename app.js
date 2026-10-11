@@ -1876,10 +1876,10 @@ function renderDepositMethodsTabs() {
 
     if (m.type === 'mobile_money' || m.id === 'saspay-mobile-money' || m.id === 1) {
       mainTitle = 'Mobile Money';
-      subTitle = 'Wave, Orange, MTN, Moov';
+      subTitle = 'Wave, Orange, MTN';
     } else if (m.type === 'crypto_trybit' || m.provider === 'trybit' || m.id === 2 || m.id === 'trybit') {
-      mainTitle = 'Crypto Instantané';
-      subTitle = 'Trybit (USDT, BTC, SOL...)';
+      mainTitle = 'Crypto Instant';
+      subTitle = 'Trybit (USDT, BTC)';
     } else if (rawName.indexOf('(') !== -1) {
       mainTitle = rawName.substring(0, rawName.indexOf('(')).trim();
       subTitle = rawName.substring(rawName.indexOf('(') + 1).replace(')', '').trim();
@@ -1932,8 +1932,8 @@ function renderDepositMethodContent() {
   if (isCrypto && m.qrCode) {
     var qrCaption = isBinance ? "Scanner avec l'application Binance" : "Scanner avec votre portefeuille crypto";
     qrHtml = `
-      <div class="pay-qr-wrapper">
-        <img src="${m.qrCode}" alt="QR Code">
+      <div class="pay-qr-wrapper" style="margin-bottom: 6px;">
+        <img src="${m.qrCode}" alt="QR Code" style="max-height: 85px;">
         <span class="qr-caption-hint">${qrCaption}</span>
       </div>
     `;
@@ -1942,41 +1942,41 @@ function renderDepositMethodContent() {
   var addressLabel = isCrypto ? 'Adresse du portefeuille' : 'Numéro de compte / Tél';
 
   container.innerHTML = `
-    ${networkTag ? `<div style="text-align: center; margin-bottom: 8px;">${networkTag}</div>` : ''}
+    ${networkTag ? `<div style="text-align: center; margin-bottom: 4px;">${networkTag}</div>` : ''}
     ${qrHtml}
 
-    <div class="field">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-        <label style="margin-bottom: 0;">${addressLabel}</label>
-        <span style="font-size: 11px; color: var(--primary-600); font-weight: 600;">${escapeHtml(m.name)}</span>
+    <div class="field" style="margin-bottom: 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+        <label style="margin-bottom: 0; font-size: 11px; font-weight: 700;">${addressLabel}</label>
+        <span style="font-size: 10.5px; color: var(--primary-600); font-weight: 600;">${escapeHtml(m.name)}</span>
       </div>
-      <div class="pay-copy-group">
-        <input type="text" id="deposit-addr-value" value="${escapeHtml(m.address)}" readonly>
-        <button type="button" class="btn-copy-address" onclick="copyDepositAddress()">Copier</button>
+      <div class="pay-copy-group" style="margin-bottom: 0;">
+        <input type="text" id="deposit-addr-value" value="${escapeHtml(m.address)}" readonly style="height: 32px; font-size: 11.5px;">
+        <button type="button" class="btn-copy-address" onclick="copyDepositAddress()" style="height: 32px; font-size: 11.5px; padding: 0 10px;">Copier</button>
       </div>
     </div>
 
-    <div class="method-instructions-box">
-      <span style="font-size: 14px;">ℹ️</span>
-      <p style="margin: 0; font-size: 12.5px; line-height: 1.45;">${escapeHtml(m.instructions || 'Effectuez votre transfert puis joignez votre preuve ci-dessous.')}</p>
+    <div class="method-instructions-box" style="padding: 6px 8px; margin-bottom: 6px;">
+      <span style="font-size: 13px;">ℹ️</span>
+      <p style="margin: 0; font-size: 11.5px; line-height: 1.35;">${escapeHtml(m.instructions || 'Effectuez votre transfert puis joignez votre preuve ci-dessous.')}</p>
     </div>
 
-    <div class="field" style="margin-top: 14px;">
-      <label style="font-weight: 700; color: var(--primary-600);">📸 Capture d'écran ou Reçu du transfert</label>
-      <div class="proof-dropzone-compact" onclick="document.getElementById('deposit-proof-file-input').click()">
+    <div class="field" style="margin-top: 6px; margin-bottom: 6px;">
+      <label style="font-weight: 700; font-size: 11px; color: var(--primary-600); margin-bottom: 2px;">📸 Preuve du transfert (Capture d'écran)</label>
+      <div class="proof-dropzone-compact" onclick="document.getElementById('deposit-proof-file-input').click()" style="padding: 8px;">
         <input type="file" id="deposit-proof-file-input" accept="image/*" class="hidden" onchange="handleDepositProofSelected(event)">
         <div id="dep-prompt-text" class="${currentDepositProofBase64 ? 'hidden' : ''}">
-          <span style="font-size: 20px;">📁</span>
-          <p style="font-size: 12px; margin-top: 2px;">Cliquez pour joindre la preuve de transfert</p>
+          <span style="font-size: 18px;">📁</span>
+          <p style="font-size: 11px; margin-top: 1px;">Cliquez pour joindre votre capture de paiement</p>
         </div>
         <div id="dep-preview-wrapper" class="${currentDepositProofBase64 ? '' : 'hidden'}">
-          <img id="dep-preview-img" style="max-height: 100px; max-width: 100%; border-radius: 6px; margin-top: 4px; box-shadow: var(--shadow-sm);" src="${currentDepositProofBase64 || ''}" alt="Preuve">
-          <p style="font-size: 11px; color: var(--emerald-600); margin-top: 3px; font-weight: 600;">✓ Capture prête pour vérification</p>
+          <img id="dep-preview-img" style="max-height: 70px; max-width: 100%; border-radius: 4px; margin-top: 2px; box-shadow: var(--shadow-sm);" src="${currentDepositProofBase64 || ''}" alt="Preuve">
+          <p style="font-size: 10.5px; color: var(--emerald-600); margin-top: 2px; font-weight: 600;">✓ Capture prête pour vérification</p>
         </div>
       </div>
     </div>
 
-    <button type="button" class="btn-primary btn-light-sweep" style="width: 100%; margin-top: 10px;" onclick="submitDepositRequest()">
+    <button type="button" class="btn-primary btn-light-sweep" style="width: 100%; margin-top: 6px; height: 38px; font-size: 13px;" onclick="submitDepositRequest()">
       Valider la Recharge de Solde ⚡
     </button>
   `;
@@ -2007,28 +2007,28 @@ function renderSasPayDepositContent(container) {
   var isHosted = selectedMomoNetwork === 'checkout_hosted';
 
   var phoneFieldHtml = isHosted ? '' : `
-    <div class="field" style="margin-top: 10px;">
-      <label style="font-weight: 700; font-size: 13px;">Numéro Mobile Money (${country.name})</label>
+    <div class="field" style="margin-top: 4px; margin-bottom: 4px;">
+      <label class="momo-phone-label">Numéro Mobile Money (${country.name})</label>
       <div class="phone-input-group">
         <span class="phone-prefix">${country.prefix}</span>
         <input type="tel" id="momo-phone-input" placeholder="Ex: 0701020304" autocomplete="tel">
       </div>
-      <p style="font-size: 11px; color: var(--text-muted); margin: 3px 0 0 0;">
-        Notification de débit automatique ou invite USSD push envoyée sur ce numéro.
+      <p class="momo-phone-hint">
+        Notification automatique ou invite USSD push envoyée sur ce numéro.
       </p>
     </div>
   `;
 
   container.innerHTML = `
     <div class="momo-country-wrapper">
-      <label style="font-weight: 700; font-size: 13px; margin-bottom: 5px; display: block;">1. Choisissez votre Pays</label>
+      <label class="momo-networks-label">1. Choisissez votre Pays</label>
       <select id="momo-country-select" class="momo-select" onchange="onMomoCountryChange(this.value)">
         ${countryOptionsHtml}
       </select>
     </div>
 
-    <div class="field" style="margin-bottom: 10px;">
-      <label style="font-weight: 700; font-size: 13px; margin-bottom: 5px; display: block;">2. Choisissez votre Opérateur</label>
+    <div class="field" style="margin-bottom: 4px;">
+      <label class="momo-networks-label">2. Choisissez votre Opérateur</label>
       <div class="momo-networks-grid">
         ${networksHtml}
       </div>
@@ -2036,7 +2036,7 @@ function renderSasPayDepositContent(container) {
 
     <div class="momo-convert-card">
       <div class="momo-convert-left">
-        <span style="font-size: 20px;">💱</span>
+        <span style="font-size: 16px;">💱</span>
         <div>
           <div class="momo-convert-label">Montant débité (Devise locale)</div>
           <div class="momo-convert-value" id="momo-calc-local">${formattedLocal}</div>
@@ -2044,20 +2044,20 @@ function renderSasPayDepositContent(container) {
       </div>
       <div style="text-align: right;">
         <span class="momo-badge-live">Taux SasPay direct</span>
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">1 USD = ${country.rate} ${country.currency}</div>
+        <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 1px;">1 USD = ${country.rate} ${country.currency}</div>
       </div>
     </div>
 
     ${phoneFieldHtml}
 
-    <div class="momo-ticker-box" style="margin: 6px 0 10px;">
+    <div class="momo-ticker-box">
       <span class="momo-ticker-icon">🔒</span>
       <div class="momo-ticker-track">
-        <span class="momo-ticker-text">Passerelle officielle SasPay : votre solde est automatiquement crédité dès réception de la confirmation bancaire ou mobile ⚡ Cryptage bancaire TLS 1.3 direct • Sécurité 100% garantie</span>
+        <span class="momo-ticker-text">Passerelle officielle SasPay : votre solde est automatiquement crédité dès confirmation de votre opérateur • Sécurité 100% garantie</span>
       </div>
     </div>
 
-    <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" style="width: 100%; margin-top: 6px; padding: 10px;" onclick="submitSasPayDeposit()">
+    <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" onclick="submitSasPayDeposit()">
       Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
     </button>
   `;
@@ -2176,52 +2176,58 @@ async function submitSasPayDeposit() {
       throw new Error(data.error || 'Erreur lors de l\'initialisation du paiement SasPay.');
     }
 
-    if (data.checkoutUrl) {
-      window.open(data.checkoutUrl, '_blank');
-    }
-
     var localAmount = Math.round(amount * country.rate);
     var formattedLocal = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
     var container = document.getElementById('deposit-dynamic-content');
 
     if (container) {
+      var netObj = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || { name: 'Mobile Money' };
+      var checkoutBtnHtml = data.checkoutUrl ? `
+        <a href="${data.checkoutUrl}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-light-sweep" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 10px; font-weight: 700; font-size: 13px; margin-bottom: 8px; border-radius: 6px;">
+          ⚡ Ouvrir la page de paiement sécurisée (${escapeHtml(netObj.name)}) ↗
+        </a>
+      ` : '';
+
+      var instructionsText = Array.isArray(data.instructions) ? data.instructions.join(' ') : (data.instructions || 'Validez le prélèvement sur votre téléphone portable ou sur la page de paiement.');
+
       container.innerHTML = `
-        <div class="deposit-active-flow">
+        <div class="deposit-active-flow" id="deposit-momo-status-box" style="text-align: center; padding: 10px 6px;">
           <div class="pulse-spinner"></div>
           <div class="pulse-indicator">● En attente de confirmation</div>
-          <h3 style="font-size: 16px; margin: 0 0 6px 0; color: var(--text-primary);">Paiement SasPay Initié ⚡</h3>
-          <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px 0; line-height: 1.45;">
-            ${escapeHtml(data.instructions || 'Validez le prélèvement sur votre téléphone ou sur la page de paiement ouverte.')}
+          <h3 style="font-size: 15px; margin: 0 0 4px 0; color: var(--text-primary);">Paiement Mobile Money Initié ⚡</h3>
+          <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.4;">
+            ${escapeHtml(instructionsText)}
           </p>
 
-          <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px; text-align: left; font-size: 12px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; text-align: left; font-size: 11.5px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--text-secondary);">Montant crédité :</span>
-              <strong style="color: var(--emerald-600); font-size: 13px;">+$${amount.toFixed(2)} USD</strong>
+              <strong style="color: var(--emerald-600); font-size: 12.5px;">+$${amount.toFixed(2)} USD</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--text-secondary);">Débit local :</span>
               <strong>${formattedLocal}</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--text-secondary);">Opérateur :</span>
-              <span>${escapeHtml(selectedMomoNetwork.toUpperCase())}</span>
+              <span>${escapeHtml(netObj.name)}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="color: var(--text-secondary);">Réf. Transaction :</span>
-              <code style="font-size: 11px; background: #f1f5f9; padding: 1px 4px; border-radius: 3px;">${escapeHtml(data.transactionId)}</code>
+              <code style="font-size: 10.5px; background: #f1f5f9; padding: 1px 4px; border-radius: 3px;">${escapeHtml(data.transactionId)}</code>
             </div>
           </div>
 
-          ${data.checkoutUrl ? `
-            <a href="${data.checkoutUrl}" target="_blank" class="btn-primary" style="display: block; text-decoration: none; margin-bottom: 8px; text-align: center;">
-              Ouvrir le paiement ↗
-            </a>
-          ` : ''}
+          ${checkoutBtnHtml}
 
-          <button type="button" class="btn-secondary" onclick="checkSasPayStatusManual('${data.transactionId}', '${data.providerTxId || ''}', ${amount})" style="width: 100%;">
-            Vérifier maintenant 🔄
-          </button>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-secondary" onclick="checkSasPayStatusManual('${data.transactionId}', '${data.providerTxId || ''}', ${amount})" style="flex: 1; padding: 7px; font-size: 12px;">
+              Vérifier le statut 🔄
+            </button>
+            <button type="button" class="btn-secondary" onclick="renderDepositMethodContent()" style="padding: 7px 10px; font-size: 12px;" title="Changer d'opérateur">
+              Modifier
+            </button>
+          </div>
         </div>
       `;
     }
@@ -2236,6 +2242,30 @@ async function submitSasPayDeposit() {
       submitBtn.innerHTML = `Payer avec ${cNet.icon} ${escapeHtml(cNet.name)} ⚡`;
     }
   }
+}
+
+function showSasPayFailedState(message) {
+  if (momoPollingTimer) {
+    clearInterval(momoPollingTimer);
+    momoPollingTimer = null;
+  }
+  var container = document.getElementById('deposit-dynamic-content');
+  if (!container) return;
+  container.innerHTML = `
+    <div class="deposit-active-flow" style="text-align: center; padding: 14px 10px;">
+      <div style="font-size: 34px; margin-bottom: 6px;">❌</div>
+      <h3 style="color: var(--rose-600); font-size: 15.5px; margin: 0 0 4px 0;">Paiement non abouti</h3>
+      <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 12px 0; line-height: 1.45;">
+        ${escapeHtml(message || 'Le paiement a été rejeté ou a expiré auprès de votre opérateur.')}
+      </p>
+      <button type="button" class="btn-primary" onclick="renderDepositMethodContent()" style="width: 100%; margin-bottom: 6px; padding: 8px;">
+        Réessayer ou Choisir un autre moyen 🔄
+      </button>
+      <button type="button" class="btn-secondary" onclick="closeDepositModal()" style="width: 100%; padding: 7px;">
+        Fermer
+      </button>
+    </div>
+  `;
 }
 
 function startSasPayPolling(txId, providerTxId, amount) {
@@ -2261,10 +2291,10 @@ function startSasPayPolling(txId, providerTxId, amount) {
         clearInterval(momoPollingTimer);
         momoPollingTimer = null;
         onSasPayPaymentConfirmed(txId, amount, result.newBalance);
-      } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired') {
+      } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired' || result.status === 'cancelled') {
         clearInterval(momoPollingTimer);
         momoPollingTimer = null;
-        showToast('Paiement non abouti ou expiré.', 'error');
+        showSasPayFailedState(result.message);
       }
     } catch (e) {}
   }, 3500);
@@ -2282,8 +2312,10 @@ async function checkSasPayStatusManual(txId, providerTxId, amount) {
       if (momoPollingTimer) clearInterval(momoPollingTimer);
       momoPollingTimer = null;
       onSasPayPaymentConfirmed(txId, amount, result.newBalance);
+    } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired' || result.status === 'cancelled') {
+      showSasPayFailedState(result.message);
     } else {
-      showToast(result.message || 'Paiement en cours de traitement par votre opérateur.', 'info');
+      showToast(result.message || 'Paiement en attente de validation sur votre mobile.', 'info');
     }
   } catch (err) {
     showToast('Erreur lors de la vérification : ' + err.message, 'error');
@@ -2437,23 +2469,29 @@ async function submitTrybitDeposit() {
     // Afficher l'interface de suivi dynamique en direct
     var container = document.getElementById('deposit-dynamic-content');
     if (container) {
+      var paymentBtnHtml = data.paymentUrl ? `
+        <a href="${data.paymentUrl}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-light-sweep" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; text-align: center; margin-bottom: 8px; width: 100%; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 6px;">
+          ⚡ Ouvrir la page de paiement Trybit (${escapeHtml(selectedCrypto || 'Crypto')}) ↗
+        </a>
+      ` : '';
+
       container.innerHTML = `
-        <div class="momo-waiting-box" style="text-align: center; padding: 18px 12px;">
+        <div class="momo-waiting-box" style="text-align: center; padding: 12px 8px;">
           <div class="pulse-spinner"></div>
           <div class="pulse-indicator">⏳ Facture Trybit Active (${escapeHtml(data.invoiceUuid || '')})</div>
-          <h3 style="font-size: 16px; margin: 0 0 6px 0; color: var(--text-primary);">Paiement Crypto Initié ⚡</h3>
-          <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px 0; line-height: 1.45;">
-            La page de paiement officielle Trybit a été ouverte. Transférez les fonds vers l'adresse indiquée sur la page de paiement.
+          <h3 style="font-size: 15px; margin: 0 0 4px 0; color: var(--text-primary);">Paiement Crypto Initié ⚡</h3>
+          <p style="font-size: 11.5px; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.4;">
+            La facture officielle Trybit a été générée. Cliquez sur le bouton ci-dessous pour payer l'adresse exacte.
           </p>
 
-          <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 14px; text-align: left; font-size: 12px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; text-align: left; font-size: 11.5px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--text-secondary);">Montant à créditer :</span>
-              <strong style="color: var(--emerald-600); font-size: 13px;">+$${amount.toFixed(2)} USD</strong>
+              <strong style="color: var(--emerald-600); font-size: 12.5px;">+$${amount.toFixed(2)} USD</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
               <span style="color: var(--text-secondary);">Réf Facture :</span>
-              <code style="font-size: 11px; background: rgba(0,0,0,0.05); padding: 2px 5px; border-radius: 4px;">${escapeHtml(data.invoiceUuid || data.transactionId)}</code>
+              <code style="font-size: 10.5px; background: rgba(0,0,0,0.05); padding: 1px 4px; border-radius: 3px;">${escapeHtml(data.invoiceUuid || data.transactionId)}</code>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="color: var(--text-secondary);">Validation :</span>
@@ -2461,15 +2499,16 @@ async function submitTrybitDeposit() {
             </div>
           </div>
 
-          ${data.paymentUrl ? `
-            <a href="${data.paymentUrl}" target="_blank" class="btn-primary" style="display: block; text-decoration: none; text-align: center; margin-bottom: 10px; width: 100%;">
-              Ouvrir la page de paiement Trybit ↗
-            </a>
-          ` : ''}
+          ${paymentBtnHtml}
 
-          <button type="button" class="btn-secondary" onclick="checkTrybitStatusManual('${data.transactionId}', '${data.invoiceUuid || ''}', ${amount})" style="width: 100%;">
-            Vérifier le statut maintenant 🔄
-          </button>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-secondary" onclick="checkTrybitStatusManual('${data.transactionId}', '${data.invoiceUuid || ''}', ${amount})" style="flex: 1; padding: 7px; font-size: 12px;">
+              Vérifier le statut 🔄
+            </button>
+            <button type="button" class="btn-secondary" onclick="renderDepositMethodContent()" style="padding: 7px 10px; font-size: 12px;" title="Changer de moyen">
+              Modifier
+            </button>
+          </div>
         </div>
       `;
     }
@@ -2483,6 +2522,30 @@ async function submitTrybitDeposit() {
       submitBtn.innerHTML = `Payer $${amount.toFixed(2)} USD en Crypto ⚡`;
     }
   }
+}
+
+function showTrybitFailedState(message) {
+  if (trybitPollingTimer) {
+    clearInterval(trybitPollingTimer);
+    trybitPollingTimer = null;
+  }
+  var container = document.getElementById('deposit-dynamic-content');
+  if (!container) return;
+  container.innerHTML = `
+    <div class="deposit-active-flow" style="text-align: center; padding: 14px 10px;">
+      <div style="font-size: 34px; margin-bottom: 6px;">❌</div>
+      <h3 style="color: var(--rose-600); font-size: 15.5px; margin: 0 0 4px 0;">Facture non complétée</h3>
+      <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 12px 0; line-height: 1.45;">
+        ${escapeHtml(message || 'La facture crypto a été annulée ou a expiré.')}
+      </p>
+      <button type="button" class="btn-primary" onclick="renderDepositMethodContent()" style="width: 100%; margin-bottom: 6px; padding: 8px;">
+        Générer une nouvelle facture 🔄
+      </button>
+      <button type="button" class="btn-secondary" onclick="closeDepositModal()" style="width: 100%; padding: 7px;">
+        Fermer
+      </button>
+    </div>
+  `;
 }
 
 function startTrybitPolling(txId, invoiceUuid, amount) {
@@ -2508,10 +2571,10 @@ function startTrybitPolling(txId, invoiceUuid, amount) {
         clearInterval(trybitPollingTimer);
         trybitPollingTimer = null;
         onTrybitPaymentConfirmed(txId, amount, result.newBalance);
-      } else if (result.status === 'failed' || result.status === 'canceled') {
+      } else if (result.status === 'failed' || result.status === 'canceled' || result.status === 'expired') {
         clearInterval(trybitPollingTimer);
         trybitPollingTimer = null;
-        showToast('Facture Trybit annulée ou expirée.', 'error');
+        showTrybitFailedState(result.message);
       }
     } catch (e) {}
   }, 3500);
@@ -2529,6 +2592,8 @@ async function checkTrybitStatusManual(txId, invoiceUuid, amount) {
       if (trybitPollingTimer) clearInterval(trybitPollingTimer);
       trybitPollingTimer = null;
       onTrybitPaymentConfirmed(txId, amount, result.newBalance);
+    } else if (result.status === 'failed' || result.status === 'canceled' || result.status === 'expired') {
+      showTrybitFailedState(result.message);
     } else {
       showToast(result.message || 'Paiement en attente de détection sur la blockchain.', 'info');
     }
@@ -3742,7 +3807,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610111150_1e0d50',
+  currentVersion: 'v202610111239_613efa',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

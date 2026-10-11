@@ -318,16 +318,61 @@ class PaymentService {
           throw new Error(errMsg);
         }
 
-        saspayResult = res.data.data;
-        db.updateTransaction(txId, { providerTxId: saspayResult.id });
+        saspayResult = res.data?.data || res.data || {};
+        if (saspayResult.id) {
+          db.updateTransaction(txId, { providerTxId: saspayResult.id });
+        }
+
+        let instructionsList = (Array.isArray(saspayResult.instructions) && saspayResult.instructions.length > 0)
+          ? saspayResult.instructions
+          : null;
+
+        if (!instructionsList) {
+          if (saspayResult.checkout_url) {
+            instructionsList = ['Cliquez sur "Ouvrir le paiement" ci-dessous pour finaliser la transaction sur votre application ou navigateur.'];
+          } else if (cleanNetwork.startsWith('orange_cm')) {
+            instructionsList = ['Demande de paiement envoyée. Si aucun pop-up ne s\'affiche : composez le #150*4*4# pour générer votre code d\'autorisation Orange Money.'];
+          } else if (cleanNetwork.startsWith('mtn_cm')) {
+            instructionsList = ['Validez l\'invite USSD envoyée sur votre mobile ou composez le *126# pour approuver le prélèvement MTN MoMo.'];
+          } else if (cleanNetwork.startsWith('orange_ci')) {
+            instructionsList = ['Validez la notification ou composez le #144*82# sur votre mobile pour autoriser le paiement Orange Money.'];
+          } else if (cleanNetwork.startsWith('mtn_ci')) {
+            instructionsList = ['Validez la demande en composant le *133# sur votre mobile MTN MoMo.'];
+          } else if (cleanNetwork.startsWith('wave_')) {
+            instructionsList = ['Ouvrez l\'application Wave pour confirmer le paiement.'];
+          } else {
+            instructionsList = ['Validez la demande de débit avec votre code PIN secret sur votre téléphone portable.'];
+          }
+        }
+
+        // Si aucun checkout_url direct n'est fourni, générer un lien de session SasPay de secours
+        let effectiveCheckoutUrl = saspayResult.checkout_url || null;
+        if (!effectiveCheckoutUrl) {
+          try {
+            const fallbackSessionRes = await this.requestSasPay('/checkout-sessions/', 'POST', {
+              amount: formattedAmount,
+              currency: currency,
+              description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD - ${user.email}`,
+              country: countryCode,
+              customer_email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : `client_${user.id}@getvirtu.shop`,
+              customer_name: customerName || user.name,
+              customer_phone: cleanPhone || '',
+              return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
+              metadata: { internalTxId: txId, userId: user.id, amountUsd: parsedUsd.toFixed(2) }
+            });
+            if (fallbackSessionRes.ok && fallbackSessionRes.data?.success) {
+              effectiveCheckoutUrl = fallbackSessionRes.data.data.checkout_url;
+            }
+          } catch (e) {}
+        }
 
         return {
           success: true,
           transactionId: txId,
           providerTxId: saspayResult.id,
           status: 'pending',
-          checkoutUrl: saspayResult.checkout_url || null,
-          instructions: saspayResult.instructions || ['Demande de paiement envoyée sur votre téléphone. Veuillez valider le prompt avec votre code secret.'],
+          checkoutUrl: effectiveCheckoutUrl,
+          instructions: instructionsList,
           mode: saspayResult.checkout_url ? 'redirect' : 'push',
           amountUsd: parsedUsd,
           localAmount: formattedAmount,
@@ -399,13 +444,22 @@ class PaymentService {
 
       if (!verifyRes.ok) {
         // Tentative de vérification par statut de session de checkout si c'était une session
-        const sessionRes = await this.requestSasPay(`/checkout-sessions/${effectiveProviderTxId}/status/`, 'GET');
+        const sessionRes = await this.requestSasPay(`/checkout-sessions/${effectiveProviderTxId}/`, 'GET');
         if (sessionRes.ok && sessionRes.data?.success) {
           const sData = sessionRes.data.data;
-          if (sData.transaction_id) {
-            // S'il y a une transaction associée, la vérifier
-            return await this.verifySasPayPayment({ transactionId: tx.id, providerTxId: sData.transaction_id });
+          const sStatus = (sData.status || '').toUpperCase();
+          if (sStatus === 'PAID' || sStatus === 'SUCCESS') {
+            const txIdToVerify = (sData.transaction && typeof sData.transaction === 'object' ? sData.transaction.id : sData.transaction) || effectiveProviderTxId;
+            return await this.verifySasPayPayment({ transactionId: tx.id, providerTxId: txIdToVerify });
+          } else if (sStatus === 'EXPIRED' || sStatus === 'FAILED' || sStatus === 'CANCELLED') {
+            const failedTx = db.updateTransaction(tx.id, {
+              status: 'failed',
+              failureReason: `Session de paiement ${sStatus.toLowerCase()}.`,
+              updatedAt: new Date().toISOString()
+            });
+            return { success: false, status: 'failed', message: failedTx.failureReason, transaction: failedTx };
           }
+          return { success: true, status: 'pending', message: 'Session en attente de paiement...' };
         }
         return { success: true, status: 'pending', message: 'Vérification en cours auprès de l\'opérateur...' };
       }

@@ -30,7 +30,7 @@
   <meta name="twitter:title" content="GetVirtu ⚡ Comptes & Services Numériques">
   <meta name="twitter:description" content="Comptes vérifiés, clés d'activation et services numériques instantanés sur getvirtu.shop.">
 
-  <link rel="stylesheet" href="style.css?v=v202610111150_1e0d50">
+  <link rel="stylesheet" href="style.css?v=v202610111239_613efa">
 
   <!-- Données Structurées Schema.org -->
   <script type="application/ld+json">
@@ -666,22 +666,22 @@
   <div id="modal-deposit" class="modal-backdrop">
     <div class="modal-window modal-deposit-compact" style="max-width: 490px;">
       <button type="button" class="modal-close-btn" onclick="closeDepositModal()">✕</button>
-      <h2 class="modal-title" style="font-size: 18px; margin-bottom: 2px;">💳 Recharger mon Solde</h2>
+      <h2 class="modal-title deposit-title">💳 Recharger mon Solde</h2>
 
-      <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
-        Votre solde est utilisable immédiatement pour tous vos achats sur GetVirtu.
+      <p class="deposit-subtitle">
+        Solde utilisable immédiatement pour tous vos achats sur GetVirtu.
       </p>
 
-      <div class="field" style="margin-bottom: 10px;">
+      <div class="field deposit-field-amount">
         <div class="deposit-amount-row-clean">
           <label for="deposit-amount-input" class="deposit-amount-clean-label">Montant à recharger ($)</label>
           <span id="deposit-min-notice" class="deposit-min-badge-compact">Minimum requis : $5.00</span>
         </div>
-        <input type="number" step="1" min="5" id="deposit-amount-input" value="10" placeholder="Ex: 10" oninput="updateDepositCalculation()" style="height: 38px; font-size: 14px;">
+        <input type="number" step="1" min="5" id="deposit-amount-input" value="10" placeholder="Ex: 10" oninput="updateDepositCalculation()">
       </div>
 
-      <div class="field" style="margin-bottom: 8px;">
-        <label style="font-weight: 700; font-size: 12.5px; margin-bottom: 5px; display: block;">Choisissez le moyen de paiement</label>
+      <div class="field deposit-field-methods">
+        <label class="deposit-label">Choisissez le moyen de paiement</label>
         <div class="payment-method-tabs" id="deposit-methods-tabs-container">
           <!-- Injecté dynamiquement depuis les méthodes configurées par l'admin -->
         </div>
@@ -756,7 +756,7 @@
   <div id="toast"></div>
 
   <!-- Scripts Applicatifs & Sécurité -->
-  <script src="security.js?v=v202610111150_1e0d50"></script>
-  <script src="app.js?v=v202610111150_1e0d50"></script>
+  <script src="security.js?v=v202610111239_613efa"></script>
+  <script src="app.js?v=v202610111239_613efa"></script>
 </body>
 </html>
