@@ -2114,9 +2114,11 @@ function renderDepositMethodContent() {
       </div>
     </div>
 
-    <button type="button" class="btn-primary btn-light-sweep" style="width: 100%; margin-top: 6px; height: 38px; font-size: 13px;" onclick="submitDepositRequest()">
-      Valider la Recharge de Solde ⚡
-    </button>
+    <div style="display: flex; justify-content: center; width: 100%; margin-top: 6px;">
+      <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-manual" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; height: 38px; font-size: 13px; font-weight: 700; border-radius: 8px; margin: 0 auto;" onclick="submitDepositRequest()">
+        Valider la Recharge de Solde ⚡
+      </button>
+    </div>
   `;
 }
 
@@ -2216,12 +2218,14 @@ function renderSasPayDepositContent(container) {
       </div>
     </div>
 
-    <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" onclick="submitSasPayDeposit()">
-      Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
-    </button>
+    <div style="display: flex; justify-content: center; width: 100%; margin-top: 6px;">
+      <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" onclick="submitSasPayDeposit()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; height: 38px; font-size: 13px; font-weight: 700; border-radius: 8px; margin: 0 auto;">
+        Payer avec ${currentNet ? currentNet.icon + ' ' + escapeHtml(currentNet.name) : 'Mobile Money'} ⚡
+      </button>
+    </div>
 
-    <div style="text-align: center; margin-top: 6px;">
-      <a href="javascript:void(0)" onclick="submitSasPayDeposit('checkout')" style="font-size: 11px; color: var(--primary-600); text-decoration: underline;">
+    <div style="text-align: center; margin-top: 6px; width: 100%; display: flex; justify-content: center;">
+      <a href="javascript:void(0)" onclick="submitSasPayDeposit('checkout')" style="font-size: 11px; color: var(--primary-600); text-decoration: underline; text-align: center;">
         🌐 Préférer le Guichet Sécurisé SasPay (Toutes devises, Cartes & Portefeuilles) ↗
       </a>
     </div>
@@ -2609,9 +2613,11 @@ function renderTrybitDepositContent(container) {
       </div>
     </div>
 
-    <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; padding: 10px;" onclick="submitTrybitDeposit()">
-      <span>Payer <span id="trybit-btn-dynamic-amount">$${amount.toFixed(2)}</span> ⚡</span>
-    </button>
+    <div style="display: flex; justify-content: center; width: 100%; margin-top: 6px;">
+      <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-trybit" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; height: 38px; font-size: 13.5px; font-weight: 700; border-radius: 8px; margin: 0 auto; padding: 6px 12px;" onclick="submitTrybitDeposit()">
+        <span>Payer <span id="trybit-btn-dynamic-amount">$${amount.toFixed(2)}</span> ⚡</span>
+      </button>
+    </div>
   `;
 }
 
@@ -4118,7 +4124,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610111823_ca7619',
+  currentVersion: 'v202610111854_16b7d3',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

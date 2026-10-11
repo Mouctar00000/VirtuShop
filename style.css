@@ -1857,6 +1857,10 @@ button {
 }
 
 .modal-deposit-compact .momo-network-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
   padding: 5px 10px !important;
   min-height: 34px !important;
 }
@@ -1897,11 +1901,21 @@ button {
 }
 
 .modal-deposit-compact #btn-submit-momo,
-.modal-deposit-compact #btn-submit-trybit {
-  height: 36px !important;
+.modal-deposit-compact #btn-submit-trybit,
+.modal-deposit-compact #btn-submit-manual {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  height: 38px !important;
   font-size: 13px !important;
-  margin-top: 4px !important;
-  padding: 6px 12px !important;
+  font-weight: 700 !important;
+  margin: 6px auto 0 auto !important;
+  padding: 6px 14px !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
 }
 
 .pay-qr-wrapper {
@@ -1977,6 +1991,7 @@ button {
 .momo-network-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 10px 12px;
   background: #ffffff;
@@ -1984,7 +1999,7 @@ button {
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition-normal);
-  text-align: left;
+  text-align: center;
 }
 .momo-network-btn:hover {
   background: var(--bg-subtle);
@@ -5275,6 +5290,10 @@ html, body {
     gap: 4px !important;
   }
   .momo-network-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
     padding: 4px 6px !important;
   }
   .momo-network-title {
@@ -5307,11 +5326,18 @@ html, body {
   .momo-ticker-text {
     font-size: 9px !important;
   }
-  #btn-submit-momo, #btn-submit-trybit {
+  #btn-submit-momo, #btn-submit-trybit, #btn-submit-manual {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
     padding: 6px 8px !important;
     font-size: 12.5px !important;
-    height: 35px !important;
-    margin-top: 2px !important;
+    height: 36px !important;
+    margin: 4px auto 0 auto !important;
+    box-sizing: border-box !important;
   }
   .crypto-ticker-box {
     height: 19px !important;
