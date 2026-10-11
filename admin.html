@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202610111510_05cbdf">
-  <script src="security.js?v=v202610111510_05cbdf"></script>
+  <link rel="stylesheet" href="style.css?v=v202610111736_5f15a1">
+  <script src="security.js?v=v202610111736_5f15a1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -1107,6 +1107,43 @@
       background: #94a3b8;
     }
 
+    /* BOUTON COMPACT & MODERNE : AJOUTER UNE CLÉ */
+    .btn-admin-add-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: #ffffff;
+      border: 1px solid rgba(5, 150, 105, 0.5);
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 7px 14px;
+      border-radius: 7px;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(5, 150, 105, 0.22);
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      height: 34px;
+      box-sizing: border-box;
+    }
+
+    .btn-admin-add-key:hover {
+      background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+      box-shadow: 0 4px 10px rgba(5, 150, 105, 0.32);
+      transform: translateY(-1px);
+    }
+
+    .btn-admin-add-key:active {
+      transform: translateY(0);
+    }
+
+    .btn-admin-add-key:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .thumb-table-img {
       width: 44px;
       height: 44px;
@@ -1360,25 +1397,14 @@
       </div>
 
       <form id="admin-direct-login-form" onsubmit="handleAdminDirectLogin(event)">
-        <!-- BOUTON CONNEXION 1-CLIC OFFICIEL -->
-        <button type="button" id="btn-admin-instant-1click" onclick="autoLoginAdminDirect()" style="width: 100%; padding: 13px; margin-bottom: 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: none; border-radius: var(--radius-md); font-size: 14.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); transition: transform 0.15s ease;">
-          ⚡ Connexion Instantanée 1-Clic
-        </button>
-
-        <div style="display: flex; align-items: center; margin-bottom: 16px; gap: 10px;">
-          <div style="flex: 1; height: 1px; background: var(--border-subtle);"></div>
-          <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">ou par saisie manuelle</span>
-          <div style="flex: 1; height: 1px; background: var(--border-subtle);"></div>
-        </div>
-
         <div class="field">
           <label for="admin-direct-email">Identifiant administrateur</label>
-          <input type="text" id="admin-direct-email" required value="admin@getvirtu.shop" placeholder="admin@getvirtu.shop" autocomplete="username">
+          <input type="text" id="admin-direct-email" required placeholder="Adresse e-mail ou nom d'utilisateur" autocomplete="username">
         </div>
 
         <div class="field">
           <label for="admin-direct-pass">Mot de passe</label>
-          <input type="password" id="admin-direct-pass" required value="admin123" placeholder="••••••••" autocomplete="current-password">
+          <input type="password" id="admin-direct-pass" required placeholder="••••••••" autocomplete="current-password">
         </div>
 
         <button type="submit" class="btn-primary" style="width: 100%; padding: 11px; margin-top: 8px; font-size: 14px;">
@@ -1386,11 +1412,6 @@
         </button>
 
         <p id="admin-direct-error" class="error-text hidden" style="margin-top: 10px;"></p>
-
-        <div style="background: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.15); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 14px; font-size: 12px; color: var(--text-secondary); line-height: 1.45; text-align: center;">
-          Identifiants administrateur : <strong>admin@getvirtu.shop</strong> ou <strong>admin</strong><br>
-          Mot de passe : <strong>admin123</strong>
-        </div>
       </form>
 
       <div style="text-align: center; margin-top: 24px; border-top: 1px solid var(--border-subtle); padding-top: 16px;">
@@ -1526,8 +1547,8 @@
               <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">📦 Catalogue des Produits Disponibles</h2>
               <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Gérez vos articles, prix, stocks et contenus confidentiels délivrés aux acheteurs.</p>
             </div>
-            <button type="button" class="btn-primary btn-sm" onclick="openNewProductModal()">
-              <span>+ Ajouter un Produit ⚡</span>
+            <button type="button" class="btn-admin-add-key" onclick="openAddKeyModal()" id="btn-open-add-key" title="Ajouter une clé ou un code à un produit existant">
+              <span>+ Ajouter une Clé 🔑</span>
             </button>
           </div>
 
@@ -1936,9 +1957,72 @@
         </table>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+        <button type="button" class="btn-admin-add-key" style="height: 32px; padding: 0 12px; font-size: 11.5px;" onclick="closeAdminKeysModal(); openAddKeyModal(currentInspectedProductId);">
+          <span>+ Ajouter une Clé à ce Produit 🔑</span>
+        </button>
         <button type="button" class="btn-secondary" style="padding: 6px 16px;" onclick="closeAdminKeysModal()">Fermer</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODALE DÉDIÉE : AJOUTER UNE CLÉ (PRODUIT EXISTANT) ==================== -->
+  <div id="admin-add-key-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 500px;">
+      <button type="button" class="modal-close-btn" onclick="closeAdminAddKeyModal()">✕</button>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+        <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(16, 185, 129, 0.12); color: #059669; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">🔑</div>
+        <div>
+          <h2 class="modal-title" style="margin: 0; font-size: 17px; color: var(--text-primary);">Ajouter une Clé à un Produit</h2>
+          <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-secondary);">Réapprovisionnez le stock numérique d'un produit déjà créé.</p>
+        </div>
+      </div>
+
+      <form id="admin-add-key-form" onsubmit="submitAddKey(event)">
+        <!-- 1. Sélectionner un produit existant -->
+        <div class="field" style="margin-bottom: 12px;">
+          <label for="add-key-product-select" style="font-weight: 700; font-size: 12.5px; display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Produit existant à réapprovisionner <span style="color: var(--danger-500); font-weight: bold;">*</span></span>
+            <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">(Obligatoire)</span>
+          </label>
+          <select id="add-key-product-select" class="form-input" required onchange="onAddKeyProductChange()" style="width: 100%; font-size: 13px; font-weight: 500; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); background: #ffffff; box-sizing: border-box;">
+            <option value="">-- Sélectionnez un produit existant --</option>
+          </select>
+        </div>
+
+        <!-- Aperçu dynamique du produit sélectionné -->
+        <div id="add-key-product-preview" style="display: none; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <strong id="add-key-preview-name" style="color: var(--text-primary); font-size: 13px;"></strong>
+            <span id="add-key-preview-price" style="font-weight: 700; color: var(--primary-600);"></span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; color: var(--text-secondary);">
+            <span>Stock actuel : <strong id="add-key-preview-stock" style="color: var(--text-primary);">0</strong></span>
+            <span style="font-size: 11px; color: #059669; font-weight: 600;">+1 clé = +1 stock après enregistrement</span>
+          </div>
+        </div>
+
+        <!-- 2. Saisie de la clé numérique -->
+        <div class="field" style="margin-bottom: 12px;">
+          <label for="add-key-content" style="font-weight: 700; font-size: 12.5px; display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Nouvelle clé ou code numérique à vendre <span style="color: var(--danger-500); font-weight: bold;">*</span></span>
+            <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">1 par ligne</span>
+          </label>
+          <textarea id="add-key-content" class="form-input" required rows="4" oninput="onAddKeyInput(this.value)" placeholder="Entrez la clé ou le compte numérique à vendre :&#10;ex: GV-9823-XXXX-YYYY&#10;ou identifiant@email.com:motdepasse&#10;(Si vous avez plusieurs clés, collez 1 clé par ligne)" style="width: 100%; font-family: monospace; font-size: 12px; line-height: 1.45; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); resize: vertical; box-sizing: border-box;"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 11px; color: var(--text-muted);">
+            <span>Chaque clé sera vendue individuellement et de façon unique.</span>
+            <span id="add-key-count-hint" style="font-weight: 600; color: #059669;">0 clé détectée</span>
+          </div>
+        </div>
+
+        <!-- 3. Actions -->
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+          <button type="button" class="btn-secondary btn-sm" style="padding: 7px 14px;" onclick="closeAdminAddKeyModal()">Annuler</button>
+          <button type="submit" class="btn-admin-add-key" id="btn-submit-add-key">
+            <span>+ Enregistrer la Clé 🔑</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
   <div id="admin-method-modal" class="modal-backdrop">
@@ -2314,9 +2398,9 @@
 
     // ========== AUTHENTIFICATION ADMIN SÉCURISÉE (HASH SHA-256 + SESSIONS + ANTI BRUTE-FORCE) ==========
     var ADMIN_SALT = 'getvirtu_sec_salt_2026';
-    var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
-    var ADMIN_SHORT_HASH = '78c3dc6ad802ec87ba0b8333e41869ef13b168d63c8e09f189b34c4906dd5771'; // Salted SHA-256 de admin
-    var ADMIN_LEGACY_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Ancien hash
+    var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902';
+    var ADMIN_SHORT_HASH = '78c3dc6ad802ec87ba0b8333e41869ef13b168d63c8e09f189b34c4906dd5771';
+    var ADMIN_LEGACY_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc';
 
     function checkAdminAuth() {
       var s = DB.get('admin_session');
@@ -2353,15 +2437,6 @@
         DB.set('session', s);
       }
       window.location.href = 'index.html';
-    }
-
-    // Connexion automatique 1-clic pour l'administrateur
-    function autoLoginAdminDirect() {
-      var emailEl = document.getElementById('admin-direct-email');
-      var passEl = document.getElementById('admin-direct-pass');
-      if (emailEl) emailEl.value = 'admin@getvirtu.shop';
-      if (passEl) passEl.value = 'admin123';
-      handleAdminDirectLogin(null);
     }
 
     async function handleAdminDirectLogin(e) {
@@ -2687,9 +2762,14 @@
               </div>
             </td>
             <td>
-              <button type="button" class="btn-secondary btn-sm" style="padding: 4px 9px; font-size: 11px; white-space: nowrap;" onclick="viewProductKeysInventory(${p.id})">
-                🔐 Clés (${totalKeys})
-              </button>
+              <div style="display: flex; gap: 5px; align-items: center;">
+                <button type="button" class="btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; white-space: nowrap;" onclick="viewProductKeysInventory(${p.id})">
+                  🔐 Clés (${totalKeys})
+                </button>
+                <button type="button" class="btn-admin-add-key" style="height: 25px; padding: 0 8px; font-size: 10.5px; border-radius: 5px;" title="Ajouter une clé à ce produit" onclick="openAddKeyModal(${p.id})">
+                  + Clé
+                </button>
+              </div>
             </td>
             <td>
               <span class="status-indicator-pill ${p.published ? 'online' : 'offline'}" onclick="toggleProductVisibility(${p.id})">
@@ -2710,10 +2790,14 @@
       tbody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun produit configuré.</td></tr>';
     }
 
+    var currentInspectedProductId = null;
+
     function viewProductKeysInventory(prodId) {
       var prods = DB.get('products', []);
       var p = prods.find(function(x) { return x.id === prodId; });
       if (!p) return;
+
+      currentInspectedProductId = prodId;
 
       var titleEl = document.getElementById('keys-modal-title');
       if (titleEl) titleEl.textContent = '🔐 Inventaire des Clés : ' + p.name;
@@ -2736,7 +2820,7 @@
 
         if (tbody) {
           if (keys.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Aucune clé enregistrée pour ce produit. Ajoutez des clés via le bouton Modifier.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Aucune clé enregistrée pour ce produit. Ajoutez des clés via le bouton Modifier ou "+ Ajouter une Clé".</td></tr>';
           } else {
             tbody.innerHTML = keys.map(function(k) {
               return `
@@ -2786,6 +2870,196 @@
     function closeAdminKeysModal() {
       var m = document.getElementById('admin-keys-modal');
       if (m) m.classList.remove('active');
+    }
+
+    // ==================== GESTION DE LA FONCTIONNALITÉ « AJOUTER UNE CLÉ » ====================
+    function openAddKeyModal(preselectedProdId) {
+      var select = document.getElementById('add-key-product-select');
+      var contentInput = document.getElementById('add-key-content');
+      var countHint = document.getElementById('add-key-count-hint');
+      var preview = document.getElementById('add-key-product-preview');
+
+      if (!select) return;
+
+      var prods = DB.get('products', []) || [];
+
+      if (!prods || prods.length === 0) {
+        showToast('Aucun produit n\'existe actuellement. Veuillez d\'abord créer un produit via "+ Nouveau Produit ⚡".', 'warning');
+        return;
+      }
+
+      var html = '<option value="">-- Sélectionnez un produit existant --</option>';
+      prods.forEach(function(p) {
+        var isSel = (preselectedProdId && (p.id === preselectedProdId || String(p.id) === String(preselectedProdId)));
+        html += `<option value="${p.id}" ${isSel ? 'selected' : ''}>${escapeHtml(p.name)} (Stock : ${p.stock || 0}) — $${(p.price || 0).toFixed(2)}</option>`;
+      });
+      select.innerHTML = html;
+
+      if (contentInput) contentInput.value = '';
+      if (countHint) countHint.textContent = '0 clé détectée';
+      if (preview) preview.style.display = 'none';
+
+      if (preselectedProdId) {
+        select.value = preselectedProdId;
+        onAddKeyProductChange();
+      }
+
+      var modal = document.getElementById('admin-add-key-modal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeAdminAddKeyModal() {
+      var modal = document.getElementById('admin-add-key-modal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function onAddKeyProductChange() {
+      var select = document.getElementById('add-key-product-select');
+      var preview = document.getElementById('add-key-product-preview');
+      var nameEl = document.getElementById('add-key-preview-name');
+      var priceEl = document.getElementById('add-key-preview-price');
+      var stockEl = document.getElementById('add-key-preview-stock');
+
+      if (!select || !preview) return;
+      var val = select.value;
+      if (!val) {
+        preview.style.display = 'none';
+        return;
+      }
+
+      var prodId = parseInt(val, 10);
+      var prods = DB.get('products', []) || [];
+      var p = prods.find(function(x) { return x.id === prodId; });
+
+      if (!p) {
+        preview.style.display = 'none';
+        return;
+      }
+
+      if (nameEl) nameEl.textContent = p.name + ' (' + (p.category || 'Général') + ')';
+      if (priceEl) priceEl.textContent = '$' + (p.price || 0).toFixed(2) + ' USD';
+      if (stockEl) stockEl.textContent = (p.stock || 0) + ' disponible(s)';
+      preview.style.display = 'block';
+    }
+
+    function onAddKeyInput(val) {
+      var countHint = document.getElementById('add-key-count-hint');
+      if (!countHint) return;
+      var clean = (val || '').trim();
+      if (!clean) {
+        countHint.textContent = '0 clé détectée';
+        return;
+      }
+      var lines = clean.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+      countHint.textContent = lines.length + (lines.length > 1 ? ' clés prêtes' : ' clé prête');
+    }
+
+    async function submitAddKey(e) {
+      e.preventDefault();
+      var select = document.getElementById('add-key-product-select');
+      var contentInput = document.getElementById('add-key-content');
+      var submitBtn = document.getElementById('btn-submit-add-key');
+
+      if (!select || !contentInput) return;
+
+      var prodId = parseInt(select.value, 10);
+      if (!prodId || isNaN(prodId)) {
+        showToast('Veuillez obligatoirement sélectionner un produit existant.', 'error');
+        return;
+      }
+
+      var prods = DB.get('products', []) || [];
+      var targetProduct = prods.find(function(x) { return x.id === prodId; });
+      if (!targetProduct) {
+        showToast('Le produit sélectionné est introuvable.', 'error');
+        return;
+      }
+
+      var raw = contentInput.value.trim();
+      if (!raw) {
+        showToast('Veuillez saisir au moins une clé ou un code numérique.', 'warning');
+        return;
+      }
+
+      var lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+      if (lines.length === 0) {
+        showToast('Veuillez saisir au moins une clé valide.', 'warning');
+        return;
+      }
+
+      var seen = new Set();
+      for (var i = 0; i < lines.length; i++) {
+        var lower = lines[i].toLowerCase();
+        if (seen.has(lower)) {
+          showToast(`Erreur : la clé "${lines[i]}" apparaît plusieurs fois dans votre saisie.`, 'error');
+          return;
+        }
+        seen.add(lower);
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Enregistrement... ⏳</span>';
+      }
+
+      try {
+        var session = DB.get('session');
+        var res = await fetch('/api/data/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+          },
+          body: JSON.stringify({
+            action: 'add_keys',
+            productId: prodId,
+            keys: lines
+          })
+        });
+
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erreur lors de l\'enregistrement des clés.');
+        }
+
+        if (data.products) {
+          DB.set('products', data.products);
+        } else {
+          targetProduct.stock = data.stock;
+          DB.set('products', prods);
+        }
+
+        var vault = DB.get('vault', {}) || {};
+        if (!vault[prodId]) vault[prodId] = { type: 'text', keys: [] };
+        if (!Array.isArray(vault[prodId].keys)) vault[prodId].keys = [];
+        lines.forEach(function(l, idx) {
+          vault[prodId].keys.push({
+            id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + idx,
+            content: l,
+            used: false,
+            orderId: null,
+            soldTo: null,
+            userId: null,
+            soldAt: null
+          });
+        });
+        DB.set('vault', vault);
+
+        var updatedProds = DB.get('products', []);
+        renderProductsTable(updatedProds);
+
+        showToast(`🎉 ${data.addedCount} clé(s) ajoutée(s) avec succès ! Nouveau stock pour "${escapeHtml(data.product ? data.product.name : targetProduct.name)}" : ${data.stock}`, 'success');
+        closeAdminAddKeyModal();
+
+      } catch (err) {
+        console.error('[Add Key Error]', err);
+        showToast(err.message || 'Échec de l\'ajout des clés.', 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>+ Enregistrer la Clé 🔑</span>';
+        }
+      }
     }
 
     function toggleProductVisibility(id) {
@@ -4596,7 +4870,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202610111510_05cbdf',
+      currentVersion: 'v202610111736_5f15a1',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 

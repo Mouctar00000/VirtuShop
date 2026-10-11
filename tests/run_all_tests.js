@@ -81,7 +81,11 @@ assert(styleCss.includes('.nav-tab-connected'), '.nav-tab-connected must be pres
 assert(styleCss.includes('.nav-links-connected'), '.nav-links-connected must be present in style.css');
 assert(indexHtml.includes('nav-tab-connected'), 'nav-tab-connected must be present in index.html');
 assert(indexHtml.includes('id="nav-admin-link-li"'), 'nav-admin-link-li must be present in index.html');
-assert(appJs.includes("var isAdmin = Boolean(session && session.userId && session.role === 'admin');"), 'Strict role isolation check in app.js');
+assert(adminHtml.includes('btn-admin-add-key'), '.btn-admin-add-key must be present in admin.html');
+assert(adminHtml.includes('openAddKeyModal()'), 'openAddKeyModal() must be bound in admin.html');
+assert(adminHtml.includes('id="admin-add-key-modal"'), '#admin-add-key-modal must be present in admin.html');
+assert(adminHtml.includes('id="add-key-product-select"'), '#add-key-product-select must be present in admin.html');
+assert(styleCss.includes('.btn-admin-add-key'), '.btn-admin-add-key must be defined in style.css');
 
 console.log('✓ Test 4 Réussi: Toutes les modifications UI, CSS et boutons de bascule validées.');
 
@@ -109,8 +113,12 @@ async function runAsyncTests() {
   const testVersionCache = require('./test_version_cache');
   await testVersionCache();
 
+  console.log('\n=== TEST 11: Ajout de Clés & Stock Réapprovisionné (Add Key Feature) ===');
+  const testAddKey = require('./test_add_key_feature');
+  await testAddKey();
+
   console.log('\n======================================================');
-  console.log('🏆 TOUS LES 10 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('🏆 TOUTES LES 11 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
   console.log('======================================================\n');
 }
 

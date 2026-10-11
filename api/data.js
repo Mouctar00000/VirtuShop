@@ -59,12 +59,12 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(stats);
     }
 
-    // 2. PRODUITS
-    if (resource === 'products') {
+    // 2. PRODUITS & GESTION DES CLÉS
+    if (resource === 'products' || resource === 'keys') {
       if (req.method === 'GET') {
         const prodId = req.query?.productId || (req.url && req.url.includes('productId=') ? req.url.split('productId=')[1].split('&')[0] : null);
         const checkName = req.query?.checkName || (req.url && req.url.includes('checkName=') ? decodeURIComponent(req.url.split('checkName=')[1].split('&')[0]) : null);
-        const withKeys = req.query?.keys === '1' || (req.url && req.url.includes('keys=1'));
+        const withKeys = resource === 'keys' || req.query?.keys === '1' || (req.url && req.url.includes('keys=1'));
 
         // Inspection des clés du coffre-fort réservée à l'administrateur
         if (withKeys && prodId) {
@@ -90,6 +90,28 @@ module.exports = async function handler(req, res) {
           return res.status(403).json({ error: 'Action réservée à l\'administrateur.' });
         }
         try {
+          // Ajout direct de clés à un produit existant (sans créer de nouveau produit)
+          if (resource === 'keys' || body.action === 'add_keys') {
+            const prodId = parseInt(body.productId, 10);
+            if (!prodId) {
+              return res.status(400).json({ error: 'Veuillez sélectionner un produit existant valide.' });
+            }
+            const existingProduct = db.getProductById(prodId);
+            if (!existingProduct) {
+              return res.status(404).json({ error: 'Produit introuvable dans le catalogue.' });
+            }
+            const rawKeys = body.keys || body.newKeys || body.key;
+            const resKeys = await db.addKeysToProduct(prodId, rawKeys);
+            await db.persistToRemote();
+            return res.status(200).json({
+              success: true,
+              product: resKeys.product,
+              stock: resKeys.stock,
+              addedCount: resKeys.addedCount,
+              products: db.getProducts()
+            });
+          }
+
           const savedProd = db.saveProduct(body, { newKeys: body.newKeys || body.keys });
           await db.persistToRemote();
           return res.status(200).json({ success: true, product: savedProd, products: db.getProducts() });
