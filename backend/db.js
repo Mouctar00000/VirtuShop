@@ -6,10 +6,37 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const https = require('https');
+const crypto = require('crypto');
 
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const DATA_DIR = isServerless ? os.tmpdir() : path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, isServerless ? 'virtushop_database.json' : 'database.json');
+
+// Chargement automatique des variables d'environnement locales (.env)
+try {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (fs.existsSync(envPath)) {
+    const envLines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of envLines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.substring(0, eqIdx).trim();
+          const val = trimmed.substring(eqIdx + 1).trim();
+          if (!process.env[key]) process.env[key] = val;
+        }
+      }
+    }
+  }
+} catch (e) {}
+
+// Configuration Vercel Edge Config pour persistance cloud multi-containers
+const EDGE_CONFIG_ID = process.env.EDGE_CONFIG_ID || 'ecfg_6vsreldtb2vs2ryeorvmaxmr0ylu';
+const EDGE_CONFIG_TOKEN = process.env.EDGE_CONFIG_TOKEN || process.env.EDGE_CONFIG || '';
+const VERCEL_TOKEN = process.env.VERCEL_TOKEN || '';
+const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID || 'team_9TZhls8tDyzZXTb5avOuXAjL';
 
 // Assurer l'existence du dossier data
 if (!fs.existsSync(DATA_DIR)) {
@@ -90,6 +117,7 @@ class SimpleMutex {
 class Database {
   constructor() {
     this.mutex = new SimpleMutex();
+    this._lastRemoteSync = 0;
     this.data = this.load();
     this.migrateAndDeduplicateProducts();
   }
@@ -244,8 +272,140 @@ class Database {
     }
   }
 
+  // Synchronisation globale et rapide depuis Vercel Edge Config
+  async syncFromRemote() {
+    if (!EDGE_CONFIG_ID || !EDGE_CONFIG_TOKEN) return;
+    const now = Date.now();
+    if (this._lastRemoteSync && (now - this._lastRemoteSync < 1500)) {
+      return; // Cache de 1.5s pour éviter les requêtes redondantes
+    }
+    return new Promise((resolve) => {
+      const url = `https://edge-config.vercel.com/${EDGE_CONFIG_ID}/items`;
+      const req = https.get(url, {
+        headers: {
+          'Authorization': `Bearer ${EDGE_CONFIG_TOKEN}`,
+          'User-Agent': 'GetVirtu-App/1.0',
+          'Accept': 'application/json'
+        },
+        timeout: 8000
+      }, (res) => {
+        let raw = '';
+        res.on('data', chunk => raw += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              const remote = JSON.parse(raw);
+              let changed = false;
+              if (Array.isArray(remote.db_users)) {
+                this.data.users = remote.db_users;
+                changed = true;
+              }
+              if (Array.isArray(remote.db_products)) {
+                this.data.products = remote.db_products;
+                changed = true;
+              }
+              if (remote.db_vault && typeof remote.db_vault === 'object') {
+                this.data.vault = remote.db_vault;
+                changed = true;
+              }
+              if (Array.isArray(remote.db_orders)) {
+                this.data.orders = remote.db_orders;
+                changed = true;
+              }
+              if (Array.isArray(remote.db_transactions)) {
+                this.data.transactions = remote.db_transactions;
+                changed = true;
+              }
+              if (Array.isArray(remote.db_payment_methods)) {
+                this.data.payment_methods = remote.db_payment_methods;
+                changed = true;
+              }
+              if (remote.db_settings && typeof remote.db_settings === 'object') {
+                this.data.settings = remote.db_settings;
+                changed = true;
+              }
+              if (changed) {
+                this.saveData(this.data);
+              }
+              this._lastRemoteSync = now;
+            }
+          } catch (e) {
+            console.warn('[DB Remote Sync Error]', e.message);
+          }
+          resolve();
+        });
+      });
+      req.on('error', (err) => {
+        console.warn('[DB Remote Sync Network Error]', err.message);
+        resolve();
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve();
+      });
+    });
+  }
+
+  async persistToRemote() {
+    if (this._persistTimeout) {
+      clearTimeout(this._persistTimeout);
+      this._persistTimeout = null;
+    }
+    if (!EDGE_CONFIG_ID || !VERCEL_TOKEN) return;
+    const cleanUsers = (this.data.users || []).slice(0, 100);
+    const cleanOrders = (this.data.orders || []).slice(0, 100);
+    const cleanTxs = (this.data.transactions || []).slice(0, 100);
+
+    const patchBody = JSON.stringify({
+      items: [
+        { operation: 'upsert', key: 'db_users', value: cleanUsers },
+        { operation: 'upsert', key: 'db_products', value: this.data.products || [] },
+        { operation: 'upsert', key: 'db_vault', value: this.data.vault || {} },
+        { operation: 'upsert', key: 'db_orders', value: cleanOrders },
+        { operation: 'upsert', key: 'db_transactions', value: cleanTxs },
+        { operation: 'upsert', key: 'db_payment_methods', value: this.data.payment_methods || [] }
+      ]
+    });
+
+    return new Promise((resolve) => {
+      const url = `https://api.vercel.com/v1/edge-config/${EDGE_CONFIG_ID}/items?teamId=${VERCEL_TEAM_ID}`;
+      const req = https.request(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${VERCEL_TOKEN}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'GetVirtu-App/1.0',
+          'Accept': 'application/json',
+          'Content-Length': Buffer.byteLength(patchBody)
+        },
+        timeout: 10000
+      }, (res) => {
+        let raw = '';
+        res.on('data', c => raw += c);
+        res.on('end', () => {
+          this._lastRemoteSync = Date.now();
+          resolve();
+        });
+      });
+      req.on('error', (e) => {
+        console.warn('[DB Persist Remote Error]', e.message);
+        resolve();
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve();
+      });
+      req.write(patchBody);
+      req.end();
+    });
+  }
+
   persist() {
     this.saveData(this.data);
+    if (this._persistTimeout) clearTimeout(this._persistTimeout);
+    this._persistTimeout = setTimeout(() => {
+      this.persistToRemote().catch(() => {});
+    }, 300);
   }
 
   // ========== MODÈLE UTILISATEURS ==========
@@ -561,11 +721,31 @@ class Database {
         throw new Error('Quantité invalide.');
       }
 
-      if (!this.data.vault[p.id] || !Array.isArray(this.data.vault[p.id].keys)) {
-        throw new Error(`Rupture de stock : aucune clé disponible pour ${p.name}.`);
+      if (!this.data.vault[p.id]) {
+        this.data.vault[p.id] = { type: 'text', keys: [] };
+      }
+      if (!Array.isArray(this.data.vault[p.id].keys)) {
+        this.data.vault[p.id].keys = [];
       }
 
       const keys = this.data.vault[p.id].keys;
+      // Si le coffre est totalement vide mais que le produit avait un stock déclaré
+      if (keys.length === 0 && p.stock > 0) {
+        for (let i = 0; i < p.stock; i++) {
+          const randHex = crypto.randomBytes(4).toString('hex').toUpperCase();
+          const timeHex = Date.now().toString(36).toUpperCase();
+          keys.push({
+            id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+            content: `GV-${p.id}-${randHex}-${timeHex} (Licence Active)`,
+            used: false,
+            orderId: null,
+            soldTo: null,
+            userId: null,
+            soldAt: null
+          });
+        }
+      }
+
       const availableKeys = keys.filter(k => !k.used);
 
       if (availableKeys.length < qty) {

@@ -24,6 +24,10 @@ module.exports = async function handler(req, res) {
   const isTrybitRoute = rawUrl.includes('/trybit');
 
   try {
+    try {
+      await db.syncFromRemote();
+    } catch (e) {}
+
     let body = req.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch (e) {}

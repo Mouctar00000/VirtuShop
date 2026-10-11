@@ -29,6 +29,11 @@ module.exports = async function handler(req, res) {
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const auth = authService.verifySession(token);
 
+    // Synchronisation automatique préalable avec Vercel Edge Config
+    try {
+      await db.syncFromRemote();
+    } catch (e) {}
+
     // 1. STATISTIQUES RÉELLES DYNAMIQUES AVEC FILTRES
     if (req.method === 'GET' && resource === 'stats') {
       if (!auth || auth.user.role !== 'admin') {
@@ -71,6 +76,7 @@ module.exports = async function handler(req, res) {
         }
         try {
           const savedProd = db.saveProduct(body, { newKeys: body.newKeys || body.keys });
+          await db.persistToRemote();
           return res.status(200).json({ success: true, product: savedProd, products: db.getProducts() });
         } catch (err) {
           return res.status(400).json({ error: err.message });
@@ -83,6 +89,7 @@ module.exports = async function handler(req, res) {
         }
         const prodId = parseInt(body.id || req.query?.id, 10);
         db.deleteProduct(prodId);
+        await db.persistToRemote();
         return res.status(200).json({ success: true, products: db.getProducts() });
       }
     }
@@ -107,46 +114,65 @@ module.exports = async function handler(req, res) {
         }
 
         // Validation commande côté serveur
-        const prod = db.getProductById(body.productId);
+        let prod = db.getProductById(body.productId);
+        if (!prod && (body.productName || body.name)) {
+          prod = db.findProductByNormalizedName(body.productName || body.name);
+        }
+        if (!prod && body.productInfo) {
+          try { prod = db.saveProduct(body.productInfo); } catch (e) {}
+        }
         if (!prod) {
-          return res.status(404).json({ error: 'Produit introuvable.' });
+          return res.status(404).json({ error: 'Produit introuvable dans le catalogue.' });
         }
 
         const qty = parseInt(body.quantity, 10) || 1;
         if (qty < 1) {
           return res.status(400).json({ error: 'La quantité doit être supérieure ou égale à 1.' });
         }
-        if (prod.stock < qty) {
+        if (prod.stock < qty && prod.stock > 0) {
           return res.status(400).json({
-            error: prod.stock <= 0
-              ? `Ce produit est actuellement en rupture de stock.`
-              : `Stock insuffisant : maximum ${prod.stock} unité(s) disponible(s).`,
+            error: `Stock insuffisant : maximum ${prod.stock} unité(s) disponible(s).`,
             availableStock: prod.stock
           });
         }
 
         const total = Math.round(prod.price * qty * 100) / 100;
-        if ((auth.user.balance || 0) < total) {
-          return res.status(400).json({ error: 'Solde insuffisant pour cet achat. Veuillez recharger votre compte.' });
+
+        // Récupération stricte du solde frais en base de données
+        const freshUser = db.getUserById(auth.user.id) || db.getUserByEmail(auth.user.email);
+        if (!freshUser) {
+          return res.status(401).json({ error: 'Compte client introuvable.' });
         }
 
-        const orderId = 'ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+        const currentBalance = parseFloat(freshUser.balance) || 0;
+        if (currentBalance < total) {
+          const missing = Math.round((total - currentBalance) * 100) / 100;
+          return res.status(400).json({
+            error: `Solde insuffisant ($${currentBalance.toFixed(2)} disponible, $${total.toFixed(2)} requis). Veuillez recharger votre compte.`,
+            code: 'INSUFFICIENT_BALANCE',
+            currentBalance: currentBalance,
+            requiredAmount: total,
+            missingAmount: missing
+          });
+        }
+
+        const orderId = body.orderId || ('ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase());
 
         // Attribution atomique transactionnelle de N clés via le Mutex de la base
         let allocatedResult = null;
         try {
           allocatedResult = await db.allocateKeysForProduct(prod.id, qty, {
             orderId: orderId,
-            userId: auth.user.id,
-            userEmail: auth.user.email
+            userId: freshUser.id,
+            userEmail: freshUser.email
           });
         } catch (err) {
           return res.status(400).json({ error: err.message, code: err.code });
         }
 
-        // Déduction sécurisée du solde côté serveur
-        const newBalance = Math.round((auth.user.balance - total) * 100) / 100;
-        db.updateUser(auth.user.id, { balance: newBalance });
+        // Déduction sécurisée et définitive du solde en base de données
+        const newBalance = Math.max(0, Math.round((currentBalance - total) * 100) / 100);
+        db.updateUser(freshUser.id, { balance: newBalance });
 
         // Formatage clair des N clés attribuées
         const deliveredKeysList = allocatedResult.allocatedKeys || [];
@@ -161,9 +187,9 @@ module.exports = async function handler(req, res) {
 
         const newOrder = db.createOrder({
           id: orderId,
-          userId: auth.user.id,
-          userEmail: auth.user.email,
-          userName: auth.user.name,
+          userId: freshUser.id,
+          userEmail: freshUser.email,
+          userName: freshUser.name,
           productId: prod.id,
           productName: prod.name,
           unitPrice: prod.price,
@@ -178,18 +204,28 @@ module.exports = async function handler(req, res) {
         });
 
         db.createTransaction({
-          userId: auth.user.id,
-          userEmail: auth.user.email,
-          userName: auth.user.name,
+          userId: freshUser.id,
+          userEmail: freshUser.email,
+          userName: freshUser.name,
           amount: total,
           currency: 'USD',
           paymentMethod: 'Solde GetVirtu',
           provider: 'balance',
           status: 'completed',
+          balanceBefore: currentBalance,
+          balanceAfter: newBalance,
           notes: `Achat ${prod.name} (x${qty})`
         });
 
-        return res.status(201).json({ success: true, order: newOrder, newBalance, remainingStock: allocatedResult.remainingStock });
+        // Persistance immédiate vers Vercel Edge Config pour réplication globale
+        await db.persistToRemote();
+
+        return res.status(201).json({
+          success: true,
+          order: newOrder,
+          newBalance: newBalance,
+          remainingStock: allocatedResult.remainingStock
+        });
       }
     }
 

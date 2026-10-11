@@ -452,6 +452,7 @@ class PaymentService {
           recharges[rIdx].status = 'Validé';
           db.persist();
         }
+        await db.persistToRemote();
 
         console.log(`[SasPay Confirmation] Transaction ${tx.id} confirmée avec succès. Solde de ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
 
@@ -695,6 +696,7 @@ class PaymentService {
       completedAt: new Date().toISOString()
     });
 
+    await db.persistToRemote();
     return { success: true, transaction: completedTx, newBalance };
   }
 
@@ -1030,6 +1032,8 @@ class PaymentService {
       recharges[rIdx].status = 'Validé';
       db.persist();
     }
+
+    await db.persistToRemote();
 
     return {
       success: true,

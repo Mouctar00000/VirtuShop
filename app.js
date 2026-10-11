@@ -963,41 +963,25 @@ function renderPurchaseModal() {
   var unitPrice = selectedPayProd.price;
 
   // Calcul automatique du total selon la quantité choisie (1, 2, 3, etc.)
-  var total = unitPrice * currentPurchaseQty;
+  var total = Math.round(unitPrice * currentPurchaseQty * 100) / 100;
   var hasEnough = userBal >= total;
-  var diff = (total - userBal).toFixed(2);
-
-  var country = getSelectedMomoCountry();
-  var momoAmountLocal = Math.round(total * country.rate);
-
-  var countryOptionsHtml = MOMO_COUNTRIES.map(function(c) {
-    return `<option value="${c.code}" ${c.code === selectedMomoCountry ? 'selected' : ''}>${c.name}</option>`;
-  }).join('');
-
-  var networksHtml = country.networks.map(function(net) {
-    var isActive = net.id === selectedMomoNetwork ? 'active' : '';
-    return `
-      <div class="momo-network-btn ${isActive}" data-net="${net.id}" onclick="onSelectPurchaseMomoNetwork('${net.id}')">
-        <span class="momo-network-icon">${net.icon}</span>
-        <span class="momo-network-title">${escapeHtml(net.name)}</span>
-      </div>
-    `;
-  }).join('');
+  var diff = Math.max(0, Math.round((total - userBal) * 100) / 100).toFixed(2);
+  var suggestedRecharge = Math.max(5, Math.ceil(parseFloat(diff) || 5));
 
   container.innerHTML = `
     <div class="purchase-modal-header-compact">
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px;">
         <h2 class="modal-title purchase-modal-title-compact" style="margin: 0;">Acheter le Produit</h2>
         <div class="purchase-balance-compact-inline" title="Votre solde disponible">
-          <span class="balance-tag">Solde :</span>
-          <strong class="balance-val">$${userBal.toFixed(2)}</strong>
+          <span class="balance-tag">Solde disponible :</span>
+          <strong class="balance-val" style="color: ${hasEnough ? 'var(--primary-600)' : '#dc2626'};">$${userBal.toFixed(2)}</strong>
         </div>
       </div>
-      <p class="purchase-delivery-notice-line">Livraison numérique immédiate après confirmation du paiement.</p>
+      <p class="purchase-delivery-notice-line">Règlement instantané via votre solde &bull; Livraison numérique immédiate</p>
     </div>
 
     <!-- 1. Fiche Produit Compacte -->
-    <div class="purchase-prod-box purchase-prod-box-full" style="margin-bottom: 5px;">
+    <div class="purchase-prod-box purchase-prod-box-full" style="margin-bottom: 8px;">
       <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb-compact" alt="${escapeHtml(selectedPayProd.name)}">
       <div class="purchase-prod-info-compact">
         <span class="purchase-prod-cat-compact">${escapeHtml(selectedPayProd.category)}</span>
@@ -1009,12 +993,12 @@ function renderPurchaseModal() {
     </div>
 
     <!-- 2. Sélecteur de quantité réactif & robuste -->
-    <div class="purchase-qty-card-compact">
+    <div class="purchase-qty-card-compact" style="margin-bottom: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <label style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin: 0;">Quantité à acheter</label>
           <span style="font-size: 10.5px; color: ${stock > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-weight: 600; display: block;">
-            ${stock > 0 ? (stock === 999 ? '● En stock' : '● ' + stock + ' disponible' + (stock > 1 ? 's' : '')) : '● Rupture'}
+            ${stock > 0 ? (stock === 999 ? '● En stock' : '● ' + stock + ' disponible' + (stock > 1 ? 's' : '')) : '● Rupture de stock'}
           </span>
         </div>
         <div class="qty-stepper">
@@ -1025,8 +1009,8 @@ function renderPurchaseModal() {
       </div>
     </div>
 
-    <!-- 3. Calcul automatique du montant total compact -->
-    <div class="purchase-calc-box-compact">
+    <!-- 3. Calcul automatique du montant total -->
+    <div class="purchase-calc-box-compact" style="margin-bottom: 8px;">
       <div class="calc-row-compact">
         <span>Calcul du total :</span>
         <span>$${unitPrice.toFixed(2)} &times; ${currentPurchaseQty}</span>
@@ -1037,125 +1021,40 @@ function renderPurchaseModal() {
       </div>
     </div>
 
-    <!-- 4. Choix du mode de paiement -->
-    <div style="margin-bottom: 6px;">
-      <label style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 4px; display: block;">Moyen de règlement :</label>
-      <div class="purchase-method-tabs-compact">
-        <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'balance' ? 'active' : ''}" onclick="selectPurchasePayMethod('balance')">
-          💳 Solde ($${userBal.toFixed(2)})
-        </button>
-        <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'mobile_money' ? 'active' : ''}" onclick="selectPurchasePayMethod('mobile_money')">
-          📱 Mobile Money
-        </button>
-        <button type="button" class="btn-purchase-tab purchase-method-tab-compact ${currentPurchasePayMethod === 'crypto' ? 'active' : ''}" onclick="selectPurchasePayMethod('crypto')">
-          ⚡ Crypto
-        </button>
-      </div>
+    <!-- 4. Statut du Solde Client & Validation -->
+    <div style="margin-bottom: 8px;">
+      ${hasEnough ? `
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 7px 10px; font-size: 11.5px; color: var(--emerald-600); display: flex; align-items: center; justify-content: space-between;">
+          <span>✓ Solde suffisant ($${userBal.toFixed(2)})</span>
+          <span>Reste après paiement : <strong>$${(userBal - total).toFixed(2)}</strong></span>
+        </div>
+      ` : `
+        <div class="insufficient-balance-alert-centered" style="padding: 10px; border-radius: 8px; background: #fff1f2; border: 1px solid #fecdd3; display: flex; flex-direction: column; gap: 6px; text-align: center;">
+          <span class="insufficient-balance-text" style="color: #e11d48; font-weight: 700; font-size: 12px;">⚠️ Solde insuffisant : il vous manque $${diff}</span>
+          <span style="font-size: 11px; color: #475569;">Rechargez votre solde avec Mobile Money ou Crypto pour acheter ce produit.</span>
+        </div>
+      `}
     </div>
 
-    <!-- 5. Panneau selon la méthode choisie -->
-    ${currentPurchasePayMethod === 'balance' ? `
-      <div style="margin-bottom: 6px;">
-        ${hasEnough ? `
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; color: var(--emerald-600); display: flex; align-items: center; justify-content: space-between;">
-            <span>✓ Solde suffisant ($${total.toFixed(2)})</span>
-            <span>Reste après paiement : <strong>$${(userBal - total).toFixed(2)}</strong></span>
-          </div>
-        ` : `
-          <div class="insufficient-balance-alert-centered">
-            <span class="insufficient-balance-text">⚠️ Solde insuffisant (Il vous manque $${diff})</span>
-            <button type="button" class="btn-quick-recharge-centered btn-light-sweep" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
-              <span>Recharger ⚡</span>
-            </button>
-          </div>
-        `}
-      </div>
+    <!-- 5. Champ Contact Optionnel -->
+    <div class="optional-contact-box-compact" style="margin-bottom: 10px;">
+      <label for="purchase-contact-input" class="optional-contact-label-oneline">
+        <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
+      </label>
+      <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
+    </div>
 
-      <div class="optional-contact-box-compact">
-        <label for="purchase-contact-input" class="optional-contact-label-oneline">
-          <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
-        </label>
-        <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
-      </div>
-
-      ${hasEnough ? `
-        <button type="button" class="btn-recharge-bottom-compact btn-purchase-action-single-line btn-light-sweep" onclick="processProductPayment()">
-          <span>Payer maintenant ($${total.toFixed(2)}) ⚡</span>
-        </button>
-      ` : `
-        <button type="button" class="btn-recharge-bottom-compact btn-purchase-action-single-line btn-light-sweep" onclick="promptDepositFromPurchase(${Math.max(5, Math.ceil(parseFloat(diff)))})">
-          <span>Recharger mon solde ⚡</span>
-        </button>
-      `}
-    ` : ''}
-
-    ${currentPurchasePayMethod === 'mobile_money' ? `
-      <div class="purchase-method-panel-compact">
-        <div style="margin-bottom: 5px;">
-          <label style="font-size: 11px; font-weight: 700; margin-bottom: 2px; display: block;">Pays :</label>
-          <select id="purchase-momo-country" onchange="onPurchaseMomoCountryChange(this.value)" style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12px; height: 30px;">
-            ${countryOptionsHtml}
-          </select>
-        </div>
-        <div style="margin-bottom: 5px;">
-          <label style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 2px;">Réseau Mobile Money :</label>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px;">
-            ${networksHtml}
-          </div>
-        </div>
-        <div class="field" style="margin-bottom: 5px;">
-          <label for="purchase-momo-phone" style="font-size: 11px; font-weight: 700;">Numéro de téléphone Mobile Money :</label>
-          <input type="tel" id="purchase-momo-phone" placeholder="Ex: 0700000000" style="width: 100%; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12px; height: 30px;">
-          <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 1px;">Montant estimé : ~${momoAmountLocal.toLocaleString('fr-FR')} ${country.currency}</span>
-        </div>
-        <div class="optional-contact-box-compact" style="margin-bottom: 0;">
-          <label for="purchase-contact-input" class="optional-contact-label-oneline">
-            <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
-          </label>
-          <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
-        </div>
-      </div>
-      <button type="button" class="btn-pay-now btn-purchase-action-single-line btn-light-sweep" onclick="startPurchaseMomoPayment(${total}, ${currentPurchaseQty})">
-        <span>Payer $${total.toFixed(2)} avec Mobile Money ⚡</span>
+    <!-- 6. Bouton d'action exclusif par Solde -->
+    ${hasEnough ? `
+      <button type="button" class="btn-recharge-bottom-compact btn-purchase-action-single-line btn-light-sweep" id="btn-submit-purchase" onclick="processProductPayment()">
+        <span>Payer maintenant ($${total.toFixed(2)}) ⚡</span>
       </button>
-    ` : ''}
-
-    ${currentPurchasePayMethod === 'crypto' ? `
-      <div class="purchase-method-panel-compact">
-        <div style="margin-bottom: 5px;">
-          <label style="font-size: 11px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; display: block;">Sélectionnez votre devise crypto :</label>
-          ${renderCryptoCardsHtml('purchase-crypto-cards-grid', 'purchase-crypto-select', '', true)}
-        </div>
-        <div class="optional-contact-box-compact" style="margin-bottom: 0;">
-          <label for="purchase-contact-input" class="optional-contact-label-oneline">
-            <span>📱 Email ou WhatsApp de confirmation (Optionnel)</span>
-          </label>
-          <input type="text" id="purchase-contact-input" class="optional-contact-input-compact" value="${escapeHtml(defaultContact)}" placeholder="Ex: mon.email@domaine.com ou +33 6 12 34 56 78">
-        </div>
-      </div>
-      <button type="button" class="btn-pay-now btn-purchase-action-single-line btn-light-sweep" onclick="startPurchaseTrybitPayment(${total}, ${currentPurchaseQty})">
-        <span>Payer $${total.toFixed(2)} en Crypto ⚡</span>
+    ` : `
+      <button type="button" class="btn-recharge-bottom-compact btn-purchase-action-single-line btn-light-sweep" style="background: linear-gradient(135deg, #f59e0b, #d97706);" onclick="promptDepositFromPurchase(${suggestedRecharge})">
+        <span>Recharger mon solde ($${suggestedRecharge}) ⚡</span>
       </button>
-    ` : ''}
+    `}
   `;
-}
-
-function onPurchaseMomoCountryChange(code) {
-  selectedMomoCountry = code;
-  var c = getSelectedMomoCountry();
-  if (c && c.networks && c.networks.length > 0) {
-    selectedMomoNetwork = c.networks[0].id;
-  }
-  renderPurchaseModal();
-}
-
-function onSelectPurchaseMomoNetwork(netId) {
-  selectedMomoNetwork = netId;
-  var btns = document.querySelectorAll('.momo-network-btn');
-  btns.forEach(function(b) {
-    if (b.getAttribute('data-net') === netId) b.classList.add('active');
-    else b.classList.remove('active');
-  });
 }
 
 function promptDepositFromPurchase(suggestedAmount) {
@@ -1163,40 +1062,39 @@ function promptDepositFromPurchase(suggestedAmount) {
   openDepositModal(suggestedAmount);
 }
 
-// LIVRAISON IMMÉDIATE DU PRODUIT NUMÉRIQUE ACHETÉ AVEC CLÉ UNIQUE
-function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, remainingBal) {
+// LIVRAISON DU PRODUIT NUMÉRIQUE ACHETÉ AVEC CLÉ UNIQUE ET ENREGISTREMENT DÉFINITIF
+function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, remainingBal, serverOrder) {
   var u = getCurrentUser();
   if (!u || !prod) return;
 
-  // 1. Récupérer le coffre-fort associé au produit et délivrer une clé strictement unique
-  var vaultMap = DB.get('vault', {});
-  var prodVault = vaultMap[prod.id] || {};
-  var deliveredContent = null;
+  var userBalAfter = (typeof remainingBal === 'number') ? remainingBal : getUserBalance();
+  var orderId = (serverOrder && serverOrder.id) ? serverOrder.id : ('ORD-' + Date.now().toString().slice(-6));
 
-  if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
-    // Sélectionner les N clés strictement disponibles
-    var unusedKeys = prodVault.keys.filter(function(k) { return !k.used; }).slice(0, qty);
-    if (unusedKeys.length > 0) {
-      var nowIso = new Date().toISOString();
-      unusedKeys.forEach(function(k) {
-        k.used = true;
-        k.soldTo = u.email || u.name || 'Client #' + u.id;
-        k.soldAt = nowIso;
-      });
-      deliveredContent = {
-        type: prodVault.type || 'text',
-        content: unusedKeys.map(function(k) { return k.content; }).join('\n'),
-        keys: unusedKeys,
-        fileName: prodVault.fileName || 'licences.txt'
-      };
-      DB.set('vault', vaultMap);
+  // 1. Récupérer le contenu numérique délivré par le serveur ou le coffre-fort
+  var deliveredContent = null;
+  if (serverOrder && serverOrder.vaultContent) {
+    deliveredContent = serverOrder.vaultContent;
+  } else {
+    var vaultMap = DB.get('vault', {});
+    var prodVault = vaultMap[prod.id] || {};
+    if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
+      var unusedKeys = prodVault.keys.filter(function(k) { return !k.used; }).slice(0, qty);
+      if (unusedKeys.length > 0) {
+        var nowIso = new Date().toISOString();
+        unusedKeys.forEach(function(k) {
+          k.used = true;
+          k.soldTo = u.email || u.name || 'Client #' + u.id;
+          k.soldAt = nowIso;
+        });
+        deliveredContent = {
+          type: prodVault.type || 'text',
+          content: unusedKeys.map(function(k) { return k.content; }).join('\n'),
+          keys: unusedKeys,
+          fileName: prodVault.fileName || 'licences.txt'
+        };
+        DB.set('vault', vaultMap);
+      }
     }
-  } else if (prodVault.content) {
-    deliveredContent = {
-      type: prodVault.type || 'text',
-      content: prodVault.content,
-      fileName: prodVault.fileName || 'licence.txt'
-    };
   }
 
   if (!deliveredContent) {
@@ -1206,25 +1104,18 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, 
     };
   }
 
-  // 2. Décrémenter et recalculer automatiquement le stock selon les clés restantes
+  // 2. Décrémenter et recalculer automatiquement le stock local
   var prods = DB.get('products', []);
   var pIndex = prods.findIndex(function(p) { return p.id === prod.id; });
   if (pIndex !== -1) {
-    if (prodVault.keys && Array.isArray(prodVault.keys)) {
-      prods[pIndex].stock = Math.max(0, prodVault.keys.filter(function(k) { return !k.used; }).length);
-    } else {
-      prods[pIndex].stock = Math.max(0, (prods[pIndex].stock || 1) - qty);
-    }
+    prods[pIndex].stock = Math.max(0, (prods[pIndex].stock || qty) - qty);
     DB.set('products', prods);
   }
 
-  // 3. Calcul du nouveau solde restant du client après transaction
-  var userBalAfter = typeof remainingBal === 'number' ? remainingBal : getUserBalance();
-
-  // 4. Création de la commande complétée avec accès immédiat et enregistrement du nouveau solde
+  // 3. Enregistrement de la commande avec son statut Complété et nouveau solde exact
   var orders = DB.get('orders', []);
   var newOrder = {
-    id: 'ORD-' + Date.now().toString().slice(-6),
+    id: orderId,
     userId: u.id,
     userEmail: u.email,
     userName: u.name,
@@ -1236,11 +1127,11 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, 
     remainingBalance: userBalAfter,
     userBalanceAfter: userBalAfter,
     contactInfo: contactVal,
-    method: paymentMethodName || 'Solde Client',
-    status: 'Complété', // 100% complété et livré immédiatement !
+    method: paymentMethodName || 'Solde GetVirtu',
+    status: (serverOrder && serverOrder.status) ? serverOrder.status : 'Complété',
     proofImage: null,
     vaultContent: deliveredContent,
-    date: new Date().toISOString()
+    date: (serverOrder && serverOrder.date) ? serverOrder.date : new Date().toISOString()
   };
   orders.unshift(newOrder);
   DB.set('orders', orders);
@@ -1286,8 +1177,12 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, 
   renderLandingCatalog();
 }
 
-// 1. RÈGLEMENT PAR SOLDE GETVIRTU (LIVRAISON INSTANTANÉE & DÉBIT STRICT)
-function processProductPayment() {
+// RÈGLEMENT EXCLUSIF PAR SOLDE DU CLIENT AVEC TRANSACTION PERMANENTE EN BASE DE DONNÉES
+var isPurchaseProcessing = false;
+
+async function processProductPayment() {
+  if (isPurchaseProcessing) return;
+
   var u = getCurrentUser();
   if (!u) {
     openAuthModal('login', 'Veuillez vous connecter pour acheter ce produit.');
@@ -1311,43 +1206,87 @@ function processProductPayment() {
   var total = Math.round(selectedPayProd.price * qty * 100) / 100;
   var userBal = getUserBalance();
 
-  // VÉRIFICATION EN AMONT DU SOLDE DU CLIENT (APPLICABLE SANS EXCEPTION À TOUS LES COMPTES)
+  // VÉRIFICATION EN AMONT DU SOLDE DU CLIENT
   if (userBal < total) {
     var diff = (total - userBal).toFixed(2);
-    showToast('Solde insuffisant. Veuillez recharger votre compte', 'error');
+    showToast('Solde insuffisant ($' + userBal.toFixed(2) + ' disponible, $' + total.toFixed(2) + ' requis). Veuillez recharger votre compte.', 'error');
     promptDepositFromPurchase(Math.max(5, Math.ceil(parseFloat(diff))));
     return;
   }
 
-  // DÉBIT IMMÉDIAT DU PRIX EXACT DU PRODUIT DU SOLDE DU CLIENT
-  var newBal = Math.round((userBal - total) * 100) / 100;
-  updateUserBalance(newBal);
-
   var rawContact = (document.getElementById('purchase-contact-input')?.value || '').trim();
   var contactVal = typeof Security !== 'undefined' ? Security.escapeHtml(rawContact) : rawContact;
 
-  // Persister la commande et la déduction de solde côté serveur
-  var session = DB.get('session');
-  if (session && session.token) {
-    fetch('/api/data/orders', {
+  var btn = document.getElementById('btn-submit-purchase');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Traitement sécurisé de la commande... ⏳</span>';
+  }
+  isPurchaseProcessing = true;
+
+  try {
+    var session = DB.get('session');
+    var token = session ? (session.token || '') : '';
+
+    var res = await fetch('/api/data/orders', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + session.token
+        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
       },
       body: JSON.stringify({
         productId: selectedPayProd.id,
+        productName: selectedPayProd.name,
         quantity: qty,
-        contactInfo: contactVal
+        contactInfo: contactVal,
+        productInfo: {
+          id: selectedPayProd.id,
+          name: selectedPayProd.name,
+          price: selectedPayProd.price,
+          category: selectedPayProd.category,
+          stock: selectedPayProd.stock
+        }
       })
-    }).then(function(r) { return r.json(); }).then(function(res) {
-      if (res && typeof res.newBalance === 'number') {
-        updateUserBalance(res.newBalance);
-      }
-    }).catch(function(e) { console.warn('Order sync:', e); });
-  }
+    });
 
-  deliverCompletedOrder(selectedPayProd, total, qty, contactVal, 'Solde Client', newBal);
+    var data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Erreur lors du traitement de la commande par le serveur.');
+    }
+
+    var serverBalance = (typeof data.newBalance === 'number') ? data.newBalance : Math.max(0, Math.round((userBal - total) * 100) / 100);
+
+    // Mettre à jour immédiatement et définitivement le solde avec la valeur réelle renvoyée par le serveur
+    updateUserBalance(serverBalance);
+
+    // Mettre à jour le stock du produit
+    if (typeof data.remainingStock === 'number') {
+      selectedPayProd.stock = data.remainingStock;
+      var allProds = DB.get('products', []);
+      var pIdx = allProds.findIndex(function(p) { return p.id === selectedPayProd.id; });
+      if (pIdx !== -1) {
+        allProds[pIdx].stock = data.remainingStock;
+        DB.set('products', allProds);
+      }
+    }
+
+    // Livrer la commande avec les clés numériques officielles et le solde restant exact
+    deliverCompletedOrder(selectedPayProd, total, qty, contactVal, 'Solde GetVirtu', serverBalance, data.order);
+
+    // Synchronisation en arrière-plan avec le serveur
+    syncUserSessionAndBalance();
+
+  } catch (err) {
+    console.error('[Purchase Error]', err);
+    showToast(err.message || 'Impossible de finaliser l\'achat.', 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span>Payer maintenant ($${total.toFixed(2)}) ⚡</span>`;
+    }
+  } finally {
+    isPurchaseProcessing = false;
+  }
 }
 
 // 2. RÈGLEMENT PAR CRYPTO INSTANTANÉ TRYBIT
@@ -3717,9 +3656,39 @@ function startApp() {
     routeUserExperience();
     initGoogleIdentity();
     syncUserSessionAndBalance();
+    syncProductsFromServer();
+    syncPaymentMethodsFromServer();
   } catch (e) {
     console.error('[GetVirtu startApp]', e);
   }
+}
+
+// Synchronisation des produits du catalogue depuis le serveur / Edge Config
+async function syncProductsFromServer() {
+  try {
+    var res = await fetch('/api/data/products');
+    if (res.ok) {
+      var data = await res.json();
+      if (data && Array.isArray(data.products) && data.products.length > 0) {
+        DB.set('products', data.products);
+        if (typeof renderLandingCatalog === 'function') renderLandingCatalog();
+        if (typeof renderConnectedCatalog === 'function') renderConnectedCatalog();
+      }
+    }
+  } catch (e) {}
+}
+
+// Synchronisation des méthodes de paiement actives depuis le serveur
+async function syncPaymentMethodsFromServer() {
+  try {
+    var res = await fetch('/api/data/methods');
+    if (res.ok) {
+      var data = await res.json();
+      if (data && Array.isArray(data.methods) && data.methods.length > 0) {
+        DB.set('payment_methods', data.methods);
+      }
+    }
+  } catch (e) {}
 }
 
 // Basculement vers le tableau de bord administrateur

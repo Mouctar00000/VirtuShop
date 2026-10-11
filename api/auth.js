@@ -3,6 +3,7 @@
  */
 
 const authService = require('../backend/auth');
+const db = require('../backend/db');
 
 module.exports = async function handler(req, res) {
   // CORS & Security Headers
@@ -13,6 +14,11 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  // Synchronisation avec Vercel Edge Config
+  try {
+    await db.syncFromRemote();
+  } catch (e) {}
 
   // Déterminer l'action demandée de manière robuste (support Vercel rewrites, query, et URL path)
   let action = '';
@@ -97,7 +103,8 @@ module.exports = async function handler(req, res) {
       if (!verified) {
         return res.status(401).json({ error: 'Session non authentifiée ou expirée.' });
       }
-      return res.status(200).json({ success: true, user: authService.sanitizeUser(verified.user), session: verified.session });
+      const freshUser = db.getUserById(verified.user.id) || db.getUserByEmail(verified.user.email);
+      return res.status(200).json({ success: true, user: authService.sanitizeUser(freshUser || verified.user), session: verified.session });
     }
 
     if (req.method === 'POST') {

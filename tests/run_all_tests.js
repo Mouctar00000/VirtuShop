@@ -71,9 +71,7 @@ assert(styleCss.includes('.order-status-badge-select') && styleCss.includes('bor
 // Purchase modal & light sweep
 assert(styleCss.includes('.btn-light-sweep'), 'btn-light-sweep animation must be present');
 assert(styleCss.includes('paymentLightSweep'), 'paymentLightSweep keyframes must be present');
-assert(appJs.includes('Payer $${total.toFixed(2)} en Crypto ⚡'), 'Crypto button single line dynamic label');
-assert(appJs.includes('Recharger ⚡'), 'Recharge button without plus');
-assert(appJs.includes('Recharger mon solde ⚡'), 'Recharge mon solde button without overflow');
+assert(appJs.includes('Payer maintenant ($${total.toFixed(2)}) ⚡'), 'Purchase balance button single line dynamic label');
 
 // Admin toggle button
 assert(adminHtml.includes('switchToShop()'), 'switchToShop function present in admin.html');
