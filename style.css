@@ -5619,3 +5619,66 @@ html, body {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
+
+/* ==================== TABLE DES TICKETS DE SUPPORT CLIENT & MESSAGES ==================== */
+.admin-tickets-table {
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+}
+
+.admin-tickets-table th {
+  white-space: nowrap;
+}
+
+.admin-tickets-table td {
+  vertical-align: top;
+  padding: 14px 12px;
+}
+
+.admin-ticket-msg-cell {
+  width: 380px;
+  min-width: 320px;
+  max-width: 440px;
+}
+
+.admin-ticket-msg-box {
+  width: 100%;
+  min-width: 300px;
+  max-width: 380px;
+  height: 86px;
+  min-height: 86px;
+  max-height: 86px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  box-sizing: border-box;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.admin-ticket-msg-box::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-ticket-msg-box::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.6);
+  border-radius: 4px;
+}
+.admin-ticket-msg-box::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.admin-ticket-msg-box::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
