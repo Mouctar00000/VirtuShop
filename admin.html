@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202610111736_5f15a1">
-  <script src="security.js?v=v202610111736_5f15a1"></script>
+  <link rel="stylesheet" href="style.css?v=v202610111823_ca7619">
+  <script src="security.js?v=v202610111823_ca7619"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -1916,7 +1916,7 @@
           <input type="hidden" id="admin-vault-type" value="text">
 
           <div id="vault-text-group">
-            <textarea id="admin-vault-content" rows="2" placeholder="Insérez 1 clé/compte unique par ligne :&#10;login1:pass1&#10;login2:pass2" oninput="updateStockFromVaultKeys()"></textarea>
+            <textarea id="admin-vault-content" rows="3" placeholder="Insérez 1 clé complète par ligne.&#10;Exemple avec séparateur | :&#10;email@domaine.com | MotDePasse | Code2FA | +237... | https://service.url | backup@domaine.com" oninput="updateStockFromVaultKeys()"></textarea>
           </div>
 
           <div id="vault-file-group" class="hidden">
@@ -2005,10 +2005,15 @@
         <!-- 2. Saisie de la clé numérique -->
         <div class="field" style="margin-bottom: 12px;">
           <label for="add-key-content" style="font-weight: 700; font-size: 12.5px; display: flex; justify-content: space-between; margin-bottom: 6px;">
-            <span>Nouvelle clé ou code numérique à vendre <span style="color: var(--danger-500); font-weight: bold;">*</span></span>
-            <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">1 par ligne</span>
+            <span>Nouvelle clé ou compte numérique à vendre <span style="color: var(--danger-500); font-weight: bold;">*</span></span>
+            <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">1 clé par ligne</span>
           </label>
-          <textarea id="add-key-content" class="form-input" required rows="4" oninput="onAddKeyInput(this.value)" placeholder="Entrez la clé ou le compte numérique à vendre :&#10;ex: GV-9823-XXXX-YYYY&#10;ou identifiant@email.com:motdepasse&#10;(Si vous avez plusieurs clés, collez 1 clé par ligne)" style="width: 100%; font-family: monospace; font-size: 12px; line-height: 1.45; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); resize: vertical; box-sizing: border-box;"></textarea>
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 11.5px; color: #166534; line-height: 1.45;">
+            <div style="font-weight: 700; margin-bottom: 2px;">ℹ️ Format multi-éléments avec séparateur <code>|</code> supporté :</div>
+            <div style="font-family: monospace; font-size: 11px; color: #15803d; background: rgba(255,255,255,0.7); padding: 4px 6px; border-radius: 4px; word-break: break-all; margin: 3px 0;">[Email principal] | [Mot de passe] | [Code 2FA / Récupération] | [Téléphone] | [URL de service] | [Email secondaire]</div>
+            <div style="font-size: 11px; color: #166534; margin-top: 3px;">Le système préserve fidèlement le contenu complet et l'ordre d'origine. Chaque ligne correspond à 1 clé livrée telle quelle à un acheteur.</div>
+          </div>
+          <textarea id="add-key-content" class="form-input" required rows="4" oninput="onAddKeyInput(this.value)" placeholder="Collez 1 clé complète par ligne.&#10;&#10;Exemple :&#10;john.doe@gmail.com | P@ssword123! | 849204 | +237690123456 | https://service.example.com/login?token=abc | backup@outlook.com" style="width: 100%; font-family: monospace; font-size: 12px; line-height: 1.45; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); resize: vertical; box-sizing: border-box;"></textarea>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 11px; color: var(--text-muted);">
             <span>Chaque clé sera vendue individuellement et de façon unique.</span>
             <span id="add-key-count-hint" style="font-weight: 600; color: #059669;">0 clé détectée</span>
@@ -2825,7 +2830,12 @@
             tbody.innerHTML = keys.map(function(k) {
               return `
                 <tr>
-                  <td style="font-family: monospace; font-size: 11px; font-weight: 600;"><code>${escapeHtml(k.content)}</code></td>
+                  <td style="font-family: monospace; font-size: 11px; font-weight: 600; word-break: break-all; white-space: pre-wrap; max-width: 320px; line-height: 1.4;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 6px;">
+                      <code>${escapeHtml(k.content)}</code>
+                      <button type="button" class="btn-vault-action" style="padding: 2px 6px; font-size: 10px; flex-shrink: 0;" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(k.content)}')).then(function(){ showToast('Clé copiée !', 'success'); });" title="Copier cette clé">📋</button>
+                    </div>
+                  </td>
                   <td>
                     <span class="status-indicator-pill ${k.used ? 'offline' : 'online'}" style="font-size: 10.5px;">
                       ${k.used ? '● Vendue' : '● Disponible'}
@@ -4870,7 +4880,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202610111736_5f15a1',
+      currentVersion: 'v202610111823_ca7619',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 

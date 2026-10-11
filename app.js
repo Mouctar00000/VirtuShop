@@ -3144,24 +3144,111 @@ function renderVaultContentDisplay(order) {
           ••••••••••••••••
         </span>
       </div>
+      <div id="vault-breakdown-${orderId}" class="vault-breakdown-box" style="display: none; margin-top: 8px;"></div>
       <div class="vault-actions-row">
         <button type="button" class="btn-vault-action" id="btn-reveal-${orderId}" onclick="toggleVaultSecret('${orderId}')" title="Afficher ou masquer la clé">
           <span id="vault-icon-${orderId}">👁️</span>
           <span id="vault-label-${orderId}">Révéler</span>
         </button>
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier la clé dans le presse-papiers">
+        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier la clé complète au format original">
           <span id="vault-copy-icon-${orderId}">📋</span>
-          <span id="vault-copy-label-${orderId}">Copier</span>
+          <span id="vault-copy-label-${orderId}">Copier la clé complète</span>
         </button>
       </div>
     `;
   }
 }
 
+function renderKeyBreakdownHtml(keyString) {
+  if (!keyString || typeof keyString !== 'string') return '';
+  var lines = keyString.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+  if (lines.length === 0) return '';
+  
+  var hasPipe = lines.some(function(l) { return l.includes('|'); });
+  if (!hasPipe) return '';
+
+  var html = '<div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-top: 6px; font-size: 11.5px; display: flex; flex-direction: column; gap: 8px;">';
+  html += '<div style="font-weight: 700; color: #334155; font-size: 11px; display: flex; align-items: center; justify-content: space-between;">';
+  html += '<span>Détail des éléments de la clé (séparés par <code>|</code>) :</span>';
+  html += '<span style="font-size: 10px; color: #059669; font-weight: 600;">Ordre original préservé ✓</span>';
+  html += '</div>';
+
+  lines.forEach(function(line, lineIdx) {
+    var parts = line.split('|').map(function(p) { return p.trim(); });
+    if (lines.length > 1) {
+      html += '<div style="font-weight: 700; color: var(--primary-600); font-size: 11px; margin-top: 4px;">Clé #' + (lineIdx + 1) + ' :</div>';
+    }
+    html += '<div style="display: flex; flex-direction: column; gap: 4px;">';
+    parts.forEach(function(part, idx) {
+      if (!part) return;
+      var safePart = escapeHtml(part);
+      var isUrl = /^https?:\/\//i.test(part);
+      var isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part);
+      var isPhone = /^\+?[0-9\s\-()]{8,20}$/.test(part);
+
+      var icon = '📄';
+      var label = 'Info ' + (idx + 1);
+
+      if (idx === 0 && isEmail) {
+        icon = '📧';
+        label = 'Email principal';
+      } else if (idx === 1 && !isUrl) {
+        icon = '🔑';
+        label = 'Mot de passe';
+      } else if (isUrl) {
+        icon = '🔗';
+        label = 'URL de service';
+      } else if (isPhone) {
+        icon = '📱';
+        label = 'Téléphone';
+      } else if (isEmail) {
+        icon = '✉️';
+        label = 'Email secondaire';
+      } else if (/^[A-Za-z0-9\-_]{5,30}$/.test(part)) {
+        icon = '🛡️';
+        label = 'Code 2FA / Récupération';
+      }
+
+      html += `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 5px; overflow: hidden; flex: 1;">
+            <span style="font-size: 12px; flex-shrink: 0;">${icon}</span>
+            <span style="font-size: 10px; color: #64748b; font-weight: 600; white-space: nowrap; flex-shrink: 0;">${label} :</span>
+            <span style="font-family: monospace; font-size: 11px; color: #0f172a; word-break: break-all; font-weight: 600;">${safePart}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+            ${isUrl ? `<a href="${safePart}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="padding: 2px 6px; font-size: 10px; background: #fef3c7; color: #92400e; text-decoration: none;" title="Ouvrir le lien">Ouvrir ↗</a>` : ''}
+            <button type="button" class="btn-vault-action" style="padding: 2px 6px; font-size: 10px;" onclick="copySingleKeyPart(decodeURIComponent('${encodeURIComponent(part)}'), '${escapeHtml(label)}')" title="Copier uniquement cet élément">
+              📋 Copier
+            </button>
+          </div>
+        </div>
+      `;
+    });
+    html += '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+window.copySingleKeyPart = function(part, label) {
+  if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(part).then(function() {
+      showToast((label || 'Élément') + ' copié dans le presse-papiers !', 'success');
+    }).catch(function() {
+      showToast('Copié : ' + part, 'info');
+    });
+  } else {
+    showToast('Copié : ' + part, 'info');
+  }
+};
+
 window.toggleVaultSecret = function(orderId) {
   var textEl = document.getElementById('vault-text-' + orderId);
   var iconEl = document.getElementById('vault-icon-' + orderId);
   var labelEl = document.getElementById('vault-label-' + orderId);
+  var breakdownEl = document.getElementById('vault-breakdown-' + orderId);
   if (!textEl) return;
 
   // Sécurité : Vérifier le statut de la commande
@@ -3193,6 +3280,18 @@ window.toggleVaultSecret = function(orderId) {
     textEl.setAttribute('data-hidden', 'false');
     if (iconEl) iconEl.textContent = '🙈';
     if (labelEl) labelEl.textContent = 'Masquer';
+
+    if (breakdownEl) {
+      var breakdownHtml = renderKeyBreakdownHtml(realSecret);
+      if (breakdownHtml) {
+        breakdownEl.innerHTML = breakdownHtml;
+        breakdownEl.style.display = 'block';
+      } else {
+        breakdownEl.innerHTML = '';
+        breakdownEl.style.display = 'none';
+      }
+    }
+
     showToast('Contenu du produit révélé avec succès.', 'info');
   } else {
     textEl.textContent = '••••••••••••••••';
@@ -3200,6 +3299,12 @@ window.toggleVaultSecret = function(orderId) {
     textEl.setAttribute('data-hidden', 'true');
     if (iconEl) iconEl.textContent = '👁️';
     if (labelEl) labelEl.textContent = 'Révéler';
+
+    if (breakdownEl) {
+      breakdownEl.innerHTML = '';
+      breakdownEl.style.display = 'none';
+    }
+
     showToast('Contenu masqué pour votre sécurité.', 'info');
   }
 };
@@ -4013,7 +4118,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610111736_5f15a1',
+  currentVersion: 'v202610111823_ca7619',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

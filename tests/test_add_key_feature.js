@@ -191,6 +191,58 @@ async function runTest() {
   assert.strictEqual(restockRes.stock, 1, 'Le stock doit redevenir 1');
   console.log('✓ Produit réapprovisionné : Stock = 1');
 
+  // 10. Test de conformité intégrale du format multi-éléments avec séparateur '|'
+  console.log('\n▶ 10. Test du format de clé multi-éléments avec séparateur \'|\'...');
+  
+  // Vente de la clé de restock précédente pour vider le stock avant le test multi-éléments
+  await db.allocateKeysForProduct(testProduct.id, 1, {
+    orderId: 'ORD-TEST-DRAIN-RESTOCK',
+    userId: 'usr_client_drain',
+    userEmail: 'drain@getvirtu.shop'
+  });
+
+  const complexKey = 'john.doe@gmail.com | P@ssw0rdSecure!2026 | AUTH-849204 | +237690123456 | https://service.example.com/login?token=xyz789 | backup.doe@outlook.com';
+  
+  const { req: reqPipe, res: resPipe } = createMockReqRes({
+    method: 'POST',
+    url: '/api/data/products',
+    headers: { 'authorization': `Bearer ${adminToken}` },
+    body: {
+      action: 'add_keys',
+      productId: testProduct.id,
+      keys: [complexKey]
+    }
+  });
+
+  await dataHandler(reqPipe, resPipe);
+  const dataPipe = resPipe._getData();
+  assert.strictEqual(resPipe._getStatus(), 200);
+  assert.strictEqual(dataPipe.success, true);
+  assert.strictEqual(dataPipe.stock, 1, 'Le stock doit être de 1 après ajout de la clé au format |');
+
+  // Simulation de l'achat par un client
+  const allocPipe = await db.allocateKeysForProduct(testProduct.id, 1, {
+    orderId: 'ORD-TEST-PIPE-FORMAT',
+    userId: 'usr_client_pipe',
+    userEmail: 'buyer@getvirtu.shop'
+  });
+
+  assert.strictEqual(allocPipe.allocatedKeys.length, 1);
+  const deliveredKeyContent = allocPipe.allocatedKeys[0].content;
+
+  // Vérification stricte : le contenu complet et l'ordre d'origine doivent être préservés
+  assert.strictEqual(deliveredKeyContent, complexKey, 'La clé délivrée doit être 100% identique à la saisie admin');
+  
+  const segments = deliveredKeyContent.split('|').map(s => s.trim());
+  assert.strictEqual(segments.length, 6, 'Doit contenir exactement les 6 éléments séparés par |');
+  assert.strictEqual(segments[0], 'john.doe@gmail.com', 'Élément 1 : Email principal');
+  assert.strictEqual(segments[1], 'P@ssw0rdSecure!2026', 'Élément 2 : Mot de passe');
+  assert.strictEqual(segments[2], 'AUTH-849204', 'Élément 3 : Code 2FA / Récupération');
+  assert.strictEqual(segments[3], '+237690123456', 'Élément 4 : Téléphone');
+  assert.strictEqual(segments[4], 'https://service.example.com/login?token=xyz789', 'Élément 5 : URL de service');
+  assert.strictEqual(segments[5], 'backup.doe@outlook.com', 'Élément 6 : Email secondaire');
+  console.log(`✓ Clé multi-informations préservée et délivrée intacte au client : '${deliveredKeyContent}'`);
+
   // Nettoyage après test
   db.deleteProduct(testProduct.id);
 
