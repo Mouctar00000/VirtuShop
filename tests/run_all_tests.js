@@ -1,7 +1,10 @@
 const assert = require('assert');
 const fs = require('fs');
+const path = require('path');
 const db = require('../backend/db');
 const authService = require('../backend/auth');
+const dbPath = path.join(__dirname, '..', 'data', 'database.json');
+const originalDbSnapshot = fs.existsSync(dbPath) ? fs.readFileSync(dbPath, 'utf8') : null;
 
 console.log('=== TEST 1: Session Persistence & HMAC Resiliency ===');
 const testUser = { id: 'usr_test_sess_' + Date.now(), email: 'sess_test@getvirtu.shop', name: 'Sess User', role: 'client' };
@@ -122,8 +125,15 @@ async function runAsyncTests() {
   console.log('======================================================\n');
 }
 
-runAsyncTests().catch(err => {
-  console.error('❌ Échec de la suite de tests :', err);
-  process.exit(1);
-});
+runAsyncTests()
+  .catch(err => {
+    console.error('❌ Échec de la suite de tests :', err);
+    process.exit(1);
+  })
+  .finally(() => {
+    if (originalDbSnapshot) {
+      fs.writeFileSync(dbPath, originalDbSnapshot, 'utf8');
+      db.data = JSON.parse(originalDbSnapshot);
+    }
+  });
 

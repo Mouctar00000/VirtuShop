@@ -32,8 +32,8 @@ try {
   }
 } catch (e) {}
 
-// Configuration Vercel Edge Config pour persistance cloud multi-containers
-const EDGE_CONFIG_ID = process.env.EDGE_CONFIG_ID || 'ecfg_6vsreldtb2vs2ryeorvmaxmr0ylu';
+// Configuration Vercel Edge Config (optionnelle)
+const EDGE_CONFIG_ID = process.env.EDGE_CONFIG_ID || '';
 const EDGE_CONFIG_TOKEN = process.env.EDGE_CONFIG_TOKEN || process.env.EDGE_CONFIG || '';
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN || '';
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID || 'team_9TZhls8tDyzZXTb5avOuXAjL';
