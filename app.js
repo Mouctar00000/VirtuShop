@@ -2188,7 +2188,7 @@ function renderSasPayDepositContent(container) {
       <div class="momo-convert-left">
         <span style="font-size: 16px;">💱</span>
         <div>
-          <div class="momo-convert-label">Montant débité (Devise locale)</div>
+          <div class="momo-convert-label">Montant crédité (Devise locale)</div>
           <div class="momo-convert-value" id="momo-calc-local">${formattedLocal}</div>
         </div>
       </div>
@@ -2196,6 +2196,9 @@ function renderSasPayDepositContent(container) {
         <span class="momo-badge-live">Taux SasPay direct</span>
         <div style="font-size: 9.5px; color: var(--text-muted); margin-top: 1px;">1 USD = ${country.rate} ${country.currency}</div>
       </div>
+    </div>
+    <div style="font-size: 10px; color: var(--text-muted); margin: 3px 0 6px 2px; line-height: 1.35;">
+      💡 Prévoyez au moins <strong>~${Math.round(localAmount * 1.035)} ${country.currency}</strong> sur votre SIM pour couvrir les frais de réseau opérateur.
     </div>
 
     ${phoneFieldHtml}
@@ -2439,10 +2442,11 @@ function showSasPayFailedState(message) {
   container.innerHTML = `
     <div class="deposit-active-flow" style="text-align: center; padding: 14px 10px;">
       <div style="font-size: 34px; margin-bottom: 6px;">❌</div>
-      <h3 style="color: var(--rose-600); font-size: 15.5px; margin: 0 0 4px 0;">Paiement non abouti</h3>
-      <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 12px 0; line-height: 1.45;">
+      <h3 style="color: var(--rose-600); font-size: 15.5px; margin: 0 0 6px 0;">Paiement non abouti</h3>
+      <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px; color: #9f1239; line-height: 1.45; text-align: left;">
+        <strong>Motif communiqué par l'opérateur :</strong><br>
         ${escapeHtml(message || 'Le paiement a été rejeté ou a expiré auprès de votre opérateur.')}
-      </p>
+      </div>
       <button type="button" class="btn-primary" onclick="renderDepositMethodContent()" style="width: 100%; margin-bottom: 6px; padding: 8px;">
         Réessayer ou Choisir un autre moyen 🔄
       </button>
@@ -4115,7 +4119,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610120928_55d3e3',
+  currentVersion: 'v202610121025_686dfc',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

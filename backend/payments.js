@@ -945,12 +945,12 @@ class PaymentService {
 
     if (!tx) {
       if (providerTxId) {
-        tx = {
+        tx = db.createTransaction({
           id: transactionId || `TXN-${providerTxId.substring(0, 8).toUpperCase()}`,
           providerTxId: providerTxId,
           amount: 0,
           status: 'pending'
-        };
+        });
       } else {
         throw new Error('Transaction introuvable dans la base de données.');
       }
@@ -1070,26 +1070,54 @@ class PaymentService {
           message: 'Paiement confirmé avec succès ! Votre solde a été crédité.'
         };
       } else if (officialStatus === 'FAILED' || officialStatus === 'CANCELLED' || officialStatus === 'EXPIRED') {
-        // Marquage de la transaction comme échouée avec explication claire
+        // Marquage de la transaction comme échouée avec explication claire et détaillée
         let failureDesc = `Paiement ${officialStatus === 'EXPIRED' ? 'expiré' : 'rejeté'} par l'opérateur.`;
-        if (pData?.error?.message && !pData.error.message.includes('fetched successfully')) {
-          failureDesc = pData.error.message;
-        } else if (pData?.failure_reason) {
-          failureDesc = pData.failure_reason;
-        } else if (pData?.reason) {
-          failureDesc = pData.reason;
-        } else if (pData?.message && !pData.message.includes('fetched successfully')) {
-          failureDesc = pData.message;
+
+        try {
+          // Requête vers le endpoint transaction détaillé pour extraire le motif de l'opérateur (status_logs)
+          const txDetailRes = await this.requestSasPay(`/transactions/${effectiveProviderTxId}/`, 'GET');
+          if (txDetailRes.ok && txDetailRes.data?.data) {
+            const txData = txDetailRes.data.data;
+            const logs = txData.status_logs || [];
+            const lastLog = logs.slice(-1)[0];
+            const rawReason = (lastLog?.reason || '').trim();
+
+            if (rawReason.includes('INSUFFICIENT_BALANCE')) {
+              const debitAmt = txData.debited_amount ? `${Math.round(parseFloat(txData.debited_amount))} ${txData.currency || 'XAF'}` : 'le montant avec frais';
+              failureDesc = `Solde insuffisant sur votre compte Mobile Money. Prévoyez au moins ${debitAmt} (frais réseau inclus) sur votre SIM pour valider ce paiement.`;
+            } else if (rawReason.includes('TIMED_OUT') || rawReason.includes('EXPIRED')) {
+              failureDesc = `Délai de validation dépassé. Vous n'avez pas validé la transaction à temps sur votre téléphone portable.`;
+            } else if (rawReason.includes('USER_REJECTED') || rawReason.includes('CANCELLED')) {
+              failureDesc = `La transaction a été annulée ou refusée depuis votre téléphone portable.`;
+            } else if (rawReason.includes('INVALID_PIN')) {
+              failureDesc = `Code secret PIN erroné lors de la validation sur votre téléphone.`;
+            } else if (rawReason) {
+              failureDesc = rawReason;
+            }
+          }
+        } catch (e) {
+          console.warn('[SasPay Detail Extraction]', e.message);
         }
+
+        if (!failureDesc || failureDesc.includes('fetched successfully')) {
+          if (pData?.error?.message && !pData.error.message.includes('fetched successfully')) {
+            failureDesc = pData.error.message;
+          } else if (pData?.failure_reason) {
+            failureDesc = pData.failure_reason;
+          } else if (pData?.reason) {
+            failureDesc = pData.reason;
+          }
+        }
+
         const failedTx = db.updateTransaction(tx.id, {
           status: 'failed',
           failureReason: failureDesc,
           updatedAt: new Date().toISOString()
-        });
+        }) || { ...tx, status: 'failed', failureReason: failureDesc };
         return {
           success: true,
           status: 'failed',
-          message: failedTx.failureReason,
+          message: failureDesc,
           transaction: failedTx
         };
       } else {
