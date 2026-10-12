@@ -102,7 +102,11 @@ async function runPaymentMethodTests() {
   console.log('\n🎉 TOUS LES TESTS DE L\'API MOYENS DE PAIEMENT ONT RÉUSSI À 100% !');
 }
 
-runPaymentMethodTests().catch(err => {
-  console.error('❌ Erreur de test:', err);
-  process.exit(1);
-});
+module.exports = runPaymentMethodTests;
+
+if (require.main === module) {
+  runPaymentMethodTests().catch(err => {
+    console.error('❌ Erreur de test:', err);
+    process.exit(1);
+  });
+}

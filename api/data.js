@@ -338,8 +338,8 @@ module.exports = async function handler(req, res) {
         }
         const userId = body.userId;
         const amount = parseFloat(body.amount);
-        const action = body.action || 'add'; // 'add' | 'deduct' | 'set'
-        const reason = body.reason || 'Ajustement manuel par administrateur';
+        const action = body.action || 'add'; // 'add' | 'deduct' | 'set' | 'gift' | 'refund'
+        const reason = body.reason || (action === 'gift' ? 'Don de solde offert par l\'administrateur' : 'Ajustement manuel par administrateur');
         if (!userId || isNaN(amount)) {
           return res.status(400).json({ error: 'Paramètres manquants ou invalides (userId, amount).' });
         }
@@ -350,6 +350,9 @@ module.exports = async function handler(req, res) {
           reason,
           adminName: auth.user.name || 'Administrateur'
         });
+
+        // Persistance immédiate vers Vercel Edge Config pour synchronisation globale
+        await db.persistToRemote();
 
         return res.status(200).json({ success: true, ...resAdjust });
       }
@@ -367,6 +370,7 @@ module.exports = async function handler(req, res) {
           return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
         }
         const saved = db.savePaymentMethod(body);
+        await db.persistToRemote();
         return res.status(200).json({ success: true, method: saved, methods: db.getPaymentMethods() });
       }
 
@@ -376,6 +380,7 @@ module.exports = async function handler(req, res) {
         }
         const mId = parseInt(body.id || req.query?.id, 10);
         db.deletePaymentMethod(mId);
+        await db.persistToRemote();
         return res.status(200).json({ success: true, methods: db.getPaymentMethods() });
       }
     }

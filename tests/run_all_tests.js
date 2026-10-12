@@ -110,7 +110,8 @@ async function runAsyncTests() {
   await runPaymentTests();
 
   console.log('\n=== TEST 9: Payment Methods Administration & API ===');
-  require('./test_payment_methods');
+  const runPaymentMethodTests = require('./test_payment_methods');
+  await runPaymentMethodTests();
 
   console.log('\n=== TEST 10: Versioning, Cache-Control & Auto-Update System ===');
   const testVersionCache = require('./test_version_cache');
@@ -120,8 +121,12 @@ async function runAsyncTests() {
   const testAddKey = require('./test_add_key_feature');
   await testAddKey();
 
+  console.log('\n=== TEST 12: Balance System Persistence, Gifts & Synchronization ===');
+  const runBalanceTests = require('./test_balance_system');
+  await runBalanceTests();
+
   console.log('\n======================================================');
-  console.log('🏆 TOUTES LES 11 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('🏆 TOUTES LES 12 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
   console.log('======================================================\n');
 }
 

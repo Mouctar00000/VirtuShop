@@ -32,11 +32,17 @@ try {
   }
 } catch (e) {}
 
-// Configuration Vercel Edge Config (optionnelle)
-const EDGE_CONFIG_ID = process.env.EDGE_CONFIG_ID || '';
+// Configuration Vercel Edge Config & Persistance Distante
+const EDGE_CONFIG_ID = process.env.EDGE_CONFIG_ID || 'ecfg_6vsreldtb2vs2ryeorvmaxmr0ylu';
 const EDGE_CONFIG_TOKEN = process.env.EDGE_CONFIG_TOKEN || process.env.EDGE_CONFIG || '';
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN || '';
 const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID || 'team_9TZhls8tDyzZXTb5avOuXAjL';
+
+// Configuration Stockage Persistant Cloud GitHub (db-storage branch)
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_REPO = process.env.GITHUB_REPO || 'Mouctar00000/VirtuShop';
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'db-storage';
+const GITHUB_FILE = 'remote_db.json';
 
 // Assurer l'existence du dossier data
 if (!fs.existsSync(DATA_DIR)) {
@@ -118,6 +124,8 @@ class Database {
   constructor() {
     this.mutex = new SimpleMutex();
     this._lastRemoteSync = 0;
+    this._deletedProductIds = new Set();
+    this._deletedMethodIds = new Set();
     this.data = this.load();
     this.migrateAndDeduplicateProducts();
   }
@@ -272,18 +280,322 @@ class Database {
     }
   }
 
-  // Synchronisation globale et rapide depuis Vercel Edge Config
-  async syncFromRemote() {
-    if (!EDGE_CONFIG_ID || !EDGE_CONFIG_TOKEN) return;
-    const now = Date.now();
-    if (this._lastRemoteSync && (now - this._lastRemoteSync < 1500)) {
-      return; // Cache de 1.5s pour éviter les requêtes redondantes
+  // Fusion intelligente des données distantes avec préservation des modifications locales
+  mergeRemoteData(parsed) {
+    if (!parsed || typeof parsed !== 'object') return false;
+    let changed = false;
+
+    // 1. UTILISATEURS : Fusion intelligente avec protection des soldes
+    if (Array.isArray(parsed.users) && parsed.users.length > 0) {
+      const localUsers = this.data.users || [];
+      const localUserMap = new Map(localUsers.map(u => [String(u.id), u]));
+      const mergedUsers = [];
+
+      for (const remoteUser of parsed.users) {
+        const uId = String(remoteUser.id);
+        const localUser = localUserMap.get(uId);
+        if (localUser) {
+          const remoteTime = remoteUser.updated_at ? new Date(remoteUser.updated_at).getTime() : 0;
+          const localTime = localUser.updated_at ? new Date(localUser.updated_at).getTime() : 0;
+          if (localTime > remoteTime) {
+            mergedUsers.push(localUser);
+          } else {
+            mergedUsers.push(remoteUser);
+          }
+          localUserMap.delete(uId);
+        } else {
+          mergedUsers.push(remoteUser);
+        }
+      }
+
+      for (const remainingLocal of localUserMap.values()) {
+        mergedUsers.push(remainingLocal);
+      }
+
+      this.data.users = mergedUsers;
+      changed = true;
     }
+
+    // 2. PRODUITS : Fusion par ID en préservant les ajouts locaux et en respectant les suppressions
+    if (Array.isArray(parsed.products)) {
+      const localProducts = this.data.products || [];
+      const localProdMap = new Map(localProducts.map(p => [String(p.id), p]));
+      const mergedProducts = [];
+
+      for (const remoteProd of parsed.products) {
+        const pId = String(remoteProd.id);
+        if (this._deletedProductIds && this._deletedProductIds.has(pId)) {
+          continue;
+        }
+        const localProd = localProdMap.get(pId);
+        if (localProd) {
+          const remoteTime = remoteProd.updated_at ? new Date(remoteProd.updated_at).getTime() : 0;
+          const localTime = localProd.updated_at ? new Date(localProd.updated_at).getTime() : 0;
+          if (localTime > remoteTime) {
+            mergedProducts.push(localProd);
+          } else {
+            mergedProducts.push(remoteProd);
+          }
+          localProdMap.delete(pId);
+        } else {
+          mergedProducts.push(remoteProd);
+        }
+      }
+
+      for (const remainingProd of localProdMap.values()) {
+        const pId = String(remainingProd.id);
+        if (!this._deletedProductIds || !this._deletedProductIds.has(pId)) {
+          mergedProducts.push(remainingProd);
+        }
+      }
+
+      this.data.products = mergedProducts;
+      changed = true;
+    }
+
+    // 3. COFFRE-FORT (VAULT) : Fusion des clés sans perte ni duplication
+    if (parsed.vault && typeof parsed.vault === 'object') {
+      const mergedVault = { ...parsed.vault };
+      const localVault = this.data.vault || {};
+
+      for (const [prodId, lVault] of Object.entries(localVault)) {
+        if (!mergedVault[prodId]) {
+          mergedVault[prodId] = lVault;
+        } else {
+          const rKeys = Array.isArray(mergedVault[prodId].keys) ? mergedVault[prodId].keys : [];
+          const lKeys = Array.isArray(lVault.keys) ? lVault.keys : [];
+          const keyMap = new Map();
+
+          for (const rk of rKeys) {
+            const keyIdentifier = (rk.id || rk.content || '').trim().toLowerCase();
+            if (keyIdentifier) keyMap.set(keyIdentifier, { ...rk });
+          }
+
+          for (const lk of lKeys) {
+            const keyIdentifier = (lk.id || lk.content || '').trim().toLowerCase();
+            if (!keyIdentifier) continue;
+            if (keyMap.has(keyIdentifier)) {
+              const existing = keyMap.get(keyIdentifier);
+              if (lk.used) {
+                existing.used = true;
+                existing.orderId = lk.orderId || existing.orderId;
+                existing.soldTo = lk.soldTo || existing.soldTo;
+                existing.soldAt = lk.soldAt || existing.soldAt;
+              }
+            } else {
+              keyMap.set(keyIdentifier, { ...lk });
+            }
+          }
+
+          mergedVault[prodId].keys = Array.from(keyMap.values());
+        }
+      }
+
+      this.data.vault = mergedVault;
+      changed = true;
+    }
+
+    // 4. COMMANDES : Fusion par ID
+    if (Array.isArray(parsed.orders)) {
+      const remoteOrderIds = new Set(parsed.orders.map(o => String(o.id)));
+      const localOnlyOrders = (this.data.orders || []).filter(o => !remoteOrderIds.has(String(o.id)));
+      this.data.orders = [...parsed.orders, ...localOnlyOrders];
+      changed = true;
+    }
+
+    // 5. TRANSACTIONS : Fusion par ID
+    if (Array.isArray(parsed.transactions)) {
+      const remoteTxIds = new Set(parsed.transactions.map(t => String(t.id)));
+      const localOnlyTxs = (this.data.transactions || []).filter(t => !remoteTxIds.has(String(t.id)));
+      this.data.transactions = [...parsed.transactions, ...localOnlyTxs];
+      changed = true;
+    }
+
+    // 6. MÉTHODES DE PAIEMENT : Fusion intelligente par ID avec respect des timestamps et suppressions
+    if (Array.isArray(parsed.payment_methods) && parsed.payment_methods.length > 0) {
+      const localMethods = this.data.payment_methods || [];
+      const localMethodMap = new Map(localMethods.map(m => [String(m.id), m]));
+      const mergedMethods = [];
+
+      for (const remoteMethod of parsed.payment_methods) {
+        const mId = String(remoteMethod.id);
+        if (this._deletedMethodIds && this._deletedMethodIds.has(mId)) {
+          continue;
+        }
+        const localMethod = localMethodMap.get(mId);
+        if (localMethod) {
+          const remoteTime = remoteMethod.updated_at ? new Date(remoteMethod.updated_at).getTime() : 0;
+          const localTime = localMethod.updated_at ? new Date(localMethod.updated_at).getTime() : 0;
+          if (localTime > remoteTime) {
+            mergedMethods.push(localMethod);
+          } else {
+            mergedMethods.push(remoteMethod);
+          }
+          localMethodMap.delete(mId);
+        } else {
+          mergedMethods.push(remoteMethod);
+        }
+      }
+
+      for (const remainingMethod of localMethodMap.values()) {
+        const mId = String(remainingMethod.id);
+        if (!this._deletedMethodIds || !this._deletedMethodIds.has(mId)) {
+          mergedMethods.push(remainingMethod);
+        }
+      }
+
+      this.data.payment_methods = mergedMethods;
+      changed = true;
+    }
+
+    // 7. PARAMÈTRES
+    if (parsed.settings && typeof parsed.settings === 'object') {
+      this.data.settings = Object.assign({}, this.data.settings, parsed.settings);
+      changed = true;
+    }
+
+    if (changed) {
+      if (Array.isArray(this.data.products) && this.data.vault) {
+        for (const p of this.data.products) {
+          const v = this.data.vault[p.id];
+          if (v && Array.isArray(v.keys)) {
+            p.stock = v.keys.filter(k => !k.used).length;
+          }
+        }
+      }
+      this.saveData(this.data);
+    }
+    return changed;
+  }
+
+  // Synchronisation depuis le stockage GitHub distant (branche db-storage)
+  async syncFromGitHub() {
+    if (!GITHUB_TOKEN) return false;
     return new Promise((resolve) => {
-      const url = `https://edge-config.vercel.com/${EDGE_CONFIG_ID}/items`;
+      const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}?ref=${GITHUB_BRANCH}`;
       const req = https.get(url, {
         headers: {
-          'Authorization': `Bearer ${EDGE_CONFIG_TOKEN}`,
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'User-Agent': 'GetVirtu-App/1.0',
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        timeout: 8000
+      }, (res) => {
+        let raw = '';
+        res.on('data', c => raw += c);
+        res.on('end', () => {
+          try {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              const fileData = JSON.parse(raw);
+              if (fileData.sha) this._lastRemoteSha = fileData.sha;
+              if (fileData.content) {
+                const jsonStr = Buffer.from(fileData.content, 'base64').toString('utf8');
+                const parsed = JSON.parse(jsonStr);
+                this.mergeRemoteData(parsed);
+                this._lastRemoteSync = Date.now();
+                return resolve(true);
+              }
+            }
+          } catch(e) {
+            console.warn('[DB GitHub Sync Error]', e.message);
+          }
+          resolve(false);
+        });
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+  }
+
+  // Persistance vers le stockage GitHub distant (branche db-storage)
+  async persistToGitHub() {
+    if (!GITHUB_TOKEN) return false;
+    // 1. Récupérer le SHA actuel si non présent
+    if (!this._lastRemoteSha) {
+      await this.syncFromGitHub();
+    }
+
+    const payload = JSON.stringify({
+      users: (this.data.users || []).slice(0, 100),
+      products: this.data.products || [],
+      vault: this.data.vault || {},
+      orders: (this.data.orders || []).slice(0, 100),
+      transactions: (this.data.transactions || []).slice(0, 100),
+      payment_methods: this.data.payment_methods || [],
+      settings: this.data.settings || {}
+    });
+
+    const bodyObj = {
+      message: `db: update (${new Date().toISOString()})`,
+      content: Buffer.from(payload).toString('base64'),
+      branch: GITHUB_BRANCH
+    };
+    if (this._lastRemoteSha) {
+      bodyObj.sha = this._lastRemoteSha;
+    }
+
+    const bodyStr = JSON.stringify(bodyObj);
+
+    return new Promise((resolve) => {
+      const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`;
+      const req = https.request(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'User-Agent': 'GetVirtu-App/1.0',
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Length': Buffer.byteLength(bodyStr)
+        },
+        timeout: 10000
+      }, (res) => {
+        let raw = '';
+        res.on('data', c => raw += c);
+        res.on('end', () => {
+          try {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              const resData = JSON.parse(raw);
+              if (resData.content?.sha) {
+                this._lastRemoteSha = resData.content.sha;
+              }
+              this._lastRemoteSync = Date.now();
+              return resolve(true);
+            } else if (res.statusCode === 409) {
+              this._lastRemoteSha = null;
+              this.syncFromGitHub().then(() => resolve(false));
+              return;
+            }
+          } catch(e) {}
+          resolve(false);
+        });
+      });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+      req.write(bodyStr);
+      req.end();
+    });
+  }
+
+  // Synchronisation globale et rapide depuis le cloud
+  async syncFromRemote() {
+    const now = Date.now();
+    if (this._lastRemoteSync && (now - this._lastRemoteSync < 1500)) {
+      return; // Cache de 1.5s
+    }
+
+    // 1. Tenter la synchronisation GitHub Cloud prioritaire (stockage fiable illimité)
+    const ghSynced = await this.syncFromGitHub();
+    if (ghSynced) return;
+
+    // 2. Fallback Edge Config si configuré
+    const token = VERCEL_TOKEN || EDGE_CONFIG_TOKEN;
+    if (!EDGE_CONFIG_ID || !token) return;
+
+    return new Promise((resolve) => {
+      const url = `https://api.vercel.com/v1/edge-config/${EDGE_CONFIG_ID}/items?teamId=${VERCEL_TEAM_ID}`;
+      const req = https.get(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
           'User-Agent': 'GetVirtu-App/1.0',
           'Accept': 'application/json'
         },
@@ -294,39 +606,25 @@ class Database {
         res.on('end', () => {
           try {
             if (res.statusCode >= 200 && res.statusCode < 300) {
-              const remote = JSON.parse(raw);
-              let changed = false;
-              if (Array.isArray(remote.db_users)) {
-                this.data.users = remote.db_users;
-                changed = true;
+              const parsed = JSON.parse(raw);
+              let remoteObj = {};
+              if (Array.isArray(parsed)) {
+                for (const item of parsed) {
+                  if (item && item.key) remoteObj[item.key] = item.value;
+                }
+              } else if (parsed && typeof parsed === 'object') {
+                remoteObj = parsed;
               }
-              if (Array.isArray(remote.db_products)) {
-                this.data.products = remote.db_products;
-                changed = true;
-              }
-              if (remote.db_vault && typeof remote.db_vault === 'object') {
-                this.data.vault = remote.db_vault;
-                changed = true;
-              }
-              if (Array.isArray(remote.db_orders)) {
-                this.data.orders = remote.db_orders;
-                changed = true;
-              }
-              if (Array.isArray(remote.db_transactions)) {
-                this.data.transactions = remote.db_transactions;
-                changed = true;
-              }
-              if (Array.isArray(remote.db_payment_methods)) {
-                this.data.payment_methods = remote.db_payment_methods;
-                changed = true;
-              }
-              if (remote.db_settings && typeof remote.db_settings === 'object') {
-                this.data.settings = remote.db_settings;
-                changed = true;
-              }
-              if (changed) {
-                this.saveData(this.data);
-              }
+
+              this.mergeRemoteData({
+                users: remoteObj.db_users,
+                products: remoteObj.db_products,
+                vault: remoteObj.db_vault,
+                orders: remoteObj.db_orders,
+                transactions: remoteObj.db_transactions,
+                payment_methods: remoteObj.db_payment_methods,
+                settings: remoteObj.db_settings
+              });
               this._lastRemoteSync = now;
             }
           } catch (e) {
@@ -335,14 +633,8 @@ class Database {
           resolve();
         });
       });
-      req.on('error', (err) => {
-        console.warn('[DB Remote Sync Network Error]', err.message);
-        resolve();
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        resolve();
-      });
+      req.on('error', () => resolve());
+      req.on('timeout', () => { req.destroy(); resolve(); });
     });
   }
 
@@ -351,23 +643,27 @@ class Database {
       clearTimeout(this._persistTimeout);
       this._persistTimeout = null;
     }
-    if (!EDGE_CONFIG_ID || !VERCEL_TOKEN) return;
-    const cleanUsers = (this.data.users || []).slice(0, 100);
-    const cleanOrders = (this.data.orders || []).slice(0, 100);
-    const cleanTxs = (this.data.transactions || []).slice(0, 100);
 
-    const patchBody = JSON.stringify({
-      items: [
-        { operation: 'upsert', key: 'db_users', value: cleanUsers },
-        { operation: 'upsert', key: 'db_products', value: this.data.products || [] },
-        { operation: 'upsert', key: 'db_vault', value: this.data.vault || {} },
-        { operation: 'upsert', key: 'db_orders', value: cleanOrders },
-        { operation: 'upsert', key: 'db_transactions', value: cleanTxs },
-        { operation: 'upsert', key: 'db_payment_methods', value: this.data.payment_methods || [] }
-      ]
-    });
+    // 1. Sauvegarde principale sur GitHub Cloud (fiabilité absolue)
+    await this.persistToGitHub();
 
-    return new Promise((resolve) => {
+    // 2. Mise à jour Edge Config en tâche de fond (best effort)
+    if (EDGE_CONFIG_ID && VERCEL_TOKEN) {
+      const cleanUsers = (this.data.users || []).slice(0, 100);
+      const cleanOrders = (this.data.orders || []).slice(0, 100);
+      const cleanTxs = (this.data.transactions || []).slice(0, 100);
+
+      const patchBody = JSON.stringify({
+        items: [
+          { operation: 'upsert', key: 'db_users', value: cleanUsers },
+          { operation: 'upsert', key: 'db_products', value: this.data.products || [] },
+          { operation: 'upsert', key: 'db_vault', value: this.data.vault || {} },
+          { operation: 'upsert', key: 'db_orders', value: cleanOrders },
+          { operation: 'upsert', key: 'db_transactions', value: cleanTxs },
+          { operation: 'upsert', key: 'db_payment_methods', value: this.data.payment_methods || [] }
+        ]
+      });
+
       const url = `https://api.vercel.com/v1/edge-config/${EDGE_CONFIG_ID}/items?teamId=${VERCEL_TEAM_ID}`;
       const req = https.request(url, {
         method: 'PATCH',
@@ -378,26 +674,12 @@ class Database {
           'Accept': 'application/json',
           'Content-Length': Buffer.byteLength(patchBody)
         },
-        timeout: 10000
-      }, (res) => {
-        let raw = '';
-        res.on('data', c => raw += c);
-        res.on('end', () => {
-          this._lastRemoteSync = Date.now();
-          resolve();
-        });
-      });
-      req.on('error', (e) => {
-        console.warn('[DB Persist Remote Error]', e.message);
-        resolve();
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        resolve();
-      });
+        timeout: 6000
+      }, () => {});
+      req.on('error', () => {});
       req.write(patchBody);
       req.end();
-    });
+    }
   }
 
   persist() {
@@ -495,7 +777,7 @@ class Database {
     return u;
   }
 
-  // Ajustement manuel du solde client par l'administrateur avec traçabilité stricte
+  // Ajustement et don de solde client par l'administrateur avec traçabilité stricte
   adjustUserBalance(userId, { amount, action = 'add', reason = '', adminName = 'Administrateur' }) {
     const u = this.getUserById(userId) || this.getUserByEmail(userId);
     if (!u) throw new Error('Utilisateur introuvable.');
@@ -508,7 +790,7 @@ class Database {
       newBal = Math.max(0, numAmount);
     } else if (action === 'deduct') {
       newBal = Math.max(0, oldBal - numAmount);
-    } else { // 'add' / 'credit'
+    } else { // 'add' / 'credit' / 'gift' / 'refund'
       newBal = oldBal + numAmount;
     }
     newBal = Math.round(newBal * 100) / 100;
@@ -518,22 +800,46 @@ class Database {
     u.updated_at = new Date().toISOString();
     this.persist();
 
-    // Consigner immédiatement l'ajustement manuel dans les transactions
+    // Détermination précise du type et du libellé selon qu'il s'agit d'un don gratuit ou d'un ajustement
+    const isGift = (action === 'gift' || action === 'bonus' || action === 'cadeau');
+    let txType = 'credit_manuel_admin';
+    let paymentMethod = 'Ajustement Manuel Administrateur';
+    let provider = 'admin_manual';
+    let defaultReason = `Ajustement manuel par ${adminName} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)} $)`;
+
+    if (isGift) {
+      txType = 'gift';
+      paymentMethod = 'Cadeau Promotionnel Administrateur';
+      provider = 'admin_gift';
+      defaultReason = `Don de solde offert par l'administrateur ${adminName} (+${diff.toFixed(2)} $)`;
+    } else if (action === 'deduct') {
+      txType = 'debit_manuel_admin';
+      paymentMethod = 'Débit Manuel Administrateur';
+      defaultReason = `Débit manuel par l'administrateur ${adminName} (-${Math.abs(diff).toFixed(2)} $)`;
+    } else if (action === 'refund') {
+      txType = 'refund';
+      paymentMethod = 'Remboursement Commande';
+      provider = 'admin_refund';
+      defaultReason = `Remboursement par l'administrateur ${adminName} (+${diff.toFixed(2)} $)`;
+    }
+
+    // Consigner immédiatement l'opération dans les transactions
     const tx = this.createTransaction({
-      id: 'TXN-ADJUST-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
+      id: (isGift ? 'TXN-GIFT-' : 'TXN-ADJUST-') + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
       userId: u.id,
       userEmail: u.email,
       userName: u.name,
       amount: Math.abs(diff),
       currency: 'USD',
-      paymentMethod: 'Ajustement Manuel Administrateur',
-      provider: 'admin_manual',
+      paymentMethod: paymentMethod,
+      provider: provider,
       status: 'completed',
-      type: diff >= 0 ? 'credit_manuel_admin' : 'debit_manuel_admin',
+      type: txType,
       failureReason: null,
-      notes: reason || `Ajustement manuel par ${adminName} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)} $)`,
+      notes: reason ? `${reason} (Par : ${adminName})` : defaultReason,
       balanceBefore: oldBal,
-      balanceAfter: newBal
+      balanceAfter: newBal,
+      adminResponsible: adminName
     });
 
     return { user: u, transaction: tx, diff, oldBalance: oldBal, newBalance: newBal };
@@ -804,6 +1110,12 @@ class Database {
   }
 
   deleteProduct(id) {
+    const sId = String(id);
+    if (this._deletedProductIds) {
+      this._deletedProductIds.add(sId);
+      const num = parseInt(id, 10);
+      if (!isNaN(num)) this._deletedProductIds.add(String(num));
+    }
     this.data.products = this.data.products.filter(p => p.id !== id && p.id !== parseInt(id, 10));
     if (this.data.vault && this.data.vault[id]) {
       delete this.data.vault[id];
@@ -973,16 +1285,17 @@ class Database {
     if (!this.data.payment_methods) this.data.payment_methods = [];
     const parsedId = method.id ? parseInt(method.id, 10) : null;
     let saved = null;
+    const now = new Date().toISOString();
     if (parsedId) {
       const idx = this.data.payment_methods.findIndex(m => m.id === parsedId);
       if (idx !== -1) {
-        this.data.payment_methods[idx] = { ...this.data.payment_methods[idx], ...method, id: parsedId };
+        this.data.payment_methods[idx] = { ...this.data.payment_methods[idx], ...method, id: parsedId, updated_at: now };
         saved = this.data.payment_methods[idx];
       }
     }
     if (!saved) {
       const newId = this.data.payment_methods.length > 0 ? Math.max(...this.data.payment_methods.map(m => m.id || 0)) + 1 : 1;
-      saved = { ...method, id: newId, enabled: method.enabled !== false };
+      saved = { ...method, id: newId, enabled: method.enabled !== false, created_at: now, updated_at: now };
       this.data.payment_methods.push(saved);
     }
     this.persist();
@@ -990,8 +1303,14 @@ class Database {
   }
 
   deletePaymentMethod(id) {
+    const sId = String(id);
+    if (this._deletedMethodIds) {
+      this._deletedMethodIds.add(sId);
+      const num = parseInt(id, 10);
+      if (!isNaN(num)) this._deletedMethodIds.add(String(num));
+    }
     const numId = parseInt(id, 10);
-    this.data.payment_methods = (this.data.payment_methods || []).filter(m => m.id !== numId);
+    this.data.payment_methods = (this.data.payment_methods || []).filter(m => m.id !== numId && String(m.id) !== sId);
     this.persist();
     return true;
   }

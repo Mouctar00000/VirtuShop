@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202610121025_686dfc">
-  <script src="security.js?v=v202610121025_686dfc"></script>
+  <link rel="stylesheet" href="style.css?v=v202610122035_2d9461">
+  <script src="security.js?v=v202610122035_2d9461"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -2234,9 +2234,9 @@
   <div id="admin-adjust-balance-modal" class="modal-backdrop">
     <div class="modal-window" style="max-width: 480px;">
       <button type="button" class="modal-close-btn" onclick="closeBalanceModal()">✕</button>
-      <h2 class="modal-title" id="adjust-balance-title">Ajuster le Solde Client</h2>
+      <h2 class="modal-title" id="adjust-balance-title">🎁 Offrir un Don ou Ajuster le Solde</h2>
       <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 16px;">
-        Contrôle administrateur direct : créditez, réglez ou déduisez le solde de ce compte en dollars ($ USD).
+        Offrez des fonds gratuitement à un client (10 $, 20 $, 50 $ ou montant personnalisé) ou effectuez un ajustement direct.
       </p>
 
       <form id="admin-adjust-balance-form" onsubmit="submitBalanceAdjustment(event)">
@@ -2254,8 +2254,9 @@
         </div>
 
         <div class="field" style="margin-bottom: 12px;">
-          <label for="adjust-balance-mode">Action sur le solde</label>
+          <label for="adjust-balance-mode">Type d'opération</label>
           <select id="adjust-balance-mode" onchange="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 13px; font-weight: 600;">
+            <option value="gift" selected>🎁 Offrir des fonds gratuitement (Cadeau / Bonus promotionnel)</option>
             <option value="add">➕ Ajouter au solde (+ $)</option>
             <option value="set">⚙️ Définir le montant exact du solde ($)</option>
             <option value="deduct">➖ Déduire du solde (- $)</option>
@@ -2263,24 +2264,24 @@
         </div>
 
         <div class="field" style="margin-bottom: 12px;">
-          <label for="adjust-balance-amount">Montant ($ USD)</label>
-          <input type="number" id="adjust-balance-amount" step="0.01" min="0.01" required placeholder="Ex: 20.00" oninput="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 14px; font-weight: 700;">
+          <label for="adjust-balance-amount">Montant à allouer ($ USD)</label>
+          <input type="number" id="adjust-balance-amount" step="0.01" min="0.01" required placeholder="Ex: 10.00, 20.00, 50.00..." oninput="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 14px; font-weight: 700;">
         </div>
 
         <div class="field" style="margin-bottom: 14px;">
-          <label for="adjust-balance-reason">Motif de l'ajustement (consigné dans l'historique)</label>
-          <input type="text" id="adjust-balance-reason" required placeholder="Ex: Recharge manuelle vérifiée, Geste commercial, Régularisation..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12.5px;">
+          <label for="adjust-balance-reason">Motif de l'opération (consigné dans l'historique)</label>
+          <input type="text" id="adjust-balance-reason" placeholder="Ex: Cadeau de fidélité, Promotion, Bienvenue, Geste commercial..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 12.5px;">
         </div>
 
         <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 12px; font-weight: 600; color: #1e40af;">Nouveau Solde Calculé :</span>
+          <span style="font-size: 12px; font-weight: 600; color: #1e40af;">Nouveau Solde Résultant :</span>
           <strong id="adjust-balance-preview-val" style="font-size: 16px; color: var(--emerald-600);">$0.00</strong>
         </div>
 
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
           <button type="button" class="btn-secondary" onclick="closeBalanceModal()">Annuler</button>
           <button type="submit" class="btn-primary" style="background: var(--emerald-600); border-color: var(--emerald-600);">
-            <span>✓ Confirmer l'Ajustement ⚡</span>
+            <span>✓ Confirmer l'Opération ⚡</span>
           </button>
         </div>
       </form>
@@ -2305,6 +2306,21 @@
       },
       del: function(k) { try { localStorage.removeItem('vs_' + k); } catch (e) {} }
     };
+
+    function getAdminAuthToken() {
+      var sess = DB.get('session');
+      if (sess && sess.token) return sess.token;
+      var adminSess = DB.get('admin_session');
+      if (adminSess && adminSess.token) return adminSess.token;
+      try {
+        var raw = localStorage.getItem('vs_session');
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && parsed.token) return parsed.token;
+        }
+      } catch (e) {}
+      return '';
+    }
 
     var currentPeriod = 'day';
     var chartRev = null;
@@ -3647,24 +3663,54 @@
       document.getElementById('admin-proof-lightbox').classList.add('active');
     }
 
-    function approveRecharge(rechargeId) {
+    async function approveRecharge(rechargeId) {
       var recharges = DB.get('recharges', []);
       var r = recharges.find(function(x) { return x.id === rechargeId; });
       if (!r || r.status !== 'En attente') return;
 
-      // 1. Marquer approuvé
+      var token = getAdminAuthToken();
+      if (token) {
+        try {
+          var res = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              transactionId: r.id,
+              isApproval: true
+            })
+          });
+          var data = await res.json();
+          if (data && typeof data.newBalance === 'number') {
+            var users = DB.get('users', []);
+            var u = users.find(function(x) {
+              return (x.id && r.userId && String(x.id) === String(r.userId)) ||
+                     (x.email && r.userEmail && x.email.toLowerCase() === r.userEmail.toLowerCase());
+            });
+            if (u) {
+              u.balance = data.newBalance;
+              DB.set('users', users);
+            }
+          }
+        } catch(e) {
+          console.warn('approveRecharge API error:', e.message);
+        }
+      }
+
+      // Marquer approuvé localement
       r.status = 'Approuvé';
       r.reviewedAt = new Date().toISOString();
 
-      // 2. Créditer automatiquement le solde du client (support ID string/number et fallback email)
-      var users = DB.get('users', []);
-      var u = users.find(function(x) {
+      var usersList = DB.get('users', []);
+      var userObj = usersList.find(function(x) {
         return (x.id && r.userId && String(x.id) === String(r.userId)) ||
                (x.email && r.userEmail && x.email.toLowerCase() === r.userEmail.toLowerCase());
       });
-      if (u) {
-        u.balance = Math.round(((u.balance || 0) + (r.amount || 0)) * 100) / 100;
-        DB.set('users', users);
+      if (userObj && (typeof userObj.balance !== 'number' || isNaN(userObj.balance))) {
+        userObj.balance = Math.round(((userObj.balance || 0) + (r.amount || 0)) * 100) / 100;
+        DB.set('users', usersList);
       }
 
       DB.set('recharges', recharges);
@@ -3672,10 +3718,28 @@
       showToast(`Recharge approuvée ! Le compte de ${r.userName} a été crédité de +${r.amount.toFixed(2)} USD.`, 'success');
     }
 
-    function rejectRecharge(rechargeId) {
+    async function rejectRecharge(rechargeId) {
       var recharges = DB.get('recharges', []);
       var r = recharges.find(function(x) { return x.id === rechargeId; });
       if (!r || r.status !== 'En attente') return;
+
+      var token = getAdminAuthToken();
+      if (token) {
+        try {
+          await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              transactionId: r.id,
+              isApproval: false,
+              failureReason: 'Rejeté par l\'administrateur'
+            })
+          });
+        } catch(e) {}
+      }
 
       r.status = 'Rejeté';
       r.reviewedAt = new Date().toISOString();
@@ -4075,12 +4139,35 @@
       o.cancelledAt = new Date().toISOString();
       o.vaultContent = null;
 
-      // 1. Rembourser l'acheteur sur son solde
-      var users = DB.get('users', []);
-      var u = users.find(function(x) { return x.id === o.userId; });
-      if (u) {
-        u.balance = (u.balance || 0) + (o.amount || 0);
-        DB.set('users', users);
+      // 1. Rembourser l'acheteur sur son solde via l'API serveur persistée
+      var token = getAdminAuthToken();
+      if (token && o.amount > 0 && o.userId) {
+        try {
+          var res = await fetch('/api/data/users', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              userId: o.userId,
+              amount: o.amount,
+              action: 'refund',
+              reason: `Remboursement de la commande #${o.id}`
+            })
+          });
+          var data = await res.json();
+          if (data && typeof data.newBalance === 'number') {
+            var users = DB.get('users', []);
+            var u = users.find(function(x) { return x.id === o.userId; });
+            if (u) {
+              u.balance = data.newBalance;
+              DB.set('users', users);
+            }
+          }
+        } catch(e) {
+          console.warn('API refund warning:', e.message);
+        }
       }
 
       // 2. Restituer le stock du produit si applicable
@@ -4117,10 +4204,10 @@
             <td><strong style="color: var(--primary-600); font-size: 15px;">$${bal.toFixed(2)}</strong></td>
             <td>
               <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                <button type="button" class="btn-secondary btn-sm" onclick="quickCreditUser('${u.id}', 10)" title="Créditer +10 $ immédiatement">+10 $</button>
-                <button type="button" class="btn-secondary btn-sm" onclick="quickCreditUser('${u.id}', 20)" title="Créditer +20 $ immédiatement">+20 $</button>
-                <button type="button" class="btn-secondary btn-sm" onclick="quickCreditUser('${u.id}', 50)" title="Créditer +50 $ immédiatement">+50 $</button>
-                <button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="openBalanceModal('${u.id}')" title="Définir un solde sur mesure, ajouter ou déduire">⚙️ Ajuster</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 10)" title="Offrir +10 $ gratuitement à ce client" style="font-weight: 600;">🎁 +10 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 20)" title="Offrir +20 $ gratuitement à ce client" style="font-weight: 600;">🎁 +20 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 50)" title="Offrir +50 $ gratuitement à ce client" style="font-weight: 600;">🎁 +50 $</button>
+                <button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="openBalanceModal('${u.id}')" title="Définir un don personnalisé ou ajuster">⚙️ Offrir / Ajuster</button>
               </div>
             </td>
           </tr>
@@ -4130,64 +4217,76 @@
       tbody.innerHTML = html || '<tr><td colspan="5" style="text-align: center; padding: 20px;">Aucun utilisateur.</td></tr>';
     }
 
-    function quickCreditUser(userId, amount) {
+    async function quickGiftUser(userId, amount) {
       var users = DB.get('users', []);
       var u = users.find(function(x) { return x.id === userId || (x.email && x.email === userId); });
       if (!u) return;
 
-      var oldBal = parseFloat(u.balance) || 0;
-      var newBal = Math.round((oldBal + amount) * 100) / 100;
-      u.balance = newBal;
-      DB.set('users', users);
+      var numAmount = parseFloat(amount) || 0;
+      if (numAmount <= 0) return;
 
-      // Consigner dans les transactions avec mention explicite du crédit manuel administrateur
-      var txs = DB.get('transactions', []);
-      var newTx = {
-        id: 'TXN-ADJUST-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
-        userId: u.id,
-        userEmail: u.email,
-        userName: u.name,
-        amount: amount,
-        currency: 'USD',
-        paymentMethod: 'Ajustement Administrateur',
-        provider: 'admin_manual',
-        status: 'completed',
-        type: 'credit_manuel_admin',
-        notes: `Crédit rapide manuel par l'administrateur (+${amount} $) - Nouveau solde: $${newBal.toFixed(2)}`,
-        balanceBefore: oldBal,
-        balanceAfter: newBal,
-        date: new Date().toISOString()
-      };
-      txs.unshift(newTx);
-      DB.set('transactions', txs);
-
-      // Synchroniser la session active si l'utilisateur modifié est l'utilisateur connecté
-      var curSess = DB.get('session');
-      if (curSess && (curSess.userId === u.id || curSess.email === u.email)) {
-        curSess.balance = newBal;
-        DB.set('session', curSess);
+      var token = getAdminAuthToken();
+      if (!token) {
+        showToast('Erreur : Session administrateur non authentifiée.', 'error');
+        return;
       }
 
-      // Synchronisation backend distante
-      var adminSess = DB.get('admin_session');
-      if (adminSess && adminSess.token) {
-        fetch('/api/data/users', {
+      var oldBal = parseFloat(u.balance) || 0;
+      var curAdmin = DB.get('session') || {};
+      var adminName = curAdmin.name || 'Administrateur';
+
+      try {
+        var res = await fetch('/api/data/users', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + adminSess.token
+            'Authorization': 'Bearer ' + token
           },
           body: JSON.stringify({
             userId: u.id,
-            amount: amount,
-            action: 'add',
-            reason: `Crédit rapide administrateur (+${amount} $)`
+            amount: numAmount,
+            action: 'gift',
+            reason: `Don de solde promotionnel offert par l'administrateur ${adminName} (+${numAmount.toFixed(2)} $)`
           })
-        }).catch(function() {});
-      }
+        });
 
-      renderDashboard();
-      showToast(`Solde de ${u.name} crédité de +${amount} $ (Nouveau solde : $${newBal.toFixed(2)}).`, 'success');
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erreur lors de l\'attribution du don.');
+        }
+
+        var newBal = (typeof data.newBalance === 'number') ? data.newBalance : (oldBal + numAmount);
+        u.balance = newBal;
+        DB.set('users', users);
+
+        if (data.transaction) {
+          var txs = DB.get('transactions', []);
+          txs.unshift(data.transaction);
+          DB.set('transactions', txs);
+        }
+
+        // Synchroniser immédiatement la session active si l'utilisateur modifié est l'administrateur connecté
+        var curSess = DB.get('session');
+        if (curSess && (curSess.userId === u.id || (curSess.email && u.email && curSess.email.toLowerCase() === u.email.toLowerCase()))) {
+          curSess.balance = newBal;
+          DB.set('session', curSess);
+          var admSess = DB.get('admin_session');
+          if (admSess) {
+            admSess.balance = newBal;
+            DB.set('admin_session', admSess);
+          }
+        }
+
+        renderDashboard();
+        showToast(`🎁 Don de ${numAmount.toFixed(2)} $ offert avec succès à ${u.name} ! (Nouveau solde : $${newBal.toFixed(2)})`, 'success');
+      } catch (err) {
+        console.error('[quickGiftUser Error]', err);
+        showToast(err.message || 'Échec de l\'attribution du don.', 'error');
+      }
+    }
+
+    function quickCreditUser(userId, amount) {
+      return quickGiftUser(userId, amount);
     }
 
     var selectedBalanceUser = null;
@@ -4202,7 +4301,7 @@
       document.getElementById('adjust-balance-user-name').textContent = u.name;
       document.getElementById('adjust-balance-user-email').textContent = u.email;
       document.getElementById('adjust-balance-current-val').textContent = '$' + (u.balance || 0).toFixed(2);
-      document.getElementById('adjust-balance-mode').value = 'add';
+      document.getElementById('adjust-balance-mode').value = 'gift';
       document.getElementById('adjust-balance-amount').value = '';
       document.getElementById('adjust-balance-reason').value = '';
       updateCalculatedNewBalance();
@@ -4224,7 +4323,7 @@
       var inputAmt = parseFloat(document.getElementById('adjust-balance-amount').value) || 0;
       var calculated = curBal;
 
-      if (mode === 'add') {
+      if (mode === 'gift' || mode === 'add') {
         calculated = curBal + inputAmt;
       } else if (mode === 'deduct') {
         calculated = Math.max(0, curBal - inputAmt);
@@ -4236,7 +4335,7 @@
       if (previewEl) previewEl.textContent = '$' + calculated.toFixed(2);
     }
 
-    function submitBalanceAdjustment(e) {
+    async function submitBalanceAdjustment(e) {
       if (e) e.preventDefault();
       if (!selectedBalanceUser) return;
 
@@ -4244,8 +4343,14 @@
       var inputVal = parseFloat(document.getElementById('adjust-balance-amount').value);
       var reason = document.getElementById('adjust-balance-reason').value.trim();
 
-      if (isNaN(inputVal) || inputVal < 0) {
-        showToast('Veuillez saisir un montant valide.', 'error');
+      if (isNaN(inputVal) || inputVal <= 0) {
+        showToast('Veuillez saisir un montant positif valide.', 'error');
+        return;
+      }
+
+      var token = getAdminAuthToken();
+      if (!token) {
+        showToast('Session administrateur non authentifiée.', 'error');
         return;
       }
 
@@ -4253,62 +4358,23 @@
       var u = users.find(function(x) { return x.id === selectedBalanceUser.id; });
       if (!u) return;
 
-      var oldBal = parseFloat(u.balance) || 0;
-      var newBal = oldBal;
-      var actionDesc = '';
-
-      if (mode === 'add') {
-        newBal = oldBal + inputVal;
-        actionDesc = `Crédit manuel (+${inputVal.toFixed(2)} $)`;
-      } else if (mode === 'deduct') {
-        newBal = Math.max(0, oldBal - inputVal);
-        actionDesc = `Débit manuel (-${inputVal.toFixed(2)} $)`;
-      } else if (mode === 'set') {
-        newBal = Math.max(0, inputVal);
-        actionDesc = `Ajustement du solde à ${inputVal.toFixed(2)} $`;
-      }
-      newBal = Math.round(newBal * 100) / 100;
-      var diff = Math.round((newBal - oldBal) * 100) / 100;
-
-      u.balance = newBal;
-      DB.set('users', users);
-
-      // Consignation détaillée dans l'historique des transactions
-      var txs = DB.get('transactions', []);
-      var newTx = {
-        id: 'TXN-ADJUST-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
-        userId: u.id,
-        userEmail: u.email,
-        userName: u.name,
-        amount: Math.abs(diff),
-        currency: 'USD',
-        paymentMethod: 'Ajustement Administrateur',
-        provider: 'admin_manual',
-        status: 'completed',
-        type: diff >= 0 ? 'credit_manuel_admin' : 'debit_manuel_admin',
-        notes: `${actionDesc} par l'administrateur. Motif : ${reason}`,
-        balanceBefore: oldBal,
-        balanceAfter: newBal,
-        date: new Date().toISOString()
-      };
-      txs.unshift(newTx);
-      DB.set('transactions', txs);
-
-      // Synchroniser la session active si l'utilisateur modifié est l'utilisateur connecté
-      var curSess = DB.get('session');
-      if (curSess && (curSess.userId === u.id || curSess.email === u.email)) {
-        curSess.balance = newBal;
-        DB.set('session', curSess);
+      var curAdmin = DB.get('session') || {};
+      var adminName = curAdmin.name || 'Administrateur';
+      if (!reason) {
+        reason = mode === 'gift'
+          ? `Don de solde offert par l'administrateur ${adminName} (+${inputVal.toFixed(2)} $)`
+          : `Ajustement manuel par l'administrateur ${adminName}`;
       }
 
-      // Synchronisation backend distante
-      var adminSess = DB.get('admin_session');
-      if (adminSess && adminSess.token) {
-        fetch('/api/data/users', {
+      var btn = document.querySelector('#admin-adjust-balance-form button[type="submit"]');
+      if (btn) btn.disabled = true;
+
+      try {
+        var res = await fetch('/api/data/users', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + adminSess.token
+            'Authorization': 'Bearer ' + token
           },
           body: JSON.stringify({
             userId: u.id,
@@ -4316,12 +4382,44 @@
             action: mode,
             reason: reason
           })
-        }).catch(function() {});
-      }
+        });
 
-      closeBalanceModal();
-      renderDashboard();
-      showToast(`Solde de ${u.name} mis à jour : $${newBal.toFixed(2)} (${reason}).`, 'success');
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erreur lors de la mise à jour du solde.');
+        }
+
+        var newBal = (typeof data.newBalance === 'number') ? data.newBalance : u.balance;
+        u.balance = newBal;
+        DB.set('users', users);
+
+        if (data.transaction) {
+          var txs = DB.get('transactions', []);
+          txs.unshift(data.transaction);
+          DB.set('transactions', txs);
+        }
+
+        // Synchroniser la session active si l'utilisateur modifié est l'administrateur connecté
+        var curSess = DB.get('session');
+        if (curSess && (curSess.userId === u.id || (curSess.email && u.email && curSess.email.toLowerCase() === u.email.toLowerCase()))) {
+          curSess.balance = newBal;
+          DB.set('session', curSess);
+          var admSess = DB.get('admin_session');
+          if (admSess) {
+            admSess.balance = newBal;
+            DB.set('admin_session', admSess);
+          }
+        }
+
+        closeBalanceModal();
+        renderDashboard();
+        showToast(mode === 'gift' ? `🎁 Don de ${inputVal.toFixed(2)} $ offert avec succès à ${u.name} (Nouveau solde : $${newBal.toFixed(2)}).` : `Solde de ${u.name} mis à jour : $${newBal.toFixed(2)}.`, 'success');
+      } catch (err) {
+        console.error('[submitBalanceAdjustment Error]', err);
+        showToast(err.message || 'Échec de l\'opération.', 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     // ========== 5. TABLE DES MOYENS DE PAIEMENT (SERVEUR + LOCAL) ==========
@@ -4880,7 +4978,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202610121025_686dfc',
+      currentVersion: 'v202610122035_2d9461',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 
@@ -4959,6 +5057,9 @@
             var meData = await meRes.json();
             if (meData && meData.user && meData.user.role === 'admin') {
               s.role = 'admin';
+              if (typeof meData.user.balance === 'number') {
+                s.balance = meData.user.balance;
+              }
               DB.set('admin_session', s);
               DB.set('session', s);
             }
@@ -5008,13 +5109,31 @@
         }
       } catch (e) {}
 
-      // 6. Synchronisation des utilisateurs et soldes
+      // 6. Synchronisation des utilisateurs, soldes et transactions
       try {
         var uRes = await fetch('/api/data/users?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
         if (uRes.ok) {
           var uData = await uRes.json();
           if (uData && Array.isArray(uData.users)) {
             DB.set('users', uData.users);
+            var curSess = DB.get('session');
+            if (curSess) {
+              var meInList = uData.users.find(function(x) {
+                return x.id === curSess.userId || (curSess.email && x.email && x.email.toLowerCase() === curSess.email.toLowerCase());
+              });
+              if (meInList && typeof meInList.balance === 'number') {
+                curSess.balance = meInList.balance;
+                DB.set('session', curSess);
+                var admSess = DB.get('admin_session');
+                if (admSess) {
+                  admSess.balance = meInList.balance;
+                  DB.set('admin_session', admSess);
+                }
+              }
+            }
+          }
+          if (uData && Array.isArray(uData.transactions)) {
+            DB.set('transactions', uData.transactions);
           }
         }
       } catch (e) {}
