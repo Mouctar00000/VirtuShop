@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202610122035_2d9461">
-  <script src="security.js?v=v202610122035_2d9461"></script>
+  <link rel="stylesheet" href="style.css?v=v202610122131_2dbe15">
+  <script src="security.js?v=v202610122131_2dbe15"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -1396,7 +1396,7 @@
         <p style="color: var(--text-secondary); font-size: 13px;">Espace de gestion réservé aux administrateurs autorisés</p>
       </div>
 
-      <form id="admin-direct-login-form" onsubmit="handleAdminDirectLogin(event)">
+      <form id="admin-direct-login-form" onsubmit="handleAdminDirectLogin(event); return false;">
         <div class="field">
           <label for="admin-direct-email">Identifiant administrateur</label>
           <input type="text" id="admin-direct-email" required placeholder="Adresse e-mail ou nom d'utilisateur" autocomplete="username">
@@ -4118,7 +4118,7 @@
       showToast(`Commande ${o.id} validée et livrée dans le coffre du client !`, 'success');
     }
 
-    function cancelOrder(orderId) {
+    async function cancelOrder(orderId) {
       var orders = DB.get('orders', []);
       var o = orders.find(function(x) { return x.id === orderId; });
       if (!o) return;
@@ -4978,7 +4978,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202610122035_2d9461',
+      currentVersion: 'v202610122131_2dbe15',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 
