@@ -824,7 +824,27 @@ class PaymentService {
         });
 
         if (!res.ok || !res.data?.success) {
-          console.warn(`[SasPay Softpay] Échec direct (${cleanNetwork}): ${res.data?.message || res.data?.error?.message || res.status}. Bascule de secours vers session hébergée...`);
+          const directErrCode = res.data?.error?.code || res.data?.code;
+          const directErrMsg = res.data?.error?.message || res.data?.message || '';
+
+          // Si l'opérateur n'a aucun fournisseur/route disponible chez SasPay,
+          // NE PAS créer de session de checkout hébergée qui afficherait exactement la même erreur bloquante.
+          const isRouteUnavailable = directErrCode === 'no_route_available' || 
+            directErrMsg.toLowerCase().includes('aucun fournisseur') ||
+            directErrMsg.toLowerCase().includes('no route') ||
+            directErrMsg.toLowerCase().includes('inactif');
+
+          if (isRouteUnavailable) {
+            const operatorFriendlyName = (cleanNetwork.includes('orange_cm')) ? 'Orange Money Cameroun' :
+              (cleanNetwork.includes('mtn_cm')) ? 'MTN MoMo Cameroun' :
+              (cleanNetwork.includes('orange')) ? 'Orange Money' :
+              (cleanNetwork.includes('mtn')) ? 'MTN MoMo' : cleanNetwork;
+            const userMsg = `L'opérateur ${operatorFriendlyName} est temporairement indisponible auprès de la passerelle SasPay (${directErrMsg || 'maintenance technique'}). Veuillez sélectionner MTN MoMo ou Crypto Instantané.`;
+            db.updateTransaction(txId, { status: 'failed', failureReason: userMsg });
+            throw new Error(userMsg);
+          }
+
+          console.warn(`[SasPay Softpay] Échec direct (${cleanNetwork}): ${directErrMsg || res.status}. Bascule de secours vers session hébergée...`);
           // En cas d'indisponibilité temporaire du push direct, repli transparent vers session de checkout
           const fallbackPayload = {
             amount: formattedAmount,
@@ -856,7 +876,7 @@ class PaymentService {
             };
           }
 
-          const errMsg = res.data?.error?.message || res.data?.message || 'Erreur lors de l\'initiation Mobile Money auprès de l\'opérateur.';
+          const errMsg = directErrMsg || 'Erreur lors de l\'initiation Mobile Money auprès de l\'opérateur.';
           db.updateTransaction(txId, { status: 'failed', failureReason: errMsg });
           throw new Error(errMsg);
         }
@@ -1050,10 +1070,20 @@ class PaymentService {
           message: 'Paiement confirmé avec succès ! Votre solde a été crédité.'
         };
       } else if (officialStatus === 'FAILED' || officialStatus === 'CANCELLED' || officialStatus === 'EXPIRED') {
-        // Marquage de la transaction comme échouée
+        // Marquage de la transaction comme échouée avec explication claire
+        let failureDesc = `Paiement ${officialStatus === 'EXPIRED' ? 'expiré' : 'rejeté'} par l'opérateur.`;
+        if (pData?.error?.message && !pData.error.message.includes('fetched successfully')) {
+          failureDesc = pData.error.message;
+        } else if (pData?.failure_reason) {
+          failureDesc = pData.failure_reason;
+        } else if (pData?.reason) {
+          failureDesc = pData.reason;
+        } else if (pData?.message && !pData.message.includes('fetched successfully')) {
+          failureDesc = pData.message;
+        }
         const failedTx = db.updateTransaction(tx.id, {
           status: 'failed',
-          failureReason: pData?.message || `Paiement rejeté par l'opérateur (Statut: ${officialStatus}).`,
+          failureReason: failureDesc,
           updatedAt: new Date().toISOString()
         });
         return {

@@ -2282,14 +2282,14 @@ async function submitSasPayDeposit(forcedMode) {
     return;
   }
 
-  var fullPhone = rawPhone;
-  if (rawPhone && !rawPhone.startsWith('+') && country.prefix) {
-    var clean = rawPhone.replace(/^0+/, '');
+  var cleanDigits = (rawPhone || '').replace(/[^\d]/g, '');
+  var fullPhone = cleanDigits;
+  if (cleanDigits && country.prefix) {
     var prefixDigits = country.prefix.replace('+', '');
-    if (!clean.startsWith(prefixDigits)) {
-      fullPhone = country.prefix + clean;
+    if (cleanDigits.startsWith(prefixDigits)) {
+      fullPhone = '+' + cleanDigits;
     } else {
-      fullPhone = '+' + clean;
+      fullPhone = country.prefix + cleanDigits.replace(/^0+/, '');
     }
   }
 
@@ -2407,6 +2407,20 @@ async function submitSasPayDeposit(forcedMode) {
       ? 'Délai d\'attente dépassé. Veuillez réessayer.' 
       : (err.message || 'Impossible d\'initier le paiement.');
     showToast(errMsg, 'error');
+
+    // Affichage d'un bandeau d'information bien visible si l'opérateur est en incident
+    var alertBox = document.getElementById('momo-error-alert');
+    if (!alertBox && submitBtn && submitBtn.parentElement) {
+      alertBox = document.createElement('div');
+      alertBox.id = 'momo-error-alert';
+      alertBox.style.cssText = 'background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 6px; padding: 8px 10px; font-size: 11.5px; margin-bottom: 8px; line-height: 1.45; text-align: center; font-weight: 500;';
+      submitBtn.parentElement.insertBefore(alertBox, submitBtn);
+    }
+    if (alertBox) {
+      alertBox.innerHTML = `⚠️ ${escapeHtml(errMsg)}`;
+      alertBox.style.display = 'block';
+    }
+
     if (submitBtn) {
       submitBtn.disabled = false;
       var cNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || country.networks[0];
@@ -4101,7 +4115,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610120519_b69511',
+  currentVersion: 'v202610120928_55d3e3',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 
