@@ -658,7 +658,7 @@ function renderLandingShowcase() {
     container.innerHTML = `
       <div style="text-align: center; padding: 28px 16px; color: var(--text-muted);">
         <div style="font-size: 26px; margin-bottom: 6px;">📦</div>
-        <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary);">Catalogue en réapprovisionnement</div>
+        <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary);">Aucun produit disponible pour le moment</div>
         <div style="font-size: 11.5px; margin-top: 4px; color: var(--text-secondary);">De nouveaux comptes et services vérifiés seront bientôt disponibles.</div>
       </div>
     `;
@@ -794,8 +794,8 @@ function renderProductCardsInto(container, prods) {
     container.innerHTML = `
       <div style="grid-column: 1/-1; text-align: center; padding: 48px 20px; color: var(--text-muted); background: #ffffff; border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle); box-shadow: var(--shadow-sm);">
         <div style="font-size: 38px; margin-bottom: 12px;">📦</div>
-        <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">Catalogue en cours de réapprovisionnement</h3>
-        <p style="font-size: 13px; max-width: 480px; margin: 0 auto; line-height: 1.5; color: var(--text-secondary);">Nos équipes préparent et contrôlent les prochains stocks de comptes vérifiés et services digitaux. Revenez très prochainement !</p>
+        <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">Aucun produit disponible pour le moment</h3>
+        <p style="font-size: 13px; max-width: 480px; margin: 0 auto; line-height: 1.5; color: var(--text-secondary);">La boutique est prête et en attente de réapprovisionnement. De nouveaux produits et services seront publiés très prochainement !</p>
       </div>
     `;
     return;
@@ -4101,7 +4101,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610112042_77ab6b',
+  currentVersion: 'v202610120519_b69511',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 
