@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202610122131_2dbe15">
-  <script src="security.js?v=v202610122131_2dbe15"></script>
+  <link rel="stylesheet" href="style.css?v=v202610130554_faac65">
+  <script src="security.js?v=v202610130554_faac65"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -774,7 +774,7 @@
       .admin-header-actions {
         gap: 6px;
       }
-      .btn-admin-shop-compact {
+      .btn-admin-shop-compact, .btn-admin-reset-compact {
         width: 28px !important;
         height: 28px !important;
         min-height: 28px !important;
@@ -784,7 +784,7 @@
         justify-content: center !important;
         border-radius: 50% !important;
       }
-      .shop-btn-text {
+      .shop-btn-text, .reset-btn-text {
         display: none !important;
       }
       .admin-user-chip {
@@ -1430,6 +1430,10 @@
       </div>
 
       <div class="admin-header-actions">
+        <button type="button" class="btn-secondary btn-admin-reset-compact" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; font-weight: 700;" onclick="openResetAllDataModal()" title="Réinitialiser les données (Reset All Data)">
+          <span>⚠️</span>
+          <span class="reset-btn-text">Reset All Data</span>
+        </button>
         <button type="button" class="btn-secondary btn-admin-shop-compact" onclick="switchToShop()" title="Basculer directement vers la boutique (connecté en client)">
           <span>👁️</span>
           <span class="shop-btn-text">Boutique</span>
@@ -1465,6 +1469,11 @@
             <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('stats'); toggleAdminDropdown(event);">
               <span>📈</span>
               <span>Statistiques Direct</span>
+            </button>
+            <div style="height: 1px; background: var(--border-subtle); margin: 6px 0;"></div>
+            <button type="button" class="admin-dropdown-item danger" onclick="openResetAllDataModal(); toggleAdminDropdown(event);" style="color: #dc2626;">
+              <span>⚠️</span>
+              <span>Réinitialiser les données (Reset All Data)</span>
             </button>
             <div style="height: 1px; background: var(--border-subtle); margin: 6px 0;"></div>
             <button type="button" class="admin-dropdown-item danger" onclick="adminLogout()">
@@ -1738,6 +1747,7 @@
             <button type="button" class="admin-period-tab" id="tab-period-month" onclick="changePeriod('month')">Mois</button>
             <button type="button" class="admin-period-tab" id="tab-period-year" onclick="changePeriod('year')">Année</button>
             <button type="button" class="admin-period-tab" id="tab-period-all" onclick="changePeriod('all')">Tout</button>
+            <button type="button" class="admin-period-tab" onclick="confirmResetStats()" style="color: #dc2626; border-color: #fecaca; margin-left: 6px; font-weight: 700;" title="Remettre à zéro les compteurs et l'historique des visiteurs">🔄 Reset Visites</button>
           </div>
         </div>
 
@@ -2260,12 +2270,13 @@
             <option value="add">➕ Ajouter au solde (+ $)</option>
             <option value="set">⚙️ Définir le montant exact du solde ($)</option>
             <option value="deduct">➖ Déduire du solde (- $)</option>
+            <option value="reset">🔄 Remettre le solde à zéro ($0.00)</option>
           </select>
         </div>
 
         <div class="field" style="margin-bottom: 12px;">
           <label for="adjust-balance-amount">Montant à allouer ($ USD)</label>
-          <input type="number" id="adjust-balance-amount" step="0.01" min="0.01" required placeholder="Ex: 10.00, 20.00, 50.00..." oninput="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 14px; font-weight: 700;">
+          <input type="number" id="adjust-balance-amount" step="0.01" min="0.00" required placeholder="Ex: 10.00, 20.00, 50.00..." oninput="updateCalculatedNewBalance()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 14px; font-weight: 700;">
         </div>
 
         <div class="field" style="margin-bottom: 14px;">
@@ -2285,6 +2296,148 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODALE 8 : RÉINITIALISATION GLOBALE DES DONNÉES ==================== -->
+  <div id="admin-reset-all-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 580px; width: 95%; max-height: 90vh; overflow-y: auto;">
+      <button type="button" class="modal-close-btn" onclick="closeResetAllDataModal()">✕</button>
+      
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <div style="width: 44px; height: 44px; border-radius: 12px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">
+          ⚠️
+        </div>
+        <div>
+          <h2 class="modal-title" style="margin: 0; font-size: 19px; color: #b91c1c;">Réinitialiser les données (Reset All Data)</h2>
+          <span style="font-size: 12px; color: var(--text-muted);">Espace de gestion et réinitialisation administrative contrôlée</span>
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+        Cet outil permet de réinitialiser la boutique, remettre les soldes à zéro ou purger des enregistrements sélectionnés. Choisissez précisément ci-dessous les opérations à appliquer.
+      </p>
+
+      <!-- BANNIÈRE TÉLÉCHARGEMENT SAUVEGARDE PRÉALABLE -->
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div>
+          <strong style="font-size: 13px; color: #166534; display: block;">📥 Sauvegarde Recommandée</strong>
+          <span style="font-size: 11.5px; color: #15803d;">Téléchargez un instantané JSON de la base avant toute modification destructive.</span>
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="downloadDbBackup()" style="color: #166534; border-color: #86efac; background: #ffffff; font-weight: 700; white-space: nowrap; cursor: pointer;">
+          💾 Télécharger Backup JSON
+        </button>
+      </div>
+
+      <!-- SÉLECTION DES DONNÉES À RÉINITIALISER -->
+      <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px; margin-bottom: 18px;">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 12px;">
+          Options de réinitialisation :
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 11px;">
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-balances" checked style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Remettre les soldes clients à 0.00 $</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Tous les soldes reviennent à $0.00 avec journalisation comptable dans l'historique d'audit.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-orders" checked style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Supprimer les commandes</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Purger l'ensemble des commandes passées (y compris les commandes de test).</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-transactions" checked style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Supprimer les transactions et recharges</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Purger les demandes de recharge et l'historique financier des transactions.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-visitors" checked style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Réinitialiser les statistiques & compteurs de visite</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Remet à zéro le compteur de visiteurs uniques et l'historique de trafic.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-users" style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Supprimer tous les comptes clients</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Supprime les comptes utilisateurs clients. Le compte SuperAdmin est strictement préservé.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-tickets" style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Supprimer les tickets de support client</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Efface les messages et tickets ouverts du formulaire de contact.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="reset-opt-products" style="margin-top: 2px;">
+            <div>
+              <strong style="color: var(--text-primary);">Réinitialiser le catalogue de produits (Optionnel)</strong>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Efface les articles et stocks du catalogue boutique (décoché par défaut).</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- SÉCURITÉ ET SAUVEGARDE DU ROOT ADMIN -->
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 12px; color: #1e40af; display: flex; align-items: flex-start; gap: 8px;">
+        <span style="font-size: 16px;">🛡️</span>
+        <div>
+          <strong>Protection Système Intégrée :</strong><br>
+          Le compte Administrateur principal (<code>admin@getvirtu.shop</code>), les paramètres du site (<code>settings</code>) et les moyens de paiement configurés sont strictement protégés et ne seront jamais supprimés.
+        </div>
+      </div>
+
+      <!-- CONFIRMATION EXPLICITE PAR MOT-CLÉ -->
+      <div style="margin-bottom: 18px;">
+        <label for="reset-confirm-keyword" style="display: block; font-size: 12.5px; font-weight: 700; color: #b91c1c; margin-bottom: 6px;">
+          Pour débloquer l'opération, tapez <span style="background: #fee2e2; padding: 2px 7px; border-radius: 4px; font-family: monospace;">CONFIRMER</span> ci-dessous :
+        </label>
+        <input type="text" id="reset-confirm-keyword" oninput="checkResetConfirmKeyword()" placeholder="Tapez CONFIRMER" style="width: 100%; padding: 10px 12px; border: 2px solid #fca5a5; border-radius: 8px; font-size: 14px; font-weight: 700; text-transform: uppercase;">
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+        <button type="button" class="btn-secondary" onclick="closeResetAllDataModal()">Annuler</button>
+        <button type="button" id="btn-execute-reset-all" class="btn-primary" onclick="executeResetAllData()" disabled style="background: #dc2626; border-color: #dc2626; opacity: 0.45; cursor: not-allowed; font-weight: 700;">
+          <span>⚠️ Exécuter la Réinitialisation</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODALE 9 : CONFIRMATION DE SUPPRESSION INDIVIDUELLE ==================== -->
+  <div id="admin-confirm-delete-modal" class="modal-backdrop">
+    <div class="modal-window" style="max-width: 480px; width: 95%;">
+      <button type="button" class="modal-close-btn" onclick="closeConfirmDeleteModal()">✕</button>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <span style="font-size: 24px;">🗑️</span>
+        <h2 class="modal-title" id="confirm-delete-title" style="margin: 0; font-size: 18px; color: #dc2626;">Confirmer la Suppression</h2>
+      </div>
+      <p id="confirm-delete-desc" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">
+        Êtes-vous sûr de vouloir supprimer cet enregistrement ?
+      </p>
+
+      <div id="confirm-delete-details" style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; margin-bottom: 14px; font-size: 12.5px;">
+      </div>
+
+      <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 11.5px; color: #991b1b;">
+        ⚠️ <strong>Précision :</strong> Cette opération est définitive et prendra effet immédiatement dans la base de données.
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button type="button" class="btn-secondary" onclick="closeConfirmDeleteModal()">Annuler</button>
+        <button type="button" id="confirm-delete-submit-btn" class="btn-primary" style="background: #dc2626; border-color: #dc2626; font-weight: 700;">
+          <span>Supprimer Définitivement</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -3597,16 +3750,19 @@
           </button>
         ` : `<span style="color: var(--text-muted); font-size: 11px;">Aucun</span>`;
 
-        var actions = isPending ? `
-          <div style="display: flex; gap: 6px;">
-            <button type="button" class="btn-primary btn-sm" style="background: var(--emerald-600); border-color: var(--emerald-600); padding: 5px 10px;" onclick="approveRecharge('${r.id}')" title="Approuver et créditer le solde client">
-              ✓ Approuver
-            </button>
-            <button type="button" class="btn-secondary btn-sm" style="color: var(--rose-600); padding: 5px 8px;" onclick="rejectRecharge('${r.id}')" title="Rejeter">
-              ✕ Rejeter
-            </button>
+        var actions = `
+          <div style="display: flex; gap: 6px; align-items: center;">
+            ${isPending ? `
+              <button type="button" class="btn-primary btn-sm" style="background: var(--emerald-600); border-color: var(--emerald-600); padding: 5px 10px;" onclick="approveRecharge('${r.id}')" title="Approuver et créditer le solde client">
+                ✓ Approuver
+              </button>
+              <button type="button" class="btn-secondary btn-sm" style="color: var(--rose-600); padding: 5px 8px;" onclick="rejectRecharge('${r.id}')" title="Rejeter">
+                ✕ Rejeter
+              </button>
+            ` : (isApproved ? `<span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">✓ Crédité</span>` : `<span style="font-size: 11px; color: var(--rose-600); font-weight: 600;">✕ Rejeté</span>`)}
+            <button type="button" class="btn-secondary btn-sm" onclick="confirmDeleteTransaction('${r.id}', '${escapeHtml(r.userName || r.userEmail)}', ${r.amount})" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; padding: 4px 6px; font-size: 11px; margin-left: 2px; cursor: pointer;" title="Supprimer cet enregistrement">🗑️</button>
           </div>
-        ` : (isApproved ? `<span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">✓ Crédité</span>` : `<span style="font-size: 11px; color: var(--rose-600); font-weight: 600;">✕ Rejeté</span>`);
+        `;
 
         html += `
           <tr>
@@ -3805,6 +3961,9 @@
                 ✕
               </button>
             ` : ''}
+            <button type="button" class="btn-order-quick-cancel" onclick="confirmDeleteOrder('${o.id}', '${escapeHtml(o.productName)}', '${escapeHtml(o.userName || o.userEmail)}', ${(o.amount || 0)})" title="Supprimer définitivement cette commande" style="background: #fff1f2; border: 1px solid #fecaca; color: #dc2626; cursor: pointer;">
+              🗑️
+            </button>
           </div>
         `;
 
@@ -4208,6 +4367,14 @@
                 <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 20)" title="Offrir +20 $ gratuitement à ce client" style="font-weight: 600;">🎁 +20 $</button>
                 <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 50)" title="Offrir +50 $ gratuitement à ce client" style="font-weight: 600;">🎁 +50 $</button>
                 <button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="openBalanceModal('${u.id}')" title="Définir un don personnalisé ou ajuster">⚙️ Offrir / Ajuster</button>
+                ${bal > 0 ? `
+                  <button type="button" class="btn-secondary btn-sm" onclick="confirmResetUserBalance('${u.id}', '${escapeHtml(u.name)}', ${bal})" style="color: #ea580c; border-color: #fed7aa; background: #fff7ed; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Remettre le solde de ce client à 0.00 $ (consigné dans l'audit)">🔄 Solde $0</button>
+                ` : ''}
+                ${!isAdmin ? `
+                  <button type="button" class="btn-secondary btn-sm" onclick="confirmDeleteUser('${u.id}', '${escapeHtml(u.name)}', '${escapeHtml(u.email)}')" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Supprimer définitivement ce compte client">🗑️ Supprimer</button>
+                ` : `
+                  <span style="font-size: 11px; color: var(--text-muted); padding: 2px 6px;" title="Compte administrateur protégé contre la suppression">🔒 Protégé</span>
+                `}
               </div>
             </td>
           </tr>
@@ -4329,6 +4496,10 @@
         calculated = Math.max(0, curBal - inputAmt);
       } else if (mode === 'set') {
         calculated = Math.max(0, inputAmt);
+      } else if (mode === 'reset') {
+        calculated = 0;
+        var amtEl = document.getElementById('adjust-balance-amount');
+        if (amtEl && amtEl.value !== '0') amtEl.value = '0';
       }
 
       var previewEl = document.getElementById('adjust-balance-preview-val');
@@ -4343,7 +4514,9 @@
       var inputVal = parseFloat(document.getElementById('adjust-balance-amount').value);
       var reason = document.getElementById('adjust-balance-reason').value.trim();
 
-      if (isNaN(inputVal) || inputVal <= 0) {
+      if (mode === 'reset') {
+        inputVal = 0;
+      } else if (isNaN(inputVal) || inputVal <= 0) {
         showToast('Veuillez saisir un montant positif valide.', 'error');
         return;
       }
@@ -4361,9 +4534,13 @@
       var curAdmin = DB.get('session') || {};
       var adminName = curAdmin.name || 'Administrateur';
       if (!reason) {
-        reason = mode === 'gift'
-          ? `Don de solde offert par l'administrateur ${adminName} (+${inputVal.toFixed(2)} $)`
-          : `Ajustement manuel par l'administrateur ${adminName}`;
+        if (mode === 'reset') {
+          reason = `Remise à zéro du solde par l'administrateur ${adminName}`;
+        } else if (mode === 'gift') {
+          reason = `Don de solde offert par l'administrateur ${adminName} (+${inputVal.toFixed(2)} $)`;
+        } else {
+          reason = `Ajustement manuel par l'administrateur ${adminName}`;
+        }
       }
 
       var btn = document.querySelector('#admin-adjust-balance-form button[type="submit"]');
@@ -4413,7 +4590,7 @@
 
         closeBalanceModal();
         renderDashboard();
-        showToast(mode === 'gift' ? `🎁 Don de ${inputVal.toFixed(2)} $ offert avec succès à ${u.name} (Nouveau solde : $${newBal.toFixed(2)}).` : `Solde de ${u.name} mis à jour : $${newBal.toFixed(2)}.`, 'success');
+        showToast(mode === 'reset' ? `Solde de ${u.name} remis à $0.00 avec succès.` : (mode === 'gift' ? `🎁 Don de ${inputVal.toFixed(2)} $ offert avec succès à ${u.name} (Nouveau solde : $${newBal.toFixed(2)}).` : `Solde de ${u.name} mis à jour : $${newBal.toFixed(2)}.`), 'success');
       } catch (err) {
         console.error('[submitBalanceAdjustment Error]', err);
         showToast(err.message || 'Échec de l\'opération.', 'error');
@@ -4826,12 +5003,478 @@
       }
     }
 
-    function deleteTicket(ticketId) {
-      if (!confirm('Supprimer ce ticket de support ?')) return;
-      var tickets = DB.get('tickets', []).filter(function(x) { return x.id !== ticketId; });
+    // ========== 5. GESTION DES SUPPRESSIONS & RÉINITIALISATIONS SÉCURISÉES ==========
+    
+    // MODALE DE CONFIRMATION INDIVIDUELLE POLYVALENTE
+    var currentConfirmDeleteCallback = null;
+
+    function openConfirmDeleteModal(config) {
+      document.getElementById('confirm-delete-title').textContent = config.title || 'Confirmer la Suppression';
+      document.getElementById('confirm-delete-desc').textContent = config.desc || 'Êtes-vous sûr de vouloir supprimer cet enregistrement ?';
+      document.getElementById('confirm-delete-details').innerHTML = config.detailsHtml || '';
+      
+      var confirmBtn = document.getElementById('confirm-delete-submit-btn');
+      confirmBtn.innerHTML = `<span>${config.confirmText || 'Supprimer Définitivement'}</span>`;
+      confirmBtn.disabled = false;
+
+      currentConfirmDeleteCallback = config.onConfirm;
+      
+      confirmBtn.onclick = async function() {
+        if (typeof currentConfirmDeleteCallback === 'function') {
+          confirmBtn.disabled = true;
+          confirmBtn.innerHTML = '<span>Traitement en cours...</span>';
+          try {
+            await currentConfirmDeleteCallback();
+          } finally {
+            closeConfirmDeleteModal();
+          }
+        } else {
+          closeConfirmDeleteModal();
+        }
+      };
+
+      var modal = document.getElementById('admin-confirm-delete-modal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeConfirmDeleteModal() {
+      var modal = document.getElementById('admin-confirm-delete-modal');
+      if (modal) modal.classList.remove('active');
+      currentConfirmDeleteCallback = null;
+    }
+
+    // 1. SUPPRIMER UN CLIENT INDIVIDUELLEMENT
+    function confirmDeleteUser(userId, userName, userEmail) {
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer le Compte Client',
+        desc: 'Vous êtes sur le point de supprimer ce compte client de la base de données.',
+        detailsHtml: `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Nom :</strong> ${escapeHtml(userName)}</div>
+            <div><strong>Email :</strong> ${escapeHtml(userEmail)}</div>
+            <div><strong>ID Utilisateur :</strong> <code>${escapeHtml(userId)}</code></div>
+          </div>
+        `,
+        confirmText: 'Supprimer ce Client',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          if (!token) {
+            showToast('Session administrateur non authentifiée.', 'error');
+            return;
+          }
+          try {
+            var res = await fetch('/api/data/users', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({ id: userId })
+            });
+            var data = await res.json();
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Erreur lors de la suppression du client.');
+            }
+            
+            var users = DB.get('users', []).filter(function(x) { return x.id !== userId; });
+            DB.set('users', users);
+            renderDashboard();
+            showToast(`Client ${userName} supprimé avec succès.`, 'success');
+          } catch (err) {
+            console.error('[deleteUser Error]', err);
+            showToast(err.message || 'Échec de la suppression.', 'error');
+          }
+        }
+      });
+    }
+
+    // 2. RÉINITIALISER LE SOLDE D'UN CLIENT À ZERO
+    function confirmResetUserBalance(userId, userName, currentBal) {
+      openConfirmDeleteModal({
+        title: '🔄 Remise à Zéro du Solde',
+        desc: `Voulez-vous réinitialiser le solde de ce client à 0.00 $ ?`,
+        detailsHtml: `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Client :</strong> ${escapeHtml(userName)}</div>
+            <div><strong>Solde Actuel :</strong> <strong style="color: var(--primary-600);">$${parseFloat(currentBal).toFixed(2)}</strong></div>
+            <div><strong>Nouveau Solde :</strong> <strong style="color: var(--emerald-600);">$0.00</strong></div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 4px;">Une opération comptable d'ajustement sera consignée dans l'historique des transactions.</div>
+          </div>
+        `,
+        confirmText: 'Confirmer Solde à $0.00',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          if (!token) {
+            showToast('Session administrateur non authentifiée.', 'error');
+            return;
+          }
+          try {
+            var res = await fetch('/api/data/users', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({
+                userId: userId,
+                amount: 0,
+                action: 'reset',
+                reason: "Remise à zéro du solde par l'administrateur"
+              })
+            });
+            var data = await res.json();
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Erreur lors de la remise à zéro du solde.');
+            }
+
+            var users = DB.get('users', []);
+            var u = users.find(function(x) { return x.id === userId; });
+            if (u) {
+              u.balance = 0;
+              DB.set('users', users);
+            }
+            if (data.transaction) {
+              var txs = DB.get('transactions', []);
+              txs.unshift(data.transaction);
+              DB.set('transactions', txs);
+            }
+
+            renderDashboard();
+            showToast(`Solde de ${userName} réinitialisé à $0.00 avec succès.`, 'success');
+          } catch (err) {
+            console.error('[resetBalance Error]', err);
+            showToast(err.message || 'Échec de la réinitialisation du solde.', 'error');
+          }
+        }
+      });
+    }
+
+    // 3. SUPPRIMER UNE COMMANDE INDIVIDUELLE
+    function confirmDeleteOrder(orderId, prodName, clientName, amount) {
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer la Commande',
+        desc: 'Supprimer définitivement cet enregistrement de commande de la boutique.',
+        detailsHtml: `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Réf Commande :</strong> <code>${escapeHtml(orderId)}</code></div>
+            <div><strong>Produit :</strong> ${escapeHtml(prodName)}</div>
+            <div><strong>Client :</strong> ${escapeHtml(clientName)}</div>
+            <div><strong>Montant :</strong> $${parseFloat(amount || 0).toFixed(2)}</div>
+          </div>
+        `,
+        confirmText: 'Supprimer la Commande',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          if (!token) {
+            showToast('Session administrateur non authentifiée.', 'error');
+            return;
+          }
+          try {
+            var res = await fetch('/api/data/orders', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({ orderId: orderId })
+            });
+            var data = await res.json();
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Erreur lors de la suppression de la commande.');
+            }
+
+            var orders = DB.get('orders', []).filter(function(x) { return x.id !== orderId; });
+            DB.set('orders', orders);
+            renderDashboard();
+            showToast(`Commande ${orderId} supprimée avec succès.`, 'success');
+          } catch (err) {
+            console.error('[deleteOrder Error]', err);
+            showToast(err.message || 'Échec de la suppression de la commande.', 'error');
+          }
+        }
+      });
+    }
+
+    // 4. SUPPRIMER UNE TRANSACTION / RECHARGE
+    function confirmDeleteTransaction(txId, clientName, amount) {
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer l\'Enregistrement Financier',
+        desc: 'Supprimer cette transaction ou recharge de l\'historique.',
+        detailsHtml: `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Réf :</strong> <code>${escapeHtml(txId)}</code></div>
+            <div><strong>Client :</strong> ${escapeHtml(clientName)}</div>
+            <div><strong>Montant :</strong> $${parseFloat(amount || 0).toFixed(2)}</div>
+          </div>
+        `,
+        confirmText: 'Supprimer la Transaction',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          if (!token) {
+            showToast('Session administrateur non authentifiée.', 'error');
+            return;
+          }
+          try {
+            var res = await fetch('/api/data/transactions', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({ transactionId: txId })
+            });
+            var data = await res.json();
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Erreur lors de la suppression de la transaction.');
+            }
+
+            var recharges = DB.get('recharges', []).filter(function(x) { return x.id !== txId; });
+            DB.set('recharges', recharges);
+            var txs = DB.get('transactions', []).filter(function(x) { return x.id !== txId; });
+            DB.set('transactions', txs);
+
+            renderDashboard();
+            showToast(`Transaction ${txId} supprimée avec succès.`, 'success');
+          } catch (err) {
+            console.error('[deleteTransaction Error]', err);
+            showToast(err.message || 'Échec de la suppression de la transaction.', 'error');
+          }
+        }
+      });
+    }
+
+    // 5. RÉINITIALISER LES STATISTIQUES ET VISITEURS
+    function confirmResetStats() {
+      openConfirmDeleteModal({
+        title: '🔄 Réinitialiser les Statistiques de Trafic',
+        desc: 'Remettre à zéro les compteurs de visiteurs et l\'historique de visites.',
+        detailsHtml: `
+          <div>Toutes les traces de visiteurs récents et compteurs uniques seront réinitialisés à 0.</div>
+        `,
+        confirmText: 'Réinitialiser les Visites',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          if (!token) {
+            showToast('Session administrateur non authentifiée.', 'error');
+            return;
+          }
+          try {
+            var res = await fetch('/api/data/visitors', {
+              method: 'DELETE',
+              headers: {
+                'Authorization': 'Bearer ' + token
+              }
+            });
+            var data = await res.json();
+            if (!res.ok || !data.success) {
+              throw new Error(data.error || 'Erreur lors de la réinitialisation des statistiques.');
+            }
+
+            DB.set('visitor_logs', []);
+            renderDashboard();
+            showToast('Statistiques et visites remises à zéro avec succès.', 'success');
+          } catch (err) {
+            console.error('[resetVisitorStats Error]', err);
+            showToast(err.message || 'Échec de la réinitialisation.', 'error');
+          }
+        }
+      });
+    }
+
+    // 6. SUPPRESSION SYNCHRONE DE TICKET AVEC LE BACKEND
+    async function deleteTicket(ticketId) {
+      var tickets = DB.get('tickets', []);
+      var t = tickets.find(function(x) { return x.id === ticketId; });
+      var tInfo = t ? ` (${t.id} - ${t.userName})` : '';
+      if (!confirm(`Supprimer définitivement ce ticket de support${tInfo} ?`)) return;
+
+      var token = getAdminAuthToken();
+      if (token) {
+        try {
+          await fetch('/api/data/tickets', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({ id: ticketId })
+          });
+        } catch(e) { console.warn('deleteTicket API error:', e); }
+      }
+
+      tickets = tickets.filter(function(x) { return x.id !== ticketId; });
       DB.set('tickets', tickets);
       renderTicketsTable(tickets);
-      showToast('Ticket supprimé.', 'success');
+      showToast('Ticket supprimé avec succès.', 'success');
+    }
+
+    // ========== 7. LOGIQUE "RESET ALL DATA" & SAUVEGARDE EXPORT ==========
+    
+    function openResetAllDataModal() {
+      var kw = document.getElementById('reset-confirm-keyword');
+      if (kw) kw.value = '';
+      
+      var bBal = document.getElementById('reset-opt-balances');
+      if (bBal) bBal.checked = true;
+      var bOrd = document.getElementById('reset-opt-orders');
+      if (bOrd) bOrd.checked = true;
+      var bTx = document.getElementById('reset-opt-transactions');
+      if (bTx) bTx.checked = true;
+      var bVis = document.getElementById('reset-opt-visitors');
+      if (bVis) bVis.checked = true;
+      var bUsr = document.getElementById('reset-opt-users');
+      if (bUsr) bUsr.checked = false;
+      var bTck = document.getElementById('reset-opt-tickets');
+      if (bTck) bTck.checked = false;
+      var bProd = document.getElementById('reset-opt-products');
+      if (bProd) bProd.checked = false;
+
+      checkResetConfirmKeyword();
+
+      var modal = document.getElementById('admin-reset-all-modal');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeResetAllDataModal() {
+      var modal = document.getElementById('admin-reset-all-modal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function checkResetConfirmKeyword() {
+      var kwEl = document.getElementById('reset-confirm-keyword');
+      var btn = document.getElementById('btn-execute-reset-all');
+      if (!kwEl || !btn) return;
+
+      var val = (kwEl.value || '').trim().toUpperCase();
+      if (val === 'CONFIRMER' || val === 'RESET') {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+      } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.45';
+        btn.style.cursor = 'not-allowed';
+      }
+    }
+
+    async function downloadDbBackup() {
+      var token = getAdminAuthToken();
+      if (!token) {
+        showToast('Session administrateur non authentifiée.', 'error');
+        return;
+      }
+      try {
+        showToast('Génération de la sauvegarde en cours...', 'info');
+        var res = await fetch('/api/data?resource=backup', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!res.ok) {
+          throw new Error('Erreur lors du téléchargement de la sauvegarde.');
+        }
+        var data = await res.json();
+        var jsonStr = JSON.stringify(data, null, 2);
+        var blob = new Blob([jsonStr], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        var nowStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        a.href = url;
+        a.download = `backup_getvirtu_${nowStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Sauvegarde JSON téléchargée avec succès !', 'success');
+      } catch (err) {
+        console.error('[downloadDbBackup Error]', err);
+        showToast(err.message || 'Échec du téléchargement de la sauvegarde.', 'error');
+      }
+    }
+
+    async function executeResetAllData() {
+      var kwEl = document.getElementById('reset-confirm-keyword');
+      var kw = (kwEl ? kwEl.value : '').trim().toUpperCase();
+      if (kw !== 'CONFIRMER' && kw !== 'RESET') {
+        showToast('Veuillez taper CONFIRMER pour débloquer la réinitialisation.', 'error');
+        return;
+      }
+
+      var token = getAdminAuthToken();
+      if (!token) {
+        showToast('Session administrateur non authentifiée.', 'error');
+        return;
+      }
+
+      var options = {
+        resetBalances: document.getElementById('reset-opt-balances')?.checked || false,
+        deleteOrders: document.getElementById('reset-opt-orders')?.checked || false,
+        deleteTransactions: document.getElementById('reset-opt-transactions')?.checked || false,
+        deleteUsers: document.getElementById('reset-opt-users')?.checked || false,
+        resetVisitors: document.getElementById('reset-opt-visitors')?.checked || false,
+        deleteTickets: document.getElementById('reset-opt-tickets')?.checked || false,
+        deleteProducts: document.getElementById('reset-opt-products')?.checked || false
+      };
+
+      var btn = document.getElementById('btn-execute-reset-all');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Réinitialisation en cours...</span>';
+      }
+
+      try {
+        var res = await fetch('/api/data?resource=reset', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            confirmation: 'CONFIRMER',
+            options: options
+          })
+        });
+
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erreur lors de la réinitialisation.');
+        }
+
+        // Mettre à jour l'état local dans localStorage
+        if (options.deleteOrders) DB.set('orders', []);
+        if (options.deleteTransactions) {
+          DB.set('recharges', []);
+          DB.set('transactions', data.transactions || []);
+        }
+        if (options.resetVisitors) DB.set('visitor_logs', []);
+        if (options.deleteTickets) DB.set('tickets', []);
+        if (options.deleteProducts) {
+          DB.set('products', []);
+          DB.set('vault', {});
+        }
+        if (data.users) {
+          DB.set('users', data.users);
+          var curSess = DB.get('session');
+          if (curSess) {
+            var myAcc = data.users.find(function(x) { return x.id === curSess.userId || (curSess.email && x.email && x.email.toLowerCase() === curSess.email.toLowerCase()); });
+            if (myAcc) {
+              curSess.balance = myAcc.balance || 0;
+              DB.set('session', curSess);
+            }
+          }
+        }
+
+        closeResetAllDataModal();
+        renderDashboard();
+        showToast('Données réinitialisées avec succès selon vos critères.', 'success');
+      } catch (err) {
+        console.error('[executeResetAllData Error]', err);
+        showToast(err.message || 'Échec de la réinitialisation.', 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<span>⚠️ Exécuter la Réinitialisation</span>';
+          checkResetConfirmKeyword();
+        }
+      }
     }
 
     // ========== 6. GRAPHIQUES CHART.JS (DYNAMIQUES SELON LA PÉRIODE SÉLECTIONNÉE) ==========
@@ -4978,7 +5621,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202610122131_2dbe15',
+      currentVersion: 'v202610130554_faac65',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 

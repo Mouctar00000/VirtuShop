@@ -125,8 +125,12 @@ async function runAsyncTests() {
   const runBalanceTests = require('./test_balance_system');
   await runBalanceTests();
 
+  console.log('\n=== TEST 13: Reset All Data & Granular Record Deletions ===');
+  const runResetAndDeleteTests = require('./test_reset_and_delete_features');
+  await runResetAndDeleteTests();
+
   console.log('\n======================================================');
-  console.log('🏆 TOUTES LES 12 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('🏆 TOUTES LES 13 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
   console.log('======================================================\n');
 }
 

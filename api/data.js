@@ -264,6 +264,16 @@ module.exports = async function handler(req, res) {
           remainingStock: allocatedResult.remainingStock
         });
       }
+
+      if (req.method === 'DELETE') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+        }
+        const orderId = body.id || body.orderId || req.query?.id;
+        const delRes = db.deleteOrder(orderId);
+        await db.persistToRemote();
+        return res.status(200).json({ success: true, ...delRes, orders: db.getOrders() });
+      }
     }
 
     // 4. TICKETS SUPPORT CLIENT
@@ -294,6 +304,16 @@ module.exports = async function handler(req, res) {
         const updated = db.updateTicket(body.id, { status: body.status || 'Résolu' });
         return res.status(200).json({ success: true, ticket: updated });
       }
+
+      if (req.method === 'DELETE') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        const ticketId = body.id || req.query?.id;
+        const delRes = db.deleteTicket(ticketId);
+        await db.persistToRemote();
+        return res.status(200).json({ success: true, ...delRes, tickets: db.getTickets() });
+      }
     }
 
     // 5. VISITEURS ET TRAÇABILITÉ DES VISITES
@@ -311,6 +331,14 @@ module.exports = async function handler(req, res) {
         const period = req.query?.period || (req.url && req.url.includes('period=') ? req.url.split('period=')[1].split('&')[0] : 'all');
         const vStats = db.getVisitorStats(period);
         return res.status(200).json(vStats);
+      }
+      if (req.method === 'DELETE') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        db.resetVisitorStats();
+        await db.persistToRemote();
+        return res.status(200).json({ success: true, stats: db.getLiveStatistics('all') });
       }
     }
 
@@ -338,8 +366,8 @@ module.exports = async function handler(req, res) {
         }
         const userId = body.userId;
         const amount = parseFloat(body.amount);
-        const action = body.action || 'add'; // 'add' | 'deduct' | 'set' | 'gift' | 'refund'
-        const reason = body.reason || (action === 'gift' ? 'Don de solde offert par l\'administrateur' : 'Ajustement manuel par administrateur');
+        const action = body.action || 'add'; // 'add' | 'deduct' | 'set' | 'gift' | 'refund' | 'reset'
+        const reason = body.reason || (action === 'gift' ? 'Don de solde offert par l\'administrateur' : (action === 'reset' ? 'Remise à zéro du solde par administrateur' : 'Ajustement manuel par administrateur'));
         if (!userId || isNaN(amount)) {
           return res.status(400).json({ error: 'Paramètres manquants ou invalides (userId, amount).' });
         }
@@ -356,9 +384,47 @@ module.exports = async function handler(req, res) {
 
         return res.status(200).json({ success: true, ...resAdjust });
       }
+
+      if (req.method === 'DELETE') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+        }
+        const userId = body.id || body.userId || req.query?.id;
+        const delRes = db.deleteUser(userId);
+        await db.persistToRemote();
+        const users = db.getUsers().map(u => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          balance: u.balance || 0,
+          created_at: u.created_at
+        }));
+        return res.status(200).json({ success: true, ...delRes, users });
+      }
     }
 
-    // 7. MOYENS DE PAIEMENT POUR LA RECHARGE (GESTION ADMINISTRATEUR & LECTURE BOUTIQUE)
+    // 7. TRANSACTIONS & HISTORIQUE FINANCIER
+    if (resource === 'transactions') {
+      if (req.method === 'GET') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+        }
+        return res.status(200).json({ transactions: db.getTransactions() });
+      }
+
+      if (req.method === 'DELETE') {
+        if (!auth || auth.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+        }
+        const txId = body.id || body.transactionId || req.query?.id;
+        const delRes = db.deleteTransaction(txId);
+        await db.persistToRemote();
+        return res.status(200).json({ success: true, ...delRes, transactions: db.getTransactions() });
+      }
+    }
+
+    // 8. MOYENS DE PAIEMENT POUR LA RECHARGE (GESTION ADMINISTRATEUR & LECTURE BOUTIQUE)
     if (resource === 'methods' || resource === 'payment-methods') {
       if (req.method === 'GET') {
         const methods = db.getPaymentMethods();
@@ -383,6 +449,54 @@ module.exports = async function handler(req, res) {
         await db.persistToRemote();
         return res.status(200).json({ success: true, methods: db.getPaymentMethods() });
       }
+    }
+
+    // 9. SAUVEGARDE ET EXPORTATION (BACKUP JSON)
+    if (resource === 'backup' || resource === 'export') {
+      if (!auth || auth.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Accès réservé exclusivement à l\'administrateur.' });
+      }
+      const backup = db.createBackup();
+      res.setHeader('Cache-Control', 'no-store, no-cache');
+      return res.status(200).json(backup);
+    }
+
+    // 10. RÉINITIALISATION DES DONNÉES ("Reset All Data")
+    if (resource === 'reset') {
+      if (!auth || auth.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+      }
+
+      const conf = (body.confirmation || body.confirm || '').trim().toUpperCase();
+      const pwd = (body.password || '').trim();
+      if (conf !== 'CONFIRMER' && conf !== 'RESET' && pwd !== 'admin' && pwd !== 'admin123') {
+        return res.status(400).json({
+          error: 'Confirmation requise : veuillez taper CONFIRMER pour autoriser la réinitialisation.'
+        });
+      }
+
+      const adminName = auth.user.name || 'Administrateur';
+      const resetResult = db.resetAllData(body.options || body, adminName);
+      await db.persistToRemote();
+
+      const users = db.getUsers().map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        balance: u.balance || 0,
+        created_at: u.created_at
+      }));
+
+      return res.status(200).json({
+        success: true,
+        message: 'Opération de réinitialisation effectuée avec succès.',
+        ...resetResult,
+        users,
+        orders: db.getOrders(),
+        transactions: db.getTransactions(),
+        stats: db.getLiveStatistics('all')
+      });
     }
 
     return res.status(404).json({ error: 'Ressource non trouvée.' });

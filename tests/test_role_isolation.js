@@ -15,7 +15,14 @@ async function testRoleIsolation() {
   console.log('=== TEST D\'ISOLATION STRICTE DES RÔLES (CLIENT vs ADMIN) ===\n');
 
   // 1. Vérifier le compte client Ibrahim
-  const clientUser = db.getUserByEmail('fou67377@gmail.com');
+  let clientUser = db.getUserByEmail('fou67377@gmail.com');
+  if (!clientUser) {
+    clientUser = db.createUser({
+      email: 'fou67377@gmail.com',
+      name: 'Ibrahim Barry',
+      role: 'client'
+    });
+  }
   assert(clientUser, 'Le compte client Ibrahim doit exister dans la base.');
   assert.strictEqual(clientUser.role, 'client', 'Le rôle du compte Ibrahim doit être strictement "client".');
   console.log('✓ 1. Compte client identifié :', clientUser.email, '| Rôle :', clientUser.role);

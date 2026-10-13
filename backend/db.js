@@ -126,6 +126,9 @@ class Database {
     this._lastRemoteSync = 0;
     this._deletedProductIds = new Set();
     this._deletedMethodIds = new Set();
+    this._deletedUserIds = new Set();
+    this._deletedOrderIds = new Set();
+    this._deletedTransactionIds = new Set();
     this.data = this.load();
     this.migrateAndDeduplicateProducts();
   }
@@ -285,7 +288,7 @@ class Database {
     if (!parsed || typeof parsed !== 'object') return false;
     let changed = false;
 
-    // 1. UTILISATEURS : Fusion intelligente avec protection des soldes
+    // 1. UTILISATEURS : Fusion intelligente avec protection des soldes et suppressions
     if (Array.isArray(parsed.users) && parsed.users.length > 0) {
       const localUsers = this.data.users || [];
       const localUserMap = new Map(localUsers.map(u => [String(u.id), u]));
@@ -293,6 +296,9 @@ class Database {
 
       for (const remoteUser of parsed.users) {
         const uId = String(remoteUser.id);
+        if (this._deletedUserIds && this._deletedUserIds.has(uId)) {
+          continue;
+        }
         const localUser = localUserMap.get(uId);
         if (localUser) {
           const remoteTime = remoteUser.updated_at ? new Date(remoteUser.updated_at).getTime() : 0;
@@ -309,7 +315,10 @@ class Database {
       }
 
       for (const remainingLocal of localUserMap.values()) {
-        mergedUsers.push(remainingLocal);
+        const uId = String(remainingLocal.id);
+        if (!this._deletedUserIds || !this._deletedUserIds.has(uId)) {
+          mergedUsers.push(remainingLocal);
+        }
       }
 
       this.data.users = mergedUsers;
@@ -395,19 +404,63 @@ class Database {
       changed = true;
     }
 
-    // 4. COMMANDES : Fusion par ID
+    // 4. COMMANDES : Fusion par ID en respectant les suppressions
     if (Array.isArray(parsed.orders)) {
-      const remoteOrderIds = new Set(parsed.orders.map(o => String(o.id)));
-      const localOnlyOrders = (this.data.orders || []).filter(o => !remoteOrderIds.has(String(o.id)));
-      this.data.orders = [...parsed.orders, ...localOnlyOrders];
+      const localOrders = this.data.orders || [];
+      const localOrderMap = new Map(localOrders.map(o => [String(o.id), o]));
+      const mergedOrders = [];
+
+      for (const remoteOrder of parsed.orders) {
+        const oId = String(remoteOrder.id);
+        if (this._deletedOrderIds && this._deletedOrderIds.has(oId)) {
+          continue;
+        }
+        if (localOrderMap.has(oId)) {
+          mergedOrders.push(localOrderMap.get(oId));
+          localOrderMap.delete(oId);
+        } else {
+          mergedOrders.push(remoteOrder);
+        }
+      }
+
+      for (const remainingOrder of localOrderMap.values()) {
+        const oId = String(remainingOrder.id);
+        if (!this._deletedOrderIds || !this._deletedOrderIds.has(oId)) {
+          mergedOrders.push(remainingOrder);
+        }
+      }
+
+      this.data.orders = mergedOrders;
       changed = true;
     }
 
-    // 5. TRANSACTIONS : Fusion par ID
+    // 5. TRANSACTIONS : Fusion par ID en respectant les suppressions
     if (Array.isArray(parsed.transactions)) {
-      const remoteTxIds = new Set(parsed.transactions.map(t => String(t.id)));
-      const localOnlyTxs = (this.data.transactions || []).filter(t => !remoteTxIds.has(String(t.id)));
-      this.data.transactions = [...parsed.transactions, ...localOnlyTxs];
+      const localTxs = this.data.transactions || [];
+      const localTxMap = new Map(localTxs.map(t => [String(t.id), t]));
+      const mergedTxs = [];
+
+      for (const remoteTx of parsed.transactions) {
+        const tId = String(remoteTx.id);
+        if (this._deletedTransactionIds && this._deletedTransactionIds.has(tId)) {
+          continue;
+        }
+        if (localTxMap.has(tId)) {
+          mergedTxs.push(localTxMap.get(tId));
+          localTxMap.delete(tId);
+        } else {
+          mergedTxs.push(remoteTx);
+        }
+      }
+
+      for (const remainingTx of localTxMap.values()) {
+        const tId = String(remainingTx.id);
+        if (!this._deletedTransactionIds || !this._deletedTransactionIds.has(tId)) {
+          mergedTxs.push(remainingTx);
+        }
+      }
+
+      this.data.transactions = mergedTxs;
       changed = true;
     }
 
@@ -765,6 +818,27 @@ class Database {
     return u;
   }
 
+  deleteUser(id) {
+    if (!id) throw new Error('ID utilisateur requis.');
+    const sId = String(id);
+    const u = this.getUserById(id) || this.getUserByEmail(id);
+    if (!u) throw new Error('Utilisateur introuvable.');
+
+    // Protection absolue du compte administrateur principal
+    if (u.role === 'admin' || u.id === 'admin-001' || u.email === 'admin@getvirtu.shop' || u.email === 'admin@virtushop.com' || u.email === 'admin@admin.com') {
+      throw new Error('Action refusée : Le compte administrateur principal ne peut pas être supprimé.');
+    }
+
+    if (this._deletedUserIds) {
+      this._deletedUserIds.add(sId);
+      this._deletedUserIds.add(String(u.id));
+    }
+
+    this.data.users = (this.data.users || []).filter(x => String(x.id) !== sId && String(x.id) !== String(u.id));
+    this.persist();
+    return { success: true, deletedUser: u };
+  }
+
   linkGoogleAccount(userId, { google_id, profile_picture, name }) {
     const u = this.getUserById(userId);
     if (!u) return null;
@@ -786,7 +860,7 @@ class Database {
     const numAmount = parseFloat(amount) || 0;
     let newBal = oldBal;
 
-    if (action === 'set') {
+    if (action === 'set' || action === 'reset') {
       newBal = Math.max(0, numAmount);
     } else if (action === 'deduct') {
       newBal = Math.max(0, oldBal - numAmount);
@@ -800,14 +874,20 @@ class Database {
     u.updated_at = new Date().toISOString();
     this.persist();
 
-    // Détermination précise du type et du libellé selon qu'il s'agit d'un don gratuit ou d'un ajustement
+    // Détermination précise du type et du libellé selon qu'il s'agit d'un don gratuit, remise à zéro ou ajustement
     const isGift = (action === 'gift' || action === 'bonus' || action === 'cadeau');
+    const isReset = (action === 'reset' || (action === 'set' && numAmount === 0));
     let txType = 'credit_manuel_admin';
     let paymentMethod = 'Ajustement Manuel Administrateur';
     let provider = 'admin_manual';
     let defaultReason = `Ajustement manuel par ${adminName} (${diff >= 0 ? '+' : ''}${diff.toFixed(2)} $)`;
 
-    if (isGift) {
+    if (isReset) {
+      txType = 'debit_manuel_admin';
+      paymentMethod = 'Réinitialisation de Solde';
+      provider = 'admin_reset';
+      defaultReason = reason || `Réinitialisation administrative du solde à 0.00 $ par ${adminName}`;
+    } else if (isGift) {
       txType = 'gift';
       paymentMethod = 'Cadeau Promotionnel Administrateur';
       provider = 'admin_gift';
@@ -1157,6 +1237,21 @@ class Database {
     return o;
   }
 
+  deleteOrder(id) {
+    if (!id) throw new Error('ID commande requis.');
+    const sId = String(id);
+    const o = this.getOrderById(id);
+    if (!o) throw new Error('Commande introuvable.');
+
+    if (this._deletedOrderIds) {
+      this._deletedOrderIds.add(sId);
+    }
+
+    this.data.orders = (this.data.orders || []).filter(x => String(x.id) !== sId);
+    this.persist();
+    return { success: true, deletedOrder: o };
+  }
+
   // ========== MODÈLE TRANSACTIONS / PAIEMENTS (PRODUCTION) ==========
   getTransactions(filter = {}) {
     let list = this.data.transactions;
@@ -1216,6 +1311,21 @@ class Database {
     return t;
   }
 
+  deleteTransaction(id) {
+    if (!id) throw new Error('ID transaction requis.');
+    const sId = String(id);
+    const t = this.getTransactionById(id);
+    if (!t) throw new Error('Transaction introuvable.');
+
+    if (this._deletedTransactionIds) {
+      this._deletedTransactionIds.add(sId);
+    }
+
+    this.data.transactions = (this.data.transactions || []).filter(x => String(x.id) !== sId);
+    this.persist();
+    return { success: true, deletedTransaction: t };
+  }
+
   // ========== COFFRE-FORT NUMÉRIQUE ==========
   getVault() {
     return this.data.vault || {};
@@ -1258,6 +1368,14 @@ class Database {
     Object.assign(t, updates, { updatedAt: new Date().toISOString() });
     this.persist();
     return t;
+  }
+
+  deleteTicket(id) {
+    if (!id) throw new Error('ID ticket requis.');
+    const sId = String(id);
+    this.data.tickets = (this.data.tickets || []).filter(x => String(x.id) !== sId);
+    this.persist();
+    return { success: true };
   }
 
   // ========== MOYENS DE PAIEMENT ==========
@@ -1358,6 +1476,12 @@ class Database {
     const uniqueVids = new Set(filtered.map(l => l.vid)).size;
 
     return { totalVisits, uniqueVisitors: uniqueVids };
+  }
+
+  resetVisitorStats() {
+    this.data.visitor_logs = [];
+    this.persist();
+    return { success: true };
   }
 
   // ========== STATISTIQUES RÉELLES DYNAMIQUES AVEC FILTRES DE TEMPS ==========
@@ -1477,6 +1601,121 @@ class Database {
       chartRevenue,
       chartVolume
     };
+  }
+
+  // ========== GESTION, SAUVEGARDE & RÉINITIALISATION GLOBALE DES DONNÉES ==========
+  createBackup() {
+    return {
+      version: this.getDeploymentVersion(),
+      exportedAt: new Date().toISOString(),
+      counts: {
+        users: (this.data.users || []).length,
+        products: (this.data.products || []).length,
+        orders: (this.data.orders || []).length,
+        transactions: (this.data.transactions || []).length,
+        tickets: (this.data.tickets || []).length,
+        visitorLogs: (this.data.visitor_logs || []).length,
+        paymentMethods: (this.data.payment_methods || []).length
+      },
+      data: JSON.parse(JSON.stringify(this.data))
+    };
+  }
+
+  resetAllData(options = {}, adminName = 'Administrateur') {
+    const resetBalances = !!(options.resetBalances);
+    const deleteCustomers = !!(options.deleteCustomers || options.deleteUsers);
+    const deleteOrders = !!(options.deleteOrders);
+    const deleteTransactions = !!(options.deleteTransactions);
+    const resetStatistics = !!(options.resetStatistics || options.resetVisitors);
+    const deleteTickets = !!(options.deleteTickets);
+    const resetCatalog = !!(options.resetCatalog || options.deleteProducts);
+
+    const affected = {
+      resetBalancesCount: 0,
+      deletedCustomersCount: 0,
+      deletedOrdersCount: 0,
+      deletedTransactionsCount: 0,
+      resetStatisticsCleared: false,
+      deletedTicketsCount: 0,
+      resetCatalogCleared: false
+    };
+
+    // 1. SUPPRESSION DES CLIENTS (Protection absolue de l'admin principal)
+    if (deleteCustomers) {
+      const nonAdmins = (this.data.users || []).filter(u => u.role !== 'admin' && u.id !== 'admin-001' && u.email !== 'admin@getvirtu.shop' && u.email !== 'admin@virtushop.com');
+      nonAdmins.forEach(u => {
+        if (this._deletedUserIds) this._deletedUserIds.add(String(u.id));
+      });
+      affected.deletedCustomersCount = nonAdmins.length;
+      this.data.users = (this.data.users || []).filter(u => u.role === 'admin' || u.id === 'admin-001' || u.email === 'admin@getvirtu.shop' || u.email === 'admin@virtushop.com');
+    } else if (resetBalances) {
+      // 2. RÉINITIALISATION DES SOLDES CLIENTS À 0.00 $
+      (this.data.users || []).forEach(u => {
+        if (u.role !== 'admin' && (u.balance || 0) > 0) {
+          affected.resetBalancesCount++;
+          u.balance = 0.00;
+          u.updated_at = new Date().toISOString();
+        }
+      });
+    }
+
+    // 3. COMMANDES
+    if (deleteOrders) {
+      affected.deletedOrdersCount = (this.data.orders || []).length;
+      (this.data.orders || []).forEach(o => {
+        if (this._deletedOrderIds) this._deletedOrderIds.add(String(o.id));
+      });
+      this.data.orders = [];
+    }
+
+    // 4. TRANSACTIONS
+    if (deleteTransactions) {
+      affected.deletedTransactionsCount = (this.data.transactions || []).length;
+      (this.data.transactions || []).forEach(t => {
+        if (this._deletedTransactionIds) this._deletedTransactionIds.add(String(t.id));
+      });
+      this.data.transactions = [];
+    }
+
+    // 5. STATISTIQUES & VISITEURS
+    if (resetStatistics) {
+      affected.resetStatisticsCleared = true;
+      this.data.visitor_logs = [];
+    }
+
+    // 6. TICKETS SUPPORT
+    if (deleteTickets) {
+      affected.deletedTicketsCount = (this.data.tickets || []).length;
+      this.data.tickets = [];
+    }
+
+    // 7. CATALOGUE & CLÉS (Uniquement si explicitement demandé)
+    if (resetCatalog) {
+      affected.resetCatalogCleared = true;
+      (this.data.products || []).forEach(p => {
+        if (this._deletedProductIds) this._deletedProductIds.add(String(p.id));
+      });
+      this.data.products = [];
+      this.data.vault = {};
+    }
+
+    // Toujours consigner une transaction d'audit système traçant l'opération
+    this.createTransaction({
+      id: 'TXN-RESET-' + Date.now().toString(36).toUpperCase(),
+      userId: 'admin-001',
+      userName: adminName,
+      userEmail: 'admin@getvirtu.shop',
+      amount: 0,
+      currency: 'USD',
+      type: 'system_reset',
+      paymentMethod: 'Audit Système',
+      provider: 'admin_audit',
+      status: 'completed',
+      notes: `Reset All Data exécuté par ${adminName}. Options: ${Object.keys(options).filter(k => options[k]).join(', ') || 'aucune'}`
+    });
+
+    this.persist();
+    return { success: true, affected };
   }
 
   getDeploymentVersion() {
