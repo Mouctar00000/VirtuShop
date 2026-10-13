@@ -30,7 +30,7 @@
   <meta name="twitter:title" content="GetVirtu ⚡ Comptes & Services Numériques">
   <meta name="twitter:description" content="Comptes vérifiés, clés d'activation et services numériques instantanés sur getvirtu.shop.">
 
-  <link rel="stylesheet" href="style.css?v=v202610130554_faac65">
+  <link rel="stylesheet" href="style.css?v=v202610131029_87dbf3">
 
   <!-- Données Structurées Schema.org -->
   <script type="application/ld+json">
@@ -681,7 +681,13 @@
       </div>
 
       <div class="field deposit-field-methods">
-        <label class="deposit-label">Choisissez le moyen de paiement</label>
+        <div class="deposit-methods-header-row">
+          <label class="deposit-label">Choisissez le moyen de paiement</label>
+          <div class="pm-scroll-nav-btns" id="pm-scroll-nav-btns" style="display: none;">
+            <button type="button" class="pm-scroll-nav-btn" onclick="scrollDepositMethodsTabs('left')" title="Précédent" aria-label="Précédent">‹</button>
+            <button type="button" class="pm-scroll-nav-btn" onclick="scrollDepositMethodsTabs('right')" title="Suivant" aria-label="Suivant">›</button>
+          </div>
+        </div>
         <div class="payment-method-tabs" id="deposit-methods-tabs-container">
           <!-- Injecté dynamiquement depuis les méthodes configurées par l'admin -->
         </div>
@@ -756,7 +762,7 @@
   <div id="toast"></div>
 
   <!-- Scripts Applicatifs & Sécurité -->
-  <script src="security.js?v=v202610130554_faac65"></script>
-  <script src="app.js?v=v202610130554_faac65"></script>
+  <script src="security.js?v=v202610131029_87dbf3"></script>
+  <script src="app.js?v=v202610131029_87dbf3"></script>
 </body>
 </html>

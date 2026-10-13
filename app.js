@@ -1649,6 +1649,11 @@ function openDepositModal(suggestedAmount) {
   updateDepositCalculation();
 
   document.getElementById('modal-deposit').classList.add('active');
+
+  var tabsContainer = document.getElementById('deposit-methods-tabs-container');
+  if (tabsContainer) {
+    tabsContainer.scrollLeft = 0;
+  }
 }
 
 var selectedMomoCountry = 'CM';
@@ -2001,8 +2006,38 @@ function renderDepositMethodsTabs() {
   if (!container) return;
 
   var methods = DB.get('payment_methods', []).filter(function(m) { return m.enabled; });
+  var isScrollable = methods.length > 4;
+
+  container.classList.toggle('scrollable', isScrollable);
+
+  var navBtns = document.getElementById('pm-scroll-nav-btns');
+  if (navBtns) {
+    navBtns.style.display = isScrollable ? 'flex' : 'none';
+  }
+
+  var savedScrollLeft = container.scrollLeft;
+
+  // Si le nombre de méthodes dépasse 4, organiser les méthodes pour que les deux premières colonnes
+  // affichent exactement les 4 premières méthodes dans la disposition 2x2 de la capture 1 :
+  // Col 1 : methods[0] (haut-gauche), methods[2] (bas-gauche)
+  // Col 2 : methods[1] (haut-droite), methods[3] (bas-droite)
+  // Col 3+ : methods[4] (haut), methods[5] (bas)...
+  // Pour <= 4 méthodes, la liste normale est conservée avec la grille 2 colonnes par défaut.
+  var displayMethods = methods;
+  if (isScrollable) {
+    displayMethods = [];
+    if (methods[0]) displayMethods.push(methods[0]);
+    if (methods[2]) displayMethods.push(methods[2]);
+    if (methods[1]) displayMethods.push(methods[1]);
+    if (methods[3]) displayMethods.push(methods[3]);
+    for (var i = 4; i < methods.length; i += 2) {
+      if (methods[i]) displayMethods.push(methods[i]);
+      if (methods[i + 1]) displayMethods.push(methods[i + 1]);
+    }
+  }
+
   var html = '';
-  methods.forEach(function(m) {
+  displayMethods.forEach(function(m) {
     var icon = (m.type === 'crypto_trybit' || m.provider === 'trybit') ? '⚡' : (m.type === 'crypto' ? '🪙' : (m.type === 'mobile_money' ? '📱' : '💳'));
     var rawName = m.name || '';
     var mainTitle = rawName;
@@ -2020,19 +2055,94 @@ function renderDepositMethodsTabs() {
     }
 
     html += `
-      <div class="payment-method-tab ${currentDepositMethodId == m.id ? 'active' : ''}" onclick="selectDepositMethodTab('${m.id}')">
+      <div class="payment-method-tab ${currentDepositMethodId == m.id ? 'active' : ''}" onclick="selectDepositMethodTab('${m.id}')" data-method-id="${m.id}">
         <div class="pm-title"><span class="pm-icon">${icon}</span> <span>${escapeHtml(mainTitle)}</span></div>
         ${subTitle ? `<div class="pm-subtitle">${escapeHtml(subTitle)}</div>` : ''}
       </div>
     `;
   });
   container.innerHTML = html;
+
+  if (isScrollable && savedScrollLeft > 0) {
+    container.scrollLeft = savedScrollLeft;
+  }
+
+  initDepositModalScroll();
 }
 
 function selectDepositMethodTab(mId) {
+  if (window._isPaymentTabDragging) return;
   currentDepositMethodId = mId;
   renderDepositMethodsTabs();
   renderDepositMethodContent();
+
+  var container = document.getElementById('deposit-methods-tabs-container');
+  if (container && container.classList.contains('scrollable')) {
+    var activeTab = container.querySelector(`.payment-method-tab[data-method-id="${mId}"]`);
+    if (activeTab) {
+      activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }
+}
+
+function scrollDepositMethodsTabs(dir) {
+  var container = document.getElementById('deposit-methods-tabs-container');
+  if (!container) return;
+  var step = Math.max(160, container.clientWidth * 0.75);
+  if (dir === 'left') {
+    container.scrollBy({ left: -step, behavior: 'smooth' });
+  } else {
+    container.scrollBy({ left: step, behavior: 'smooth' });
+  }
+}
+
+function initDepositModalScroll() {
+  var container = document.getElementById('deposit-methods-tabs-container');
+  if (!container || container._scrollInitDone) return;
+  container._scrollInitDone = true;
+
+  // Défilement horizontal avec la molette de souris
+  container.addEventListener('wheel', function(e) {
+    if (!container.classList.contains('scrollable')) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      container.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+
+  // Glisser-déplacer à la souris sur ordinateur (Mouse drag-to-scroll)
+  var isDown = false;
+  var startX = 0;
+  var scrollLeftStart = 0;
+  var dragMoved = false;
+
+  container.addEventListener('mousedown', function(e) {
+    if (!container.classList.contains('scrollable')) return;
+    isDown = true;
+    dragMoved = false;
+    startX = e.pageX - container.getBoundingClientRect().left;
+    scrollLeftStart = container.scrollLeft;
+  });
+
+  window.addEventListener('mouseup', function() {
+    if (isDown) {
+      isDown = false;
+      if (dragMoved) {
+        window._isPaymentTabDragging = true;
+        setTimeout(function() { window._isPaymentTabDragging = false; }, 60);
+      }
+    }
+  });
+
+  container.addEventListener('mousemove', function(e) {
+    if (!isDown) return;
+    var x = e.pageX - container.getBoundingClientRect().left;
+    var walk = (x - startX);
+    if (Math.abs(walk) > 4) {
+      dragMoved = true;
+      container.scrollLeft = scrollLeftStart - walk;
+    }
+  });
 }
 
 function renderDepositMethodContent() {
@@ -4119,7 +4229,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610130554_faac65',
+  currentVersion: 'v202610131029_87dbf3',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

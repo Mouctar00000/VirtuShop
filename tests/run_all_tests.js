@@ -129,8 +129,12 @@ async function runAsyncTests() {
   const runResetAndDeleteTests = require('./test_reset_and_delete_features');
   await runResetAndDeleteTests();
 
+  console.log('\n=== TEST 14: Recharge Modal Layout & Isolated Horizontal Scrolling ===');
+  const runLayoutTests = require('./test_deposit_methods_layout');
+  await runLayoutTests();
+
   console.log('\n======================================================');
-  console.log('🏆 TOUTES LES 13 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
+  console.log('🏆 TOUTES LES 14 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
   console.log('======================================================\n');
 }
 
