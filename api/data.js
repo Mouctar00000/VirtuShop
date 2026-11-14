@@ -81,7 +81,14 @@ module.exports = async function handler(req, res) {
       if (!blob) return res.status(404).json({ error: 'Fichier introuvable.' });
       res.setHeader('Content-Type', blob.mime);
       res.setHeader('Content-Length', blob.data.length);
-      res.setHeader('Cache-Control', id.startsWith('pub_') ? 'public, max-age=31536000, immutable' : 'private, no-store');
+      if (id.startsWith('pub_')) {
+        // Short edge cache: an image deleted by the admin (or by a reset) disappears from the CDN within minutes
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.setHeader('Vercel-CDN-Cache-Control', 'public, max-age=600');
+        res.setHeader('CDN-Cache-Control', 'public, max-age=600');
+      } else {
+        res.setHeader('Cache-Control', 'private, no-store');
+      }
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       return res.status(200).end(blob.data);
     }
