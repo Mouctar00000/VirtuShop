@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node tests/run_all_tests.js"
+    "test": "node tests/run_all_tests.js",
+    "test:browser": "node tests/browser.e2e.js",
+    "hash-password": "node scripts/hash-password.js",
+    "deploy": "node scripts/deploy-vercel.js",
+    "deploy:preview": "node scripts/deploy-vercel.js --preview"
   },
   "keywords": [
     "ecommerce",
@@ -19,5 +23,8 @@
   "private": true,
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "pg": "8.23.1"
   }
 }

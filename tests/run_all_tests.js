@@ -1,152 +1,48 @@
-const assert = require('assert');
+#!/usr/bin/env node
+/**
+ * GetVirtu — runs every automated test suite in an isolated environment.
+ *   npm test                                  -> file store + mocked Edge Config + static checks
+ *   TEST_DATABASE_URL=postgres://... npm test -> also runs the Postgres suites (use a DISPOSABLE database)
+ * Never touches data/ (local database) nor any production store: each run uses a temporary directory,
+ * ignores .env and clears every provider credential.
+ */
+'use strict';
+
+const { spawnSync } = require('child_process');
+const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const db = require('../backend/db');
-const authService = require('../backend/auth');
-const dbPath = path.join(__dirname, '..', 'data', 'database.json');
-const originalDbSnapshot = fs.existsSync(dbPath) ? fs.readFileSync(dbPath, 'utf8') : null;
 
-console.log('=== TEST 1: Session Persistence & HMAC Resiliency ===');
-const testUser = { id: 'usr_test_sess_' + Date.now(), email: 'sess_test@getvirtu.shop', name: 'Sess User', role: 'client' };
-const sess = authService.createSession(testUser);
-assert(sess.token && sess.token.includes('.'), 'Token must be HMAC signed with a period');
-assert(sess.expiresAt - sess.createdAt >= 29 * 24 * 3600 * 1000, 'Session must last at least 29+ days');
+const root = path.join(__dirname, '..');
+const cleanEnv = { ...process.env };
+for (const k of ['VERCEL', 'DATABASE_URL', 'POSTGRES_URL', 'EDGE_CONFIG_ID', 'VERCEL_TOKEN', 'SASPAY_API_KEY', 'TRYBIT_API_KEY', 'TRYBIT_SHOP_ID', 'TRYBIT_SECRET_KEY', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'RESEND_API_KEY', 'ADMIN_PASSWORD_HASH', 'SESSION_SECRET']) delete cleanEnv[k];
+cleanEnv.GV_SKIP_DOTENV = '1';
 
-// Simuler la perte de mémoire vive (restart serverless)
-db.data.users.push({ id: testUser.id, email: testUser.email, name: testUser.name, role: testUser.role, balance: 15.0 });
-const verified = authService.verifySession(sess.token);
-assert(verified && verified.user.id === testUser.id, 'Session must verify even with new token verification');
-console.log('✓ Test 1 Réussi: Session valide 30 jours et vérifiable cross-container.');
+const suites = [
+  { name: 'Static front-end & configuration checks', file: 'tests/frontend.static.test.js' },
+  { name: 'API end-to-end (file store)', file: 'tests/api.e2e.test.js', env: { TEST_STORE: 'file' } },
+  { name: 'API end-to-end (Edge Config store, mocked API)', file: 'tests/api.e2e.test.js', env: { TEST_STORE: 'edge-config' } },
+  { name: 'Legacy Edge Config migration', file: 'tests/edge-config.migration.test.js' },
+  { name: 'Postgres store guarantees', file: 'tests/postgres.store.test.js', pg: true },
+  { name: 'API end-to-end (Postgres)', file: 'tests/api.e2e.test.js', pg: true, requirePg: true },
+  { name: 'Deposit modal layout (legacy check)', file: 'tests/test_deposit_methods_layout.js', plain: true },
+  { name: 'Version & cache headers (legacy check)', file: 'tests/test_version_cache.js', plain: true }
+];
 
-console.log('=== TEST 2: Admin Balance Adjustment & Transaction Logging ===');
-const adjustUser = { id: 'usr_bal_' + Date.now(), email: 'bal_test@getvirtu.shop', name: 'Bal Test', balance: 0.0 };
-db.data.users.push(adjustUser);
-
-// 1. Crédit +20$
-const res1 = db.adjustUserBalance(adjustUser.id, { amount: 20, action: 'add', reason: 'Crédit initial test', adminName: 'SuperAdmin' });
-assert.strictEqual(res1.newBalance, 20.0);
-assert.strictEqual(res1.transaction.balanceBefore, 0.0);
-assert.strictEqual(res1.transaction.balanceAfter, 20.0);
-assert.strictEqual(res1.transaction.type, 'credit_manuel_admin');
-
-// 2. Déduction -5$
-const res2 = db.adjustUserBalance(adjustUser.id, { amount: 5, action: 'deduct', reason: 'Régularisation', adminName: 'SuperAdmin' });
-assert.strictEqual(res2.newBalance, 15.0);
-assert.strictEqual(res2.transaction.balanceBefore, 20.0);
-assert.strictEqual(res2.transaction.balanceAfter, 15.0);
-assert.strictEqual(res2.transaction.type, 'debit_manuel_admin');
-
-// 3. Définir montant exact 50$
-const res3 = db.adjustUserBalance(adjustUser.id, { amount: 50, action: 'set', reason: 'Montant fixé', adminName: 'SuperAdmin' });
-assert.strictEqual(res3.newBalance, 50.0);
-assert.strictEqual(res3.transaction.balanceAfter, 50.0);
-console.log('✓ Test 2 Réussi: Ajustements solde (+, -, set) et traçabilité transactionnels parfaits.');
-
-console.log('=== TEST 3: Visitor Tracking & Statistics Periods ===');
-db.trackVisitor({ vid: 'vid_test_1', isNew: true });
-db.trackVisitor({ vid: 'vid_test_2', isNew: true });
-db.trackVisitor({ vid: 'vid_test_1', isNew: false }); // revisit
-
-const vStats = db.getVisitorStats('day');
-assert(vStats.totalVisits >= 3, 'Total visits recorded');
-assert(vStats.uniqueVisitors >= 2, 'Unique visitors recorded');
-
-const statsDay = db.getLiveStatistics('day');
-assert(statsDay.visitors !== undefined, 'Live statistics include visitors');
-assert(statsDay.summary !== undefined, 'Live statistics include summary');
-console.log('✓ Test 3 Réussi: Traçabilité des visiteurs et statistiques par période validées.');
-
-console.log('=== TEST 4: Frontend Assets Verification ===');
-const styleCss = fs.readFileSync('style.css', 'utf8');
-const adminHtml = fs.readFileSync('admin.html', 'utf8');
-const appJs = fs.readFileSync('app.js', 'utf8');
-
-// Footer
-assert(styleCss.includes('.footer-top') && styleCss.includes('text-align: center'), 'Footer top must be centered');
-assert(styleCss.includes('.footer-brand') && styleCss.includes('text-align: center'), 'Footer brand must be centered');
-assert(styleCss.includes('.footer-col') && styleCss.includes('align-items: center'), 'Footer col must be centered');
-
-// Status indicator pills
-assert(adminHtml.includes('.status-indicator-pill') && adminHtml.includes('border-radius: 5px'), 'Admin status pill must have 5px radius');
-assert(adminHtml.includes('white-space: nowrap !important;'), 'Admin status pill must have nowrap');
-assert(styleCss.includes('.order-status-badge-select') && styleCss.includes('border-radius: 5px !important;'), 'Order status badge must have 5px radius');
-
-// Purchase modal & light sweep
-assert(styleCss.includes('.btn-light-sweep'), 'btn-light-sweep animation must be present');
-assert(styleCss.includes('paymentLightSweep'), 'paymentLightSweep keyframes must be present');
-assert(appJs.includes('Payer maintenant ($${total.toFixed(2)}) ⚡'), 'Purchase balance button single line dynamic label');
-
-// Admin toggle button
-assert(adminHtml.includes('switchToShop()'), 'switchToShop function present in admin.html');
-// Header Connected Navigation & Role isolation assertions
-const indexHtml = fs.readFileSync('index.html', 'utf8');
-assert(styleCss.includes('.nav-tab-connected'), '.nav-tab-connected must be present in style.css');
-assert(styleCss.includes('.nav-links-connected'), '.nav-links-connected must be present in style.css');
-assert(indexHtml.includes('nav-tab-connected'), 'nav-tab-connected must be present in index.html');
-assert(indexHtml.includes('id="nav-admin-link-li"'), 'nav-admin-link-li must be present in index.html');
-assert(adminHtml.includes('btn-admin-add-key'), '.btn-admin-add-key must be present in admin.html');
-assert(adminHtml.includes('openAddKeyModal()'), 'openAddKeyModal() must be bound in admin.html');
-assert(adminHtml.includes('id="admin-add-key-modal"'), '#admin-add-key-modal must be present in admin.html');
-assert(adminHtml.includes('id="add-key-product-select"'), '#add-key-product-select must be present in admin.html');
-assert(styleCss.includes('.btn-admin-add-key'), '.btn-admin-add-key must be defined in style.css');
-
-console.log('✓ Test 4 Réussi: Toutes les modifications UI, CSS et boutons de bascule validées.');
-
-async function runAsyncTests() {
-  console.log('\n=== TEST 5: Role Isolation & Permissions ===');
-  const testRoleIsolation = require('./test_role_isolation');
-  await testRoleIsolation();
-
-  console.log('\n=== TEST 6: Validation des 10 Scénarios de Gestion du Stock & Clés ===');
-  const run10Scenarios = require('./test_scenarios_1_to_10');
-  await run10Scenarios();
-
-  console.log('\n=== TEST 7: Admin Authentication & Dashboard Access ===');
-  const runAdminAuthTests = require('./test_admin_auth');
-  await runAdminAuthTests();
-
-  console.log('\n=== TEST 8: Mobile Money & Crypto Payment Gateway ===');
-  const runPaymentTests = require('./test_payments');
-  await runPaymentTests();
-
-  console.log('\n=== TEST 9: Payment Methods Administration & API ===');
-  const runPaymentMethodTests = require('./test_payment_methods');
-  await runPaymentMethodTests();
-
-  console.log('\n=== TEST 10: Versioning, Cache-Control & Auto-Update System ===');
-  const testVersionCache = require('./test_version_cache');
-  await testVersionCache();
-
-  console.log('\n=== TEST 11: Ajout de Clés & Stock Réapprovisionné (Add Key Feature) ===');
-  const testAddKey = require('./test_add_key_feature');
-  await testAddKey();
-
-  console.log('\n=== TEST 12: Balance System Persistence, Gifts & Synchronization ===');
-  const runBalanceTests = require('./test_balance_system');
-  await runBalanceTests();
-
-  console.log('\n=== TEST 13: Reset All Data & Granular Record Deletions ===');
-  const runResetAndDeleteTests = require('./test_reset_and_delete_features');
-  await runResetAndDeleteTests();
-
-  console.log('\n=== TEST 14: Recharge Modal Layout & Isolated Horizontal Scrolling ===');
-  const runLayoutTests = require('./test_deposit_methods_layout');
-  await runLayoutTests();
-
-  console.log('\n======================================================');
-  console.log('🏆 TOUTES LES 14 SUITES DE TESTS ONT RÉUSSI À 100% SANS AUCUNE ERREUR !');
-  console.log('======================================================\n');
+let failed = 0;
+for (const s of suites) {
+  if (s.requirePg && !process.env.TEST_DATABASE_URL) { console.log(`- SKIP ${s.name} (TEST_DATABASE_URL not set)`); continue; }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-run-'));
+  const env = { ...cleanEnv, GV_DATA_DIR: tmp, GV_STORE: 'file', ...(s.env || {}) };
+  if (s.pg && process.env.TEST_DATABASE_URL) env.TEST_DATABASE_URL = process.env.TEST_DATABASE_URL; else delete env.TEST_DATABASE_URL;
+  const argv = s.plain ? [s.file] : ['--test', '--test-reporter=spec', s.file];
+  const t0 = Date.now();
+  const r = spawnSync(process.execPath, argv, { cwd: root, env, encoding: 'utf8', timeout: 10 * 60 * 1000 });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const ok = r.status === 0;
+  if (!ok) failed++;
+  console.log(`${ok ? '✔ PASS' : '✖ FAIL'} ${s.name} (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+  if (!ok) console.log((r.stdout || '') + (r.stderr || ''));
 }
-
-runAsyncTests()
-  .catch(err => {
-    console.error('❌ Échec de la suite de tests :', err);
-    process.exit(1);
-  })
-  .finally(() => {
-    if (originalDbSnapshot) {
-      fs.writeFileSync(dbPath, originalDbSnapshot, 'utf8');
-      db.data = JSON.parse(originalDbSnapshot);
-    }
-  });
-
+console.log(failed ? `\n${failed} suite(s) failed` : '\nAll suites passed');
+process.exit(failed ? 1 : 0);

@@ -1,507 +1,478 @@
 /**
  * Vercel Serverless Function: /api/data
- * Données réelles dynamiques (Produits, Commandes, Statistiques en direct).
+ * Catalogue, key vault, orders, customers, transactions, tickets, payment methods, settings, statistics,
+ * media, backups and the store reset (System Management).
+ *
+ * Every authorization check and every mutation runs inside db.read()/db.tx(): the request sees one consistent
+ * snapshot and its changes are committed atomically.
  */
+
+'use strict';
 
 const db = require('../backend/db');
 const authService = require('../backend/auth');
+const { publicTx } = require('../backend/payments');
+const {
+  httpError, apiHeaders, parseBody, clientIp, queryParam, pathParts,
+  currentAuth, requireUser, requireAdmin, requireOwnerAdmin, sendError
+} = require('../backend/http');
+
+const RESET_PHRASE = 'RESET WEBSITE';
+
+function resolveResource(req) {
+  const r = queryParam(req, 'resource');
+  if (r) return String(r);
+  const p = queryParam(req, 'path');
+  const parts = p ? String(p).split('/').filter(Boolean) : pathParts(req).filter(x => x !== 'api' && x !== 'data');
+  if (String(req.url || '').split('?')[0] === '/api/version') return 'version';
+  return parts[0] || '';
+}
+
+function safeUser(u) {
+  return {
+    id: u.id, name: u.name, email: u.email, username: u.username, role: u.role,
+    balance: u.balance || 0, auth_provider: u.auth_provider, created_at: u.created_at,
+    mustChangePassword: Boolean(u.must_change_password)
+  };
+}
+
+function adminProductsPayload() {
+  // Administrators manage the key inventory from the dashboard: full vault (admin-only endpoint)
+  return { products: db.getProducts(), vault: db.getVault() };
+}
+
+/** Converts uploaded data: URLs to stored media BEFORE the transaction (network/storage I/O outside the lock). */
+async function prepareProductMedia(body) {
+  const out = { image: body.image, deliveryFile: null };
+  if (typeof body.image === 'string' && body.image.startsWith('data:')) {
+    out.image = await db.saveImageDataUrl(body.image, { maxBytes: 2 * 1024 * 1024 });
+  }
+  const vType = body.vaultType || (body.vault && body.vault.type);
+  const vContent = body.vaultContent !== undefined ? body.vaultContent : (body.vault && body.vault.content);
+  if (vType === 'file' && typeof vContent === 'string' && vContent.startsWith('data:')) {
+    out.deliveryFile = await db.saveDeliveryFile(vContent, body.fileName || (body.vault && body.vault.fileName));
+  }
+  return out;
+}
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  const urlParts = (req.url || '').split('?')[0].split('/').filter(Boolean);
-  let resource = urlParts[urlParts.length - 1]; // 'products', 'orders', 'stats', 'vault', 'version'
-  if (req.query && req.query.resource) {
-    resource = req.query.resource;
-  }
-  if ((req.url || '').includes('/version')) {
-    resource = 'version';
-  }
+  apiHeaders(res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  const resource = resolveResource(req);
+  const method = req.method;
 
   try {
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch (e) {}
-    }
-    body = body || {};
+    const body = method === 'GET' || method === 'HEAD' ? {} : parseBody(req);
 
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace(/^Bearer\s+/i, '');
-    const auth = authService.verifySession(token);
-
-    // Synchronisation automatique préalable avec Vercel Edge Config
-    try {
-      await db.syncFromRemote();
-    } catch (e) {}
-
-    // 0. VÉRIFICATION DE LA VERSION DU DÉPLOIEMENT EN DIRECT
+    // ------------------------------------------------------------------ version (public)
     if (resource === 'version') {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      const vInfo = db.getDeploymentVersion();
-      return res.status(200).json(vInfo);
+      return res.status(200).json(db.getDeploymentVersion());
     }
 
-    // 1. STATISTIQUES RÉELLES DYNAMIQUES AVEC FILTRES
-    if (req.method === 'GET' && resource === 'stats') {
-      if (!auth || auth.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
+    // ------------------------------------------------------------------ media (public images / private proofs)
+    if (resource === 'media' && method === 'GET') {
+      const id = String(queryParam(req, 'id') || '');
+      if (id.startsWith('prv_')) {
+        await db.read(() => requireAdmin(req));
+      } else {
+        await db.ready();
       }
-      const period = req.query?.period || (req.url && req.url.includes('period=') ? req.url.split('period=')[1].split('&')[0] : 'all');
-      const stats = db.getLiveStatistics(period);
+      const blob = await db.getBlob(id);
+      if (!blob) return res.status(404).json({ error: 'Fichier introuvable.' });
+      res.setHeader('Content-Type', blob.mime);
+      res.setHeader('Content-Length', blob.data.length);
+      res.setHeader('Cache-Control', id.startsWith('pub_') ? 'public, max-age=31536000, immutable' : 'private, no-store');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      return res.status(200).end(blob.data);
+    }
+
+    // ------------------------------------------------------------------ delivered file download (order owner / admin)
+    if (resource === 'download' && method === 'GET') {
+      const orderId = String(queryParam(req, 'orderId') || '');
+      const ref = await db.read(() => {
+        const auth = requireUser(req);
+        const o = db.getOrderById(orderId);
+        if (!o || (auth.user.role !== 'admin' && String(o.userId) !== String(auth.user.id))) throw httpError(404, 'Commande introuvable.');
+        if (!(o.status === 'Complété' || o.status === 'Livré') || !o.vaultContent || !o.vaultContent.blobId) throw httpError(404, 'Aucun fichier à télécharger pour cette commande.');
+        return { blobId: o.vaultContent.blobId, fileName: o.vaultContent.fileName || 'livraison.bin' };
+      });
+      const blob = await db.getBlob(ref.blobId);
+      if (!blob) return res.status(404).json({ error: 'Fichier introuvable.' });
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${ref.fileName.replace(/[^a-zA-Z0-9._ -]/g, '_')}"`);
+      res.setHeader('Content-Length', blob.data.length);
+      return res.status(200).end(blob.data);
+    }
+
+    // ------------------------------------------------------------------ statistics (admin)
+    if (resource === 'stats' && method === 'GET') {
+      const stats = await db.read(async () => {
+        requireAdmin(req);
+        return db.getLiveStatistics(String(queryParam(req, 'period') || 'all'));
+      });
       return res.status(200).json(stats);
     }
 
-    // 2. PRODUITS & GESTION DES CLÉS
-    if (resource === 'products' || resource === 'keys') {
-      if (req.method === 'GET') {
-        const prodId = req.query?.productId || (req.url && req.url.includes('productId=') ? req.url.split('productId=')[1].split('&')[0] : null);
-        const checkName = req.query?.checkName || (req.url && req.url.includes('checkName=') ? decodeURIComponent(req.url.split('checkName=')[1].split('&')[0]) : null);
-        const withKeys = resource === 'keys' || req.query?.keys === '1' || (req.url && req.url.includes('keys=1'));
-
-        // Inspection des clés du coffre-fort réservée à l'administrateur
-        if (withKeys && prodId) {
-          if (!auth || auth.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-          }
-          const keysData = db.getProductVaultKeys(prodId);
-          return res.status(200).json(keysData || { error: 'Produit introuvable.' });
-        }
-
-        // Vérification / autocomplétion par nom existant
-        if (checkName) {
-          const match = db.findProductByNormalizedName(checkName);
-          return res.status(200).json({ exists: !!match, product: match || null });
-        }
-
-        const prods = db.getProducts();
-        return res.status(200).json({ products: prods });
-      }
-
-      if (req.method === 'POST') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée à l\'administrateur.' });
-        }
-        try {
-          // Ajout direct de clés à un produit existant (sans créer de nouveau produit)
-          if (resource === 'keys' || body.action === 'add_keys') {
-            const prodId = parseInt(body.productId, 10);
-            if (!prodId) {
-              return res.status(400).json({ error: 'Veuillez sélectionner un produit existant valide.' });
-            }
-            const existingProduct = db.getProductById(prodId);
-            if (!existingProduct) {
-              return res.status(404).json({ error: 'Produit introuvable dans le catalogue.' });
-            }
-            const rawKeys = body.keys || body.newKeys || body.key;
-            const resKeys = await db.addKeysToProduct(prodId, rawKeys);
-            await db.persistToRemote();
-            return res.status(200).json({
-              success: true,
-              product: resKeys.product,
-              stock: resKeys.stock,
-              addedCount: resKeys.addedCount,
-              products: db.getProducts()
-            });
-          }
-
-          const savedProd = db.saveProduct(body, { newKeys: body.newKeys || body.keys });
-          await db.persistToRemote();
-          return res.status(200).json({ success: true, product: savedProd, products: db.getProducts() });
-        } catch (err) {
-          return res.status(400).json({ error: err.message });
-        }
-      }
-
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée à l\'administrateur.' });
-        }
-        const prodId = parseInt(body.id || req.query?.id, 10);
-        db.deleteProduct(prodId);
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, products: db.getProducts() });
-      }
-    }
-
-    // 3. COMMANDES
-    if (resource === 'orders') {
-      if (req.method === 'GET') {
-        if (!auth) {
-          return res.status(401).json({ error: 'Authentification requise.' });
-        }
-        // Si admin -> toutes les commandes, si client -> uniquement ses commandes
-        let orders = db.getOrders();
-        if (auth.user.role !== 'admin') {
-          orders = orders.filter(o => o.userId === auth.user.id);
-        }
-        return res.status(200).json({ orders });
-      }
-
-      if (req.method === 'POST') {
-        if (!auth) {
-          return res.status(401).json({ error: 'Veuillez vous connecter pour passer commande.' });
-        }
-
-        // Validation commande côté serveur
-        let prod = db.getProductById(body.productId);
-        if (!prod && (body.productName || body.name)) {
-          prod = db.findProductByNormalizedName(body.productName || body.name);
-        }
-        if (!prod && body.productInfo) {
-          try { prod = db.saveProduct(body.productInfo); } catch (e) {}
-        }
-        if (!prod) {
-          return res.status(404).json({ error: 'Produit introuvable dans le catalogue.' });
-        }
-
-        const qty = parseInt(body.quantity, 10) || 1;
-        if (qty < 1) {
-          return res.status(400).json({ error: 'La quantité doit être supérieure ou égale à 1.' });
-        }
-        if (prod.stock < qty && prod.stock > 0) {
-          return res.status(400).json({
-            error: `Stock insuffisant : maximum ${prod.stock} unité(s) disponible(s).`,
-            availableStock: prod.stock
-          });
-        }
-
-        const total = Math.round(prod.price * qty * 100) / 100;
-
-        // Récupération stricte du solde frais en base de données
-        const freshUser = db.getUserById(auth.user.id) || db.getUserByEmail(auth.user.email);
-        if (!freshUser) {
-          return res.status(401).json({ error: 'Compte client introuvable.' });
-        }
-
-        const currentBalance = parseFloat(freshUser.balance) || 0;
-        if (currentBalance < total) {
-          const missing = Math.round((total - currentBalance) * 100) / 100;
-          return res.status(400).json({
-            error: `Solde insuffisant ($${currentBalance.toFixed(2)} disponible, $${total.toFixed(2)} requis). Veuillez recharger votre compte.`,
-            code: 'INSUFFICIENT_BALANCE',
-            currentBalance: currentBalance,
-            requiredAmount: total,
-            missingAmount: missing
-          });
-        }
-
-        const orderId = body.orderId || ('ORD-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase());
-
-        // Attribution atomique transactionnelle de N clés via le Mutex de la base
-        let allocatedResult = null;
-        try {
-          allocatedResult = await db.allocateKeysForProduct(prod.id, qty, {
-            orderId: orderId,
-            userId: freshUser.id,
-            userEmail: freshUser.email
-          });
-        } catch (err) {
-          return res.status(400).json({ error: err.message, code: err.code });
-        }
-
-        // Déduction sécurisée et définitive du solde en base de données
-        const newBalance = Math.max(0, Math.round((currentBalance - total) * 100) / 100);
-        db.updateUser(freshUser.id, { balance: newBalance });
-
-        // Formatage clair des N clés attribuées
-        const deliveredKeysList = allocatedResult.allocatedKeys || [];
-        const deliveredString = deliveredKeysList.map(k => k.content).join('\n');
-
-        const deliveredContent = {
-          type: 'text',
-          content: deliveredString,
-          keys: deliveredKeysList,
-          fileName: 'licences.txt'
+    // ------------------------------------------------------------------ system status (admin)
+    if (resource === 'system' && method === 'GET') {
+      const info = await db.read(() => {
+        const auth = requireAdmin(req);
+        return {
+          storage: db.storageInfo(),
+          isOwner: db.isOwnerAdmin(auth.user),
+          integrations: {
+            saspay: Boolean(process.env.SASPAY_API_KEY),
+            saspayWebhookSignature: Boolean(process.env.SASPAY_WEBHOOK_SECRET),
+            trybit: Boolean(process.env.TRYBIT_API_KEY && process.env.TRYBIT_SHOP_ID),
+            google: Boolean(process.env.GOOGLE_CLIENT_ID),
+            emailPasswordReset: Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM),
+            sessionSecret: Boolean(process.env.SESSION_SECRET)
+          },
+          lastReset: db.data.meta.last_reset || null,
+          version: db.getDeploymentVersion()
         };
+      });
+      return res.status(200).json(info);
+    }
 
-        const newOrder = db.createOrder({
-          id: orderId,
-          userId: freshUser.id,
-          userEmail: freshUser.email,
-          userName: freshUser.name,
-          productId: prod.id,
-          productName: prod.name,
-          unitPrice: prod.price,
-          quantity: qty,
-          amount: total,
-          remainingBalance: newBalance,
-          userBalanceAfter: newBalance,
-          contactInfo: body.contactInfo || '',
-          method: 'Solde GetVirtu',
-          status: 'Complété',
-          vaultContent: deliveredContent
+    // ------------------------------------------------------------------ products & keys
+    if (resource === 'products' || resource === 'keys') {
+      if (method === 'GET') {
+        const out = await db.read(() => {
+          const auth = currentAuth(req);
+          const isAdmin = Boolean(auth && auth.user.role === 'admin');
+          const prodId = queryParam(req, 'productId');
+          const checkName = queryParam(req, 'checkName');
+          if ((resource === 'keys' || queryParam(req, 'keys') === '1') && prodId) {
+            if (!isAdmin) requireAdmin(req);
+            const inv = db.getProductVaultKeys(prodId);
+            if (!inv) throw httpError(404, 'Produit introuvable.');
+            return inv;
+          }
+          if (checkName) {
+            if (!isAdmin) requireAdmin(req);
+            const match = db.findProductByNormalizedName(checkName);
+            return { exists: Boolean(match), product: match || null };
+          }
+          if (isAdmin) return adminProductsPayload();
+          return { products: db.getPublicProducts() };
         });
-
-        db.createTransaction({
-          userId: freshUser.id,
-          userEmail: freshUser.email,
-          userName: freshUser.name,
-          amount: total,
-          currency: 'USD',
-          paymentMethod: 'Solde GetVirtu',
-          provider: 'balance',
-          status: 'completed',
-          balanceBefore: currentBalance,
-          balanceAfter: newBalance,
-          notes: `Achat ${prod.name} (x${qty})`
-        });
-
-        // Persistance immédiate vers Vercel Edge Config pour réplication globale
-        await db.persistToRemote();
-
-        return res.status(201).json({
-          success: true,
-          order: newOrder,
-          newBalance: newBalance,
-          remainingStock: allocatedResult.remainingStock
-        });
+        return res.status(200).json(out);
       }
 
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
-        }
-        const orderId = body.id || body.orderId || req.query?.id;
-        const delRes = db.deleteOrder(orderId);
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, ...delRes, orders: db.getOrders() });
+      if (method === 'POST' || method === 'PUT') {
+        await db.read(() => requireAdmin(req));
+        const isKeyUpdate = body.action === 'update_key' || (method === 'PUT' && (resource === 'keys' || body.keyId !== undefined || body.keyIndex !== undefined));
+        const isAddKeys = !isKeyUpdate && (resource === 'keys' || body.action === 'add_keys');
+        const media = (isKeyUpdate || isAddKeys) ? null : await prepareProductMedia(body);
+        const out = await db.tx(() => {
+          requireAdmin(req);
+          if (isKeyUpdate) {
+            const pid = parseInt(body.productId !== undefined ? body.productId : queryParam(req, 'productId'), 10);
+            if (!pid) throw httpError(400, 'ID produit valide requis.');
+            const idx = body.keyIndex !== undefined && body.keyIndex !== null && body.keyIndex !== '' ? parseInt(body.keyIndex, 10) : null;
+            const r = db.updateProductKey(pid, body.keyId, body.content !== undefined ? body.content : body.newContent, idx);
+            return { success: true, key: r.key, stock: r.stock, product: r.product, inventory: r.inventory, ...adminProductsPayload() };
+          }
+          if (isAddKeys) {
+            const pid = parseInt(body.productId, 10);
+            if (!pid) throw httpError(400, 'Veuillez sélectionner un produit existant valide.');
+            const r = db.addKeysToProduct(pid, body.keys || body.newKeys || body.key);
+            return { success: true, product: r.product, stock: r.stock, addedCount: r.addedCount, inventory: db.getProductVaultKeys(pid), ...adminProductsPayload() };
+          }
+          const payload = { ...body, image: media.image };
+          if (media.deliveryFile) { delete payload.vaultContent; if (payload.vault) delete payload.vault.content; }
+          const saved = db.saveProduct(payload, { newKeys: body.newKeys !== undefined ? body.newKeys : body.keys, replaceAvailableKeys: body.replaceAvailableKeys, deliveryFile: media.deliveryFile });
+          return { success: true, product: saved, inventory: db.getProductVaultKeys(saved.id), ...adminProductsPayload() };
+        });
+        return res.status(200).json(out);
+      }
+
+      if (method === 'DELETE') {
+        const out = await db.tx(() => {
+          requireAdmin(req);
+          const keyId = body.keyId !== undefined ? body.keyId : queryParam(req, 'keyId');
+          const rawIdx = body.keyIndex !== undefined ? body.keyIndex : queryParam(req, 'keyIndex');
+          if (resource === 'keys' || body.action === 'delete_key' || keyId || (rawIdx !== null && rawIdx !== undefined && rawIdx !== '')) {
+            const pid = parseInt(body.productId !== undefined ? body.productId : (queryParam(req, 'productId') || body.id || queryParam(req, 'id')), 10);
+            if (!pid) throw httpError(400, 'ID produit requis.');
+            const idx = rawIdx !== null && rawIdx !== undefined && rawIdx !== '' ? parseInt(rawIdx, 10) : null;
+            const r = db.deleteProductKey(pid, keyId, idx);
+            return { success: true, deletedKey: r.deletedKey, stock: r.stock, product: r.product, inventory: r.inventory, ...adminProductsPayload() };
+          }
+          const pid = parseInt(body.id !== undefined ? body.id : queryParam(req, 'id'), 10);
+          if (isNaN(pid)) throw httpError(400, 'ID produit requis.');
+          db.deleteProduct(pid);
+          return { success: true, ...adminProductsPayload() };
+        });
+        return res.status(200).json(out);
       }
     }
 
-    // 4. TICKETS SUPPORT CLIENT
+    // ------------------------------------------------------------------ orders
+    if (resource === 'orders') {
+      if (method === 'GET') {
+        const out = await db.read(() => {
+          const auth = requireUser(req);
+          const orders = auth.user.role === 'admin' ? db.getOrders() : db.getOrders().filter(o => String(o.userId) === String(auth.user.id));
+          return { orders };
+        });
+        return res.status(200).json(out);
+      }
+
+      if (method === 'POST') {
+        const out = await db.tx(() => {
+          const auth = requireUser(req);
+          const r = db.purchaseWithBalance(auth.user, {
+            productId: body.productId,
+            productName: body.productName || body.name,
+            quantity: body.quantity,
+            contactInfo: body.contactInfo,
+            idempotencyKey: body.idempotencyKey,
+            paymentLabel: body.paymentLabel
+          });
+          return { success: true, order: r.order, newBalance: r.newBalance, remainingStock: r.remainingStock, duplicate: Boolean(r.duplicate) };
+        });
+        return res.status(out.duplicate ? 200 : 201).json(out);
+      }
+
+      if (method === 'PUT') {
+        const orderId = body.id || body.orderId || queryParam(req, 'id');
+        if (!orderId) throw httpError(400, 'ID commande requis.');
+        let deliveryFile = null;
+        const action = body.action || (body.status === 'Annulé' ? 'cancel' : (body.status === 'Complété' || body.status === 'Livré' ? 'deliver' : (body.status === 'En attente' ? 'set_pending' : 'deliver')));
+        const vc = body.vaultContent || {};
+        if (action === 'deliver' && vc.type === 'file' && typeof vc.content === 'string' && vc.content.startsWith('data:')) {
+          await db.read(() => requireAdmin(req));
+          deliveryFile = await db.saveDeliveryFile(vc.content, vc.fileName);
+        }
+        const out = await db.tx(() => {
+          const auth = requireAdmin(req);
+          const adminName = auth.user.name || 'Administrateur';
+          let result;
+          if (action === 'cancel') {
+            result = db.cancelOrder(orderId, { restockKeys: body.restockKeys === true, refund: body.refund !== false, reason: body.reason, adminName });
+          } else if (action === 'deliver' || action === 'update_content') {
+            const o = db.getOrderById(orderId);
+            if (!o) throw httpError(404, 'Commande introuvable.');
+            result = { order: db.deliverOrder(orderId, { content: vc.content !== undefined ? vc.content : body.content, type: vc.type || body.type, fileName: vc.fileName || body.fileName, deliveryFile }) };
+          } else if (action === 'set_pending') {
+            const o = db.getOrderById(orderId);
+            if (!o) throw httpError(404, 'Commande introuvable.');
+            if (o.status !== 'En attente') throw httpError(409, "Une commande livrée ou annulée ne peut pas repasser en attente (annulez-la pour rembourser le client).");
+            result = { order: o };
+          } else {
+            throw httpError(400, 'Action de commande inconnue.');
+          }
+          return { success: true, ...result, orders: db.getOrders(), products: db.getProducts(), users: db.getUsers().map(safeUser) };
+        });
+        return res.status(200).json(out);
+      }
+
+      if (method === 'DELETE') {
+        const out = await db.tx(() => {
+          requireAdmin(req);
+          const r = db.deleteOrder(body.id || body.orderId || queryParam(req, 'id'));
+          return { success: true, ...r, orders: db.getOrders() };
+        });
+        return res.status(200).json(out);
+      }
+    }
+
+    // ------------------------------------------------------------------ support tickets
     if (resource === 'tickets') {
-      if (req.method === 'GET') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        return res.status(200).json({ tickets: db.getTickets() });
+      if (method === 'GET') {
+        return res.status(200).json(await db.read(() => { requireAdmin(req); return { tickets: db.getTickets() }; }));
       }
-
-      if (req.method === 'POST') {
-        const newTicket = db.createTicket({
-          userId: auth ? auth.user.id : (body.userId || null),
-          userName: body.userName || (auth ? auth.user.name : 'Client'),
-          userContact: body.userContact || body.contact || '',
-          subject: body.subject || 'Support Client',
-          message: body.message || '',
-          status: 'Ouvert'
+      if (method === 'POST') {
+        if (!authService.hit('ticket:' + clientIp(req), 8, 60 * 60 * 1000)) throw httpError(429, 'Trop de messages envoyés. Réessayez plus tard ou contactez-nous sur WhatsApp.');
+        const out = await db.tx(() => {
+          const auth = currentAuth(req);
+          const t = db.createTicket({
+            userId: auth ? auth.user.id : null,
+            userName: body.userName || (auth ? auth.user.name : 'Client'),
+            userContact: body.userContact || body.contact || (auth ? auth.user.email : ''),
+            subject: body.subject,
+            message: body.message
+          });
+          return { success: true, ticket: { id: t.id, status: t.status, date: t.date } };
         });
-        return res.status(201).json({ success: true, ticket: newTicket });
+        return res.status(201).json(out);
       }
-
-      if (req.method === 'PUT') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        const updated = db.updateTicket(body.id, { status: body.status || 'Résolu' });
-        return res.status(200).json({ success: true, ticket: updated });
+      if (method === 'PUT') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          const t = db.updateTicket(body.id, { status: body.status || 'Résolu' });
+          return { success: true, ticket: t, tickets: db.getTickets() };
+        }));
       }
-
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        const ticketId = body.id || req.query?.id;
-        const delRes = db.deleteTicket(ticketId);
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, ...delRes, tickets: db.getTickets() });
+      if (method === 'DELETE') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          db.deleteTicket(body.id || queryParam(req, 'id'));
+          return { success: true, tickets: db.getTickets() };
+        }));
       }
     }
 
-    // 5. VISITEURS ET TRAÇABILITÉ DES VISITES
+    // ------------------------------------------------------------------ visitors
     if (resource === 'visitors') {
-      if (req.method === 'POST') {
-        const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress;
-        const userAgent = req.headers['user-agent'] || '';
-        db.trackVisitor({ vid: body.vid, isNew: body.isNew, ip, userAgent });
+      if (method === 'POST') {
+        if (authService.hit('visit:' + clientIp(req), 20, 60 * 60 * 1000)) {
+          await db.ready();
+          await db.trackVisitor({ vid: body.vid, isNew: body.isNew });
+        }
         return res.status(200).json({ success: true });
       }
-      if (req.method === 'GET') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        const period = req.query?.period || (req.url && req.url.includes('period=') ? req.url.split('period=')[1].split('&')[0] : 'all');
-        const vStats = db.getVisitorStats(period);
-        return res.status(200).json(vStats);
+      if (method === 'GET') {
+        return res.status(200).json(await db.read(async () => { requireAdmin(req); return db.getVisitorStats(String(queryParam(req, 'period') || 'all')); }));
       }
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        db.resetVisitorStats();
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, stats: db.getLiveStatistics('all') });
+      if (method === 'DELETE') {
+        await db.read(() => requireAdmin(req));
+        await db.resetVisitorStats();
+        return res.status(200).json(await db.read(async () => ({ success: true, stats: await db.getLiveStatistics('all') })));
       }
     }
 
-    // 6. UTILISATEURS & GESTION DES SOLDES CLIENTS
+    // ------------------------------------------------------------------ customers & balances (admin)
     if (resource === 'users') {
-      if (req.method === 'GET') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        const users = db.getUsers().map(u => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          balance: u.balance || 0,
-          created_at: u.created_at
+      if (method === 'GET') {
+        return res.status(200).json(await db.read(() => {
+          requireAdmin(req);
+          return { users: db.getUsers().map(safeUser), transactions: db.getTransactions().map(publicTx) };
         }));
-        const txs = db.getTransactions();
-        return res.status(200).json({ users, transactions: txs });
       }
-
-      if (req.method === 'POST' || req.method === 'PUT') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée à l\'administrateur.' });
-        }
-        const userId = body.userId;
-        const amount = parseFloat(body.amount);
-        const action = body.action || 'add'; // 'add' | 'deduct' | 'set' | 'gift' | 'refund' | 'reset'
-        const reason = body.reason || (action === 'gift' ? 'Don de solde offert par l\'administrateur' : (action === 'reset' ? 'Remise à zéro du solde par administrateur' : 'Ajustement manuel par administrateur'));
-        if (!userId || isNaN(amount)) {
-          return res.status(400).json({ error: 'Paramètres manquants ou invalides (userId, amount).' });
-        }
-
-        const resAdjust = db.adjustUserBalance(userId, {
-          amount,
-          action,
-          reason,
-          adminName: auth.user.name || 'Administrateur'
+      if (method === 'POST' || method === 'PUT') {
+        const out = await db.tx(() => {
+          const auth = requireAdmin(req);
+          const userId = body.userId || body.id;
+          if (!userId) throw httpError(400, 'Paramètre userId manquant.');
+          if (body.action === 'reset_password') {
+            const temp = authService.adminResetCustomerPassword(userId);
+            return { success: true, temporaryPassword: temp, user: safeUser(db.getUserById(userId)) };
+          }
+          const r = db.adjustUserBalance(userId, { amount: body.amount, action: body.action || 'add', reason: body.reason, adminName: auth.user.name || 'Administrateur' });
+          return { success: true, user: safeUser(r.user), transaction: publicTx(r.transaction), diff: r.diff, oldBalance: r.oldBalance, newBalance: r.newBalance };
         });
-
-        // Persistance immédiate vers Vercel Edge Config pour synchronisation globale
-        await db.persistToRemote();
-
-        return res.status(200).json({ success: true, ...resAdjust });
+        return res.status(200).json(out);
       }
-
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
-        }
-        const userId = body.id || body.userId || req.query?.id;
-        const delRes = db.deleteUser(userId);
-        await db.persistToRemote();
-        const users = db.getUsers().map(u => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          balance: u.balance || 0,
-          created_at: u.created_at
+      if (method === 'DELETE') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          const r = db.deleteUser(body.id || body.userId || queryParam(req, 'id'));
+          return { success: true, ...r, users: db.getUsers().map(safeUser) };
         }));
-        return res.status(200).json({ success: true, ...delRes, users });
       }
     }
 
-    // 7. TRANSACTIONS & HISTORIQUE FINANCIER
+    // ------------------------------------------------------------------ ledger (admin)
     if (resource === 'transactions') {
-      if (req.method === 'GET') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Accès réservé à l\'administrateur.' });
-        }
-        return res.status(200).json({ transactions: db.getTransactions() });
+      if (method === 'GET') {
+        return res.status(200).json(await db.read(() => { requireAdmin(req); return { transactions: db.getTransactions().map(publicTx) }; }));
       }
-
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
-        }
-        const txId = body.id || body.transactionId || req.query?.id;
-        const delRes = db.deleteTransaction(txId);
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, ...delRes, transactions: db.getTransactions() });
+      if (method === 'DELETE') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          const r = db.deleteTransaction(body.id || body.transactionId || queryParam(req, 'id'));
+          return { success: true, ...r, transactions: db.getTransactions().map(publicTx) };
+        }));
       }
     }
 
-    // 8. MOYENS DE PAIEMENT POUR LA RECHARGE (GESTION ADMINISTRATEUR & LECTURE BOUTIQUE)
+    // ------------------------------------------------------------------ payment methods
     if (resource === 'methods' || resource === 'payment-methods') {
-      if (req.method === 'GET') {
-        const methods = db.getPaymentMethods();
-        return res.status(200).json({ methods });
+      if (method === 'GET') {
+        return res.status(200).json(await db.read(() => {
+          const auth = currentAuth(req);
+          return { methods: auth && auth.user.role === 'admin' ? db.getPaymentMethods() : db.getPublicPaymentMethods() };
+        }));
       }
-
-      if (req.method === 'POST' || req.method === 'PUT') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
+      if (method === 'POST' || method === 'PUT') {
+        await db.read(() => requireAdmin(req));
+        const payload = { ...body };
+        if (typeof payload.qrCode === 'string' && payload.qrCode.startsWith('data:')) {
+          payload.qrCode = await db.saveImageDataUrl(payload.qrCode, { maxBytes: 1024 * 1024 });
         }
-        const saved = db.savePaymentMethod(body);
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, method: saved, methods: db.getPaymentMethods() });
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          const saved = db.savePaymentMethod(payload);
+          return { success: true, method: saved, methods: db.getPaymentMethods() };
+        }));
       }
-
-      if (req.method === 'DELETE') {
-        if (!auth || auth.user.role !== 'admin') {
-          return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
-        }
-        const mId = parseInt(body.id || req.query?.id, 10);
-        db.deletePaymentMethod(mId);
-        await db.persistToRemote();
-        return res.status(200).json({ success: true, methods: db.getPaymentMethods() });
+      if (method === 'DELETE') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          db.deletePaymentMethod(body.id !== undefined ? body.id : queryParam(req, 'id'));
+          return { success: true, methods: db.getPaymentMethods() };
+        }));
       }
     }
 
-    // 9. SAUVEGARDE ET EXPORTATION (BACKUP JSON)
+    // ------------------------------------------------------------------ backup export (admin)
     if (resource === 'backup' || resource === 'export') {
-      if (!auth || auth.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Accès réservé exclusivement à l\'administrateur.' });
-      }
-      const backup = db.createBackup();
-      res.setHeader('Cache-Control', 'no-store, no-cache');
+      const backup = await db.read(() => { requireAdmin(req); return db.createBackup(); });
       return res.status(200).json(backup);
     }
 
-    // 10. RÉINITIALISATION DES DONNÉES ("Reset All Data")
-    if (resource === 'reset') {
-      if (!auth || auth.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Action réservée exclusivement à l\'administrateur.' });
-      }
-
-      const conf = (body.confirmation || body.confirm || '').trim().toUpperCase();
-      const pwd = (body.password || '').trim();
-      if (conf !== 'CONFIRMER' && conf !== 'RESET' && pwd !== 'admin' && pwd !== 'admin123') {
-        return res.status(400).json({
-          error: 'Confirmation requise : veuillez taper CONFIRMER pour autoriser la réinitialisation.'
-        });
-      }
-
-      const adminName = auth.user.name || 'Administrateur';
-      const resetResult = db.resetAllData(body.options || body, adminName);
-      await db.persistToRemote();
-
-      const users = db.getUsers().map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        balance: u.balance || 0,
-        created_at: u.created_at
+    // ------------------------------------------------------------------ System Management: reset preview & reset
+    if (resource === 'reset-preview' && method === 'GET') {
+      return res.status(200).json(await db.read(() => {
+        const auth = requireAdmin(req);
+        return { success: true, isOwner: db.isOwnerAdmin(auth.user), preview: db.getResetPreview(), storage: db.storageInfo() };
       }));
-
-      return res.status(200).json({
-        success: true,
-        message: 'Opération de réinitialisation effectuée avec succès.',
-        ...resetResult,
-        users,
-        orders: db.getOrders(),
-        transactions: db.getTransactions(),
-        stats: db.getLiveStatistics('all')
-      });
     }
 
-    return res.status(404).json({ error: 'Ressource non trouvée.' });
-  } catch (error) {
-    console.error('[API Data Error]', error.message);
-    return res.status(400).json({ error: error.message });
+    if (resource === 'reset' || resource === 'reset-website') {
+      if (method !== 'POST') throw httpError(405, 'Méthode non autorisée.');
+      const ip = clientIp(req);
+      const rlKey = 'store-reset:' + ip;
+      const rl = authService.checkRateLimit(rlKey, 5);
+      if (!rl.allowed) throw httpError(429, `Trop de tentatives. Patientez ${rl.waitSeconds} secondes.`);
+
+      const mode = body.mode === 'full' ? 'full' : (body.mode === 'demo' ? 'demo' : null);
+      if (!mode) throw httpError(400, 'Choisissez le type de réinitialisation (démo ou complète).');
+      if (String(body.confirmation || '') !== RESET_PHRASE) throw httpError(400, `Tapez exactement « ${RESET_PHRASE} » pour confirmer.`);
+      const password = typeof body.password === 'string' ? body.password : '';
+      if (!password) throw httpError(400, 'Saisissez votre mot de passe administrateur pour confirmer votre identité.');
+
+      const out = await db.tx(() => {
+        const auth = requireOwnerAdmin(req);
+        if (!authService.verifyPassword(password, auth.user.password_hash)) {
+          authService.recordFailedLogin(rlKey);
+          throw httpError(401, 'Mot de passe administrateur incorrect.');
+        }
+        const backup = db.createBackup();
+        const result = db.resetStore(mode, auth.user);
+        return { success: true, message: mode === 'full' ? 'Boutique réinitialisée à son état initial.' : 'Données de démonstration supprimées.', ...result, backup, storage: db.storageInfo().kind };
+      });
+      authService.resetRateLimit(rlKey);
+      const fresh = await db.read(async () => ({
+        users: db.getUsers().map(safeUser),
+        products: db.getProducts(),
+        orders: db.getOrders(),
+        transactions: db.getTransactions().map(publicTx),
+        tickets: db.getTickets(),
+        methods: db.getPaymentMethods(),
+        settings: db.getPublicSettings(),
+        stats: await db.getLiveStatistics('all'),
+        preview: db.getResetPreview()
+      }));
+      return res.status(200).json({ ...out, ...fresh });
+    }
+
+    // ------------------------------------------------------------------ settings
+    if (resource === 'settings') {
+      if (method === 'GET') return res.status(200).json(await db.read(() => ({ success: true, settings: db.getPublicSettings() })));
+      if (method === 'POST' || method === 'PUT') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          return { success: true, settings: db.updateCustomizableSettings(body) };
+        }));
+      }
+    }
+
+    throw httpError(404, 'Ressource non trouvée.');
+  } catch (err) {
+    return sendError(res, err, 'API Data');
   }
 };

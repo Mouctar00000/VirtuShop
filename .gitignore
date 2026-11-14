@@ -33,9 +33,25 @@ Thumbs.db
 temp_*.js
 *.tmp
 data/*.json
+data/backups/
 
 # Scripts de déploiement
 deploy_*.js
 
 
 
+
+# Secrets supplémentaires (toutes variantes de .env sauf le modèle documenté)
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Données locales, sauvegardes et fichiers d'éditeur personnels
+data/
+*.code-workspace
+.claude/
+coverage/

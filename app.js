@@ -29,6 +29,33 @@ var DB = {
   }
 };
 
+// ========== JETON DE SESSION AUTOMATIQUE POUR LES APPELS /api/ ==========
+// Les vérifications de paiement et les téléchargements exigent désormais la session du client :
+// le jeton est ajouté automatiquement aux requêtes same-origin /api/ qui n'en fournissent pas.
+(function installSessionFetch() {
+  if (window.__gvSessionFetch || typeof window.fetch !== 'function') return;
+  window.__gvSessionFetch = true;
+  var originalFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    try {
+      var url = typeof input === 'string' ? input : ((input && input.url) || '');
+      var sameOriginApi = url.indexOf('/api/') === 0 || url.indexOf(window.location.origin + '/api/') === 0;
+      if (sameOriginApi) {
+        var s = null;
+        try { s = JSON.parse(localStorage.getItem('vs_session') || 'null'); } catch (e) {}
+        var token = s && s.token;
+        if (token) {
+          init = Object.assign({}, init || {});
+          var h = new Headers(init.headers || (typeof input !== 'string' && input.headers) || {});
+          if (!h.has('Authorization')) h.set('Authorization', 'Bearer ' + token);
+          init.headers = h;
+        }
+      }
+    } catch (e) {}
+    return originalFetch(input, init);
+  };
+})();
+
 // ========== ÉTAT CENTRALISÉ ET RÉACTIF D'AUTHENTIFICATION (SINGLE SOURCE OF TRUTH) ==========
 var AuthState = {
   _session: null,
@@ -153,6 +180,9 @@ var AuthState = {
     this._user = null;
     DB.del('session');
     DB.del('admin_session');
+    // Données personnelles en cache (commandes avec clés livrées, comptes...) : jamais conservées après déconnexion
+    ['orders', 'users', 'vault', 'recharges', 'transactions'].forEach(function(k) { DB.del(k); });
+    window._vaultSecretsCache = {};
     try {
       localStorage.removeItem('vs_session');
       localStorage.removeItem('vs_admin_session');
@@ -163,18 +193,8 @@ var AuthState = {
   }
 };
 
-var ADMIN_SALT = 'getvirtu_sec_salt_2026';
-var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902'; // Salted SHA-256 de admin123
-var ADMIN_LEGACY_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc'; // Ancien hash
-var ADMIN_SHORT_HASH = '78c3dc6ad802ec87ba0b8333e41869ef13b168d63c8e09f189b34c4906dd5771'; // Salted SHA-256 de admin
-
-var ADMIN = {
-  id: 'admin-001',
-  name: 'Administrateur GetVirtu',
-  email: 'admin@getvirtu.shop',
-  passwordHash: ADMIN_HASH,
-  role: 'admin'
-};
+// Aucune empreinte de mot de passe ni compte administrateur n'est embarqué dans le navigateur :
+// l'authentification est exclusivement vérifiée par le serveur (/api/auth).
 
 // Variables d'état
 var currentLandingCat = 'all';
@@ -233,6 +253,9 @@ function sanitizeProductImage(img, fallbackCategory, fallbackName) {
   }
   return escapeHtml(img);
 }
+
+// Image de repli si l'image d'un produit ne se charge pas (URL cassée, donnée corrompue)
+window.GV_PRODUCT_FALLBACK_IMG = getReliableProductSvg(null, 'GETVIRTU', 'blue');
 
 // QR Code SVG Helper
 function generateQrSvg(label) {
@@ -330,26 +353,7 @@ function initDB() {
     }).catch(function() {});
   } catch (e) {}
 
-  // Admin par défaut GetVirtu
-  var users = DB.get('users', []);
-  if (!Array.isArray(users)) users = [];
-  var existingAdmin = users.find(function(u) { return u && (u.role === 'admin' || (u.email && (u.email.toLowerCase() === 'admin@virtushop.com' || u.email.toLowerCase() === 'admin@getvirtu.shop'))); });
-  if (!existingAdmin) {
-    users.push({
-      id: ADMIN.id,
-      name: ADMIN.name,
-      email: ADMIN.email,
-      passwordHash: ADMIN_HASH,
-      role: 'admin',
-      balance: 0.00,
-      createdAt: new Date().toISOString()
-    });
-    DB.set('users', users);
-  } else {
-    existingAdmin.passwordHash = ADMIN_HASH;
-    existingAdmin.role = 'admin';
-    DB.set('users', users);
-  }
+  // (Plus de compte administrateur fictif en stockage local : seul le serveur fait foi.)
 }
 
 function getMinRecharge() {
@@ -431,6 +435,9 @@ async function syncUserSessionAndBalance() {
           try { localStorage.removeItem('vs_admin_session'); } catch (e) {}
         }
         AuthState.setAuthenticatedSession(serverSession, data.user, 'server_sync');
+        if (data.user.mustChangePassword && !document.getElementById('modal-account').classList.contains('active')) {
+          openAccountModal(true);
+        }
       }
     } else if (res.status === 401) {
       console.warn('[Auth] Session révoquée côté serveur.');
@@ -455,20 +462,19 @@ async function syncUserOrdersFromServer(token) {
     if (res.ok) {
       var data = await res.json();
       if (data && Array.isArray(data.orders)) {
-        var localList = DB.get('orders', []);
-        var updated = false;
-        data.orders.forEach(function(so) {
-          var existingIdx = localList.findIndex(function(lo) { return lo && lo.id === so.id; });
-          if (existingIdx === -1) {
-            localList.unshift(so);
-            updated = true;
-          } else {
-            localList[existingIdx] = Object.assign({}, localList[existingIdx], so);
-            updated = true;
-          }
-        });
-        if (updated) {
-          DB.set('orders', localList);
+        var s = AuthState.getSession();
+        if (s && s.role === 'admin') {
+          DB.set('orders', data.orders);
+        } else if (s && s.userId) {
+          var curId = String(s.userId);
+          var curEmail = (s.email || '').toLowerCase();
+          var otherUsersOrders = (DB.get('orders', []) || []).filter(function(lo) {
+            if (!lo) return false;
+            var matchId = lo.userId && String(lo.userId) === curId;
+            var matchEmail = lo.userEmail && curEmail && lo.userEmail.toLowerCase() === curEmail;
+            return !matchId && !matchEmail;
+          });
+          DB.set('orders', data.orders.concat(otherUsersOrders));
         }
       }
     }
@@ -530,6 +536,8 @@ function showConnectedCatalog() {
   var s = AuthState.getSession();
   if (!s || !s.userId) { openAuthModal('login'); return; }
   routeUserExperience();
+  var tabBoutique = document.getElementById('nav-tab-boutique');
+  if (tabBoutique) tabBoutique.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -539,10 +547,62 @@ function showPublicLanding() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function navigateShopSection(sectionId, event) {
+  if (event && event.preventDefault) event.preventDefault();
+  var s = AuthState.getSession();
+  var isAuth = !!(s && s.userId);
+  var landingView = document.getElementById('landing-view');
+  var connectedView = document.getElementById('connected-view');
+
+  // Mise à jour de l'état actif dans la barre visiteur
+  var navLinks = document.querySelectorAll('#nav-public-links .nav-link');
+  navLinks.forEach(function(link) {
+    link.classList.toggle('active', link.getAttribute('href') === '#' + sectionId);
+  });
+
+  if (isAuth && sectionId === 'catalog') {
+    if (landingView) landingView.classList.add('hidden');
+    if (connectedView) connectedView.classList.remove('hidden');
+    var tabB = document.getElementById('nav-tab-boutique');
+    if (tabB) tabB.classList.add('active');
+    if (connectedView) {
+      connectedView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    return false;
+  }
+
+  // Pour les sections d'information (#how-it-works, #faq, #features, #reviews, #hero) ou visiteur #catalog
+  if (landingView && landingView.classList.contains('hidden')) {
+    landingView.classList.remove('hidden');
+    if (isAuth && connectedView) {
+      connectedView.classList.add('hidden');
+      var tabBout = document.getElementById('nav-tab-boutique');
+      if (tabBout) tabBout.classList.remove('active');
+    }
+  }
+
+  var targetEl = document.getElementById(sectionId);
+  if (targetEl) {
+    var headerOffset = 72;
+    var topPos = Math.max(0, targetEl.getBoundingClientRect().top + (window.pageYOffset || window.scrollY || 0) - headerOffset);
+    window.scrollTo({ top: topPos, behavior: 'smooth' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  if (!isAuth && window.history && window.history.replaceState) {
+    try { window.history.replaceState(null, '', '#' + sectionId); } catch (e) {}
+  }
+  return false;
+}
+window.navigateShopSection = navigateShopSection;
+
 function handleLogoClick() {
   var s = AuthState.getSession();
   if (s && s.userId) showConnectedCatalog();
-  else showPublicLanding();
+  else navigateShopSection('hero');
 }
 
 // ========== BARRE DE NAVIGATION (SOLDE + PROFIL) ==========
@@ -591,15 +651,15 @@ function updateNavbar() {
       <!-- Profil Utilisateur & Menu Déroulant (Sans Scrollbar, Pleine Hauteur) -->
       <div class="user-profile-wrapper">
         <button type="button" class="btn-user-profile" onclick="toggleUserDropdown(event)" aria-label="Menu profil">
-          <span class="user-avatar-circle">${escapeHtml(session.name.charAt(0).toUpperCase())}</span>
-          <span class="user-profile-name">${escapeHtml(session.name)}</span>
+          <span class="user-avatar-circle">${escapeHtml((session.name || session.email || 'C').charAt(0).toUpperCase())}</span>
+          <span class="user-profile-name">${escapeHtml(session.name || 'Client')}</span>
           <span class="user-profile-chevron" style="font-size: 10px; color: var(--text-muted); margin-left: 2px;">▾</span>
         </button>
 
         <div class="user-dropdown-menu" id="user-dropdown">
           <div class="dropdown-user-header">
-            <div style="font-weight: 700; font-size: 13px;">${escapeHtml(session.name)}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(session.email)}</div>
+            <div style="font-weight: 700; font-size: 13px;">${escapeHtml(session.name || 'Client')}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(session.email || '')}</div>
             <div style="font-size: 11px; color: var(--primary-600); margin-top: 4px; font-weight: 700;">Solde : $${bal.toFixed(2)}</div>
           </div>
           ${isAdmin ? `
@@ -612,6 +672,9 @@ function updateNavbar() {
           </a>
           <a href="javascript:void(0)" class="dropdown-item" onclick="openOrdersModal(); toggleUserDropdown();">
             <span>📦</span> Mes Commandes
+          </a>
+          <a href="javascript:void(0)" class="dropdown-item" onclick="openAccountModal(); toggleUserDropdown();">
+            <span>👤</span> Mon compte
           </a>
           <div style="border-top: 1px solid var(--border-subtle); margin: 4px 0;"></div>
           <a href="javascript:void(0)" class="dropdown-item danger" onclick="handleLogout(); toggleUserDropdown();">
@@ -655,6 +718,8 @@ function renderLandingShowcase() {
   var topProds = prods.slice(0, 3);
 
   if (topProds.length === 0) {
+    var showcasePlaceholder = catalogPlaceholderHtml(true);
+    if (showcasePlaceholder) { container.innerHTML = showcasePlaceholder; return; }
     container.innerHTML = `
       <div style="text-align: center; padding: 28px 16px; color: var(--text-muted);">
         <div style="font-size: 26px; margin-bottom: 6px;">📦</div>
@@ -672,7 +737,7 @@ function renderLandingShowcase() {
     html += `
       <div class="showcase-item">
         <div class="showcase-item-info">
-          <img src="${safeImg}" class="showcase-thumb" alt="${escapeHtml(p.name)}">
+          <img src="${safeImg}" class="showcase-thumb" alt="${escapeHtml(p.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
           <div style="min-width: 0; flex: 1; overflow: hidden;">
             <h4 class="showcase-title">${escapeHtml(p.name)}</h4>
             <span class="showcase-stock-badge ${oos ? 'oos' : ''}">${oos ? '● Rupture' : '● ' + p.stock + ' en stock'}</span>
@@ -682,7 +747,7 @@ function renderLandingShowcase() {
           <div class="showcase-price-box">
             <span class="showcase-price-val">$${p.price.toFixed(2)}</span>
           </div>
-          <button type="button" class="btn-primary btn-sm showcase-buy-btn btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${p.id})">
+          <button type="button" class="btn-primary btn-sm showcase-buy-btn btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${typeof p.id === 'number' ? p.id : "'" + String(p.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"})">
             ${oos ? 'Rupture' : 'Acheter ⚡'}
           </button>
         </div>
@@ -727,7 +792,7 @@ function renderLandingCategories() {
   cats.forEach(function(cat) {
     var label = cat === 'all' ? 'Tous les produits' : cat.toUpperCase();
     var activeClass = cat === currentLandingCat ? ' active' : '';
-    html += `<button type="button" class="cat-pill${activeClass}" onclick="setLandingCat('${cat}')">${label}</button>`;
+    html += `<button type="button" class="cat-pill${activeClass}" onclick="setLandingCat(decodeURIComponent('${encodeURIComponent(cat)}'))">${escapeHtml(label)}</button>`;
   });
   container.innerHTML = html;
 }
@@ -763,7 +828,7 @@ function renderConnectedCategories() {
   cats.forEach(function(cat) {
     var label = cat === 'all' ? 'Tous les produits' : cat.toUpperCase();
     var activeClass = cat === currentConnectedCat ? ' active' : '';
-    html += `<button type="button" class="cat-pill${activeClass}" onclick="setConnectedCat('${cat}')">${label}</button>`;
+    html += `<button type="button" class="cat-pill${activeClass}" onclick="setConnectedCat(decodeURIComponent('${encodeURIComponent(cat)}'))">${escapeHtml(label)}</button>`;
   });
   container.innerHTML = html;
 }
@@ -791,6 +856,8 @@ function renderConnectedCatalog() {
 // Rendu des cartes produits (avec image propre par produit et fallback sécurisé)
 function renderProductCardsInto(container, prods) {
   if (prods.length === 0) {
+    var gridPlaceholder = catalogPlaceholderHtml(false);
+    if (gridPlaceholder) { container.innerHTML = gridPlaceholder; return; }
     container.innerHTML = `
       <div style="grid-column: 1/-1; text-align: center; padding: 48px 20px; color: var(--text-muted); background: #ffffff; border-radius: var(--radius-lg); border: 1px dashed var(--border-subtle); box-shadow: var(--shadow-sm);">
         <div style="font-size: 38px; margin-bottom: 12px;">📦</div>
@@ -809,7 +876,7 @@ function renderProductCardsInto(container, prods) {
     html += `
       <div class="product-card${oos ? ' oos' : ''}">
         <div class="product-image-box">
-          <img src="${safeImg}" class="product-img" alt="${escapeHtml(prod.name)}">
+          <img src="${safeImg}" class="product-img" alt="${escapeHtml(prod.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
           <div class="product-badge-overlay">⚡ Vérifié</div>
         </div>
 
@@ -823,7 +890,7 @@ function renderProductCardsInto(container, prods) {
               <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture de stock' : '● ' + prod.stock + ' disponible' + (prod.stock > 1 ? 's' : '')}</span>
               <span class="product-price">$${prod.price.toFixed(2)}</span>
             </div>
-            <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${prod.id})">
+            <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${typeof prod.id === 'number' ? prod.id : "'" + String(prod.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"})">
               ${oos ? 'Rupture de Stock' : 'Acheter ⚡'}
             </button>
           </div>
@@ -837,8 +904,12 @@ function renderProductCardsInto(container, prods) {
 
 // ========== TUNNEL D'ACHAT (SOLDE, CRYPTO, MOBILE MONEY) ==========
 function startProductPurchase(prodId) {
-  var prods = DB.get('products', []);
-  var prod = prods.find(function(p) { return p.id === prodId; });
+  var consolidated = getConsolidatedProducts();
+  var prod = consolidated.find(function(p) { return String(p.id) === String(prodId); });
+  if (!prod) {
+    var rawProds = DB.get('products', []);
+    prod = rawProds.find(function(p) { return p && String(p.id) === String(prodId); });
+  }
 
   if (!prod || prod.stock <= 0) {
     showToast('Ce produit est actuellement en rupture de stock.', 'error');
@@ -860,6 +931,7 @@ var currentPurchaseQty = 1;
 function openPaymentModal(prod) {
   selectedPayProd = prod;
   currentPurchaseQty = 1;
+  window._gvPurchaseKey = null;
 
   var session = DB.get('session');
   if (!session || !session.userId) {
@@ -876,6 +948,14 @@ function closePayModal() {
   document.getElementById('modal-pay').classList.remove('active');
   selectedPayProd = null;
   currentPurchaseQty = 1;
+  if (orderTrybitPollingTimer) {
+    clearInterval(orderTrybitPollingTimer);
+    orderTrybitPollingTimer = null;
+  }
+  if (orderMomoPollingTimer) {
+    clearInterval(orderMomoPollingTimer);
+    orderMomoPollingTimer = null;
+  }
 }
 
 window.changePurchaseQty = function(delta) {
@@ -982,7 +1062,7 @@ function getActiveCustomerEmail() {
   if (s.role === 'admin' || u.role === 'admin') return '';
   var em = (u.email || '').trim();
   var low = em.toLowerCase();
-  if (!em.includes('@') || low.includes('admin@virtushop.com') || low.includes('admin@getvirtu.shop') || low.startsWith('admin@')) {
+  if (!em.includes('@') || low.startsWith('admin@')) {
     return '';
   }
   return em;
@@ -1019,7 +1099,7 @@ function renderPurchaseModal() {
 
     <!-- 1. Fiche Produit Compacte -->
     <div class="purchase-prod-box purchase-prod-box-full" style="margin-bottom: 8px;">
-      <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb-compact" alt="${escapeHtml(selectedPayProd.name)}">
+      <img src="${sanitizeProductImage(selectedPayProd.image, selectedPayProd.category, selectedPayProd.name)}" class="purchase-prod-thumb-compact" alt="${escapeHtml(selectedPayProd.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
       <div class="purchase-prod-info-compact">
         <span class="purchase-prod-cat-compact">${escapeHtml(selectedPayProd.category)}</span>
         <h3 class="purchase-prod-title-compact" title="${escapeHtml(selectedPayProd.name)}">${escapeHtml(selectedPayProd.name)}</h3>
@@ -1100,105 +1180,116 @@ function promptDepositFromPurchase(suggestedAmount) {
 }
 
 // LIVRAISON DU PRODUIT NUMÉRIQUE ACHETÉ AVEC CLÉ UNIQUE ET ENREGISTREMENT DÉFINITIF
+// ========== LIVRAISON MANUELLE VIA WHATSAPP ==========
+var GV_DEFAULT_WHATSAPP_NUMBER = '237692960840';
+
+function getWhatsAppNumber() {
+  var n = String(DB.get('whatsapp_number', '') || '').replace(/[^0-9]/g, '');
+  return n.length >= 8 ? n : GV_DEFAULT_WHATSAPP_NUMBER;
+}
+
+function buildWhatsAppOrderUrl(order) {
+  var qtyText = order && order.quantity > 1 ? ' (x' + order.quantity + ')' : '';
+  var amount = order && typeof order.amount === 'number' ? order.amount : (parseFloat(order && order.amount) || 0);
+  var msg = "Bonjour, je viens d'acheter un produit sur GetVirtu.shop.\n\n" +
+    'Produit : ' + ((order && order.productName) || 'Produit') + qtyText + '\n' +
+    'Référence de commande : ' + ((order && order.id) || '-') + '\n' +
+    'Montant payé : $' + amount.toFixed(2) + ' USD\n\n' +
+    'Je souhaite recevoir mon produit. Merci.';
+  return 'https://wa.me/' + getWhatsAppNumber() + '?text=' + encodeURIComponent(msg);
+}
+
+function isManualDeliveryPending(order) {
+  return Boolean(order) && order.status === 'En attente' && order.deliveryMode === 'manual';
+}
+
+function renderWhatsAppDeliveryBox(order) {
+  return `
+    <div class="whatsapp-delivery-box" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm, 10px); padding: 12px; font-size: 12.5px; color: #166534; line-height: 1.5;">
+      📲 <strong>Livraison manuelle via WhatsApp</strong><br>
+      Votre paiement est confirmé. Envoyez-nous le message pré-rempli pour recevoir votre produit rapidement.
+      <a href="${escapeHtml(buildWhatsAppOrderUrl(order))}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp-delivery" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; background: #16a34a; color: #ffffff; font-weight: 700; border-radius: 10px; padding: 11px 14px; text-decoration: none;">
+        <span>💬</span><span>Recevoir mon produit sur WhatsApp</span>
+      </a>
+    </div>
+  `;
+}
+
+// Paiement confirmé mais commande pas encore visible côté serveur : jamais de clé « inventée » dans le navigateur
+function showPurchaseProcessingNotice(prod, message) {
+  var container = document.getElementById('pay-dynamic-content');
+  if (container) {
+    container.innerHTML = `
+      <div class="purchase-success-box">
+        <div class="success-icon-badge" style="background: var(--amber-500, #f59e0b); color: white;">⏳</div>
+        <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Paiement confirmé</h3>
+        <p style="font-size: 13.5px; color: #475569; line-height: 1.5; margin-bottom: 16px;">${escapeHtml(message || 'Votre commande est en cours d\'enregistrement. Elle apparaîtra dans « Mes commandes » dans quelques instants.')}</p>
+        <div class="order-recap-mini">
+          <div><span>Article :</span> <strong>${escapeHtml((prod && prod.name) || 'Produit')}</strong></div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary" style="flex: 1;" onclick="closePayModal()">Continuer mes achats</button>
+          <button type="button" class="btn-primary" style="flex: 1;" onclick="closePayModal(); openOrdersModal();">📦 Mes commandes</button>
+        </div>
+      </div>
+    `;
+  }
+  syncUserSessionAndBalance();
+}
+
 function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, remainingBal, serverOrder) {
   var u = getCurrentUser();
   if (!u || !prod) return;
 
+  // Seule une commande réellement enregistrée par le serveur est affichée au client
+  if (!serverOrder || !serverOrder.id) {
+    showPurchaseProcessingNotice(prod);
+    return;
+  }
+
   var userBalAfter = (typeof remainingBal === 'number') ? remainingBal : getUserBalance();
-  var orderId = (serverOrder && serverOrder.id) ? serverOrder.id : ('ORD-' + Date.now().toString().slice(-6));
+  var newOrder = Object.assign({}, serverOrder, {
+    contactInfo: serverOrder.contactInfo || contactVal || '',
+    method: serverOrder.method || paymentMethodName || 'Solde GetVirtu',
+    date: serverOrder.date || new Date().toISOString()
+  });
+  if (typeof newOrder.amount !== 'number') newOrder.amount = total;
+  if (!newOrder.quantity) newOrder.quantity = qty;
 
-  // 1. Récupérer le contenu numérique délivré par le serveur ou le coffre-fort
-  var deliveredContent = null;
-  if (serverOrder && serverOrder.vaultContent) {
-    deliveredContent = serverOrder.vaultContent;
-  } else {
-    var vaultMap = DB.get('vault', {});
-    var prodVault = vaultMap[prod.id] || {};
-    if (prodVault.keys && Array.isArray(prodVault.keys) && prodVault.keys.length > 0) {
-      var unusedKeys = prodVault.keys.filter(function(k) { return !k.used; }).slice(0, qty);
-      if (unusedKeys.length > 0) {
-        var nowIso = new Date().toISOString();
-        unusedKeys.forEach(function(k) {
-          k.used = true;
-          k.soldTo = u.email || u.name || 'Client #' + u.id;
-          k.soldAt = nowIso;
-        });
-        deliveredContent = {
-          type: prodVault.type || 'text',
-          content: unusedKeys.map(function(k) { return k.content; }).join('\n'),
-          keys: unusedKeys,
-          fileName: prodVault.fileName || 'licences.txt'
-        };
-        DB.set('vault', vaultMap);
-      }
-    }
-  }
-
-  if (!deliveredContent) {
-    deliveredContent = {
-      type: 'text',
-      content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
-    };
-  }
-
-  // 2. Décrémenter et recalculer automatiquement le stock local
-  var prods = DB.get('products', []);
-  var pIndex = prods.findIndex(function(p) { return p.id === prod.id; });
-  if (pIndex !== -1) {
-    prods[pIndex].stock = Math.max(0, (prods[pIndex].stock || qty) - qty);
-    DB.set('products', prods);
-  }
-
-  // 3. Enregistrement de la commande avec son statut Complété et nouveau solde exact
-  var orders = DB.get('orders', []);
-  var newOrder = {
-    id: orderId,
-    userId: u.id,
-    userEmail: u.email,
-    userName: u.name,
-    productId: prod.id,
-    productName: prod.name,
-    unitPrice: prod.price,
-    quantity: qty,
-    amount: total,
-    remainingBalance: userBalAfter,
-    userBalanceAfter: userBalAfter,
-    contactInfo: contactVal,
-    method: paymentMethodName || 'Solde GetVirtu',
-    status: (serverOrder && serverOrder.status) ? serverOrder.status : 'Complété',
-    proofImage: null,
-    vaultContent: deliveredContent,
-    date: (serverOrder && serverOrder.date) ? serverOrder.date : new Date().toISOString()
-  };
+  var orders = (DB.get('orders', []) || []).filter(function(o) { return o && o.id !== newOrder.id; });
   orders.unshift(newOrder);
   DB.set('orders', orders);
 
-  // Rendu de la boîte de livraison instantanée dans le modal
+  var manualPending = isManualDeliveryPending(newOrder) || !newOrder.vaultContent;
+
   var container = document.getElementById('pay-dynamic-content');
   if (container) {
     container.innerHTML = `
       <div class="purchase-success-box">
         <div class="success-icon-badge" style="background: var(--emerald-500); color: white;">✓</div>
-        <h3 style="font-size: 19px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Paiement Réussi & Produit Livré ! ⚡</h3>
+        <h3 style="font-size: 19px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">${manualPending ? 'Paiement réussi ! Commande enregistrée ✅' : 'Paiement Réussi & Produit Livré ! ⚡'}</h3>
         <p style="font-size: 13.5px; color: #475569; line-height: 1.5; margin-bottom: 16px;">
-          Félicitations ! Votre commande est validée et votre clé/accès numérique unique est débloqué(e) :
+          ${manualPending
+            ? 'Ce produit est livré manuellement. Contactez-nous sur WhatsApp avec le message pré-rempli pour le recevoir.'
+            : 'Félicitations ! Votre commande est validée et votre clé/accès numérique unique est débloqué(e) :'}
         </p>
 
+        ${manualPending ? `<div style="margin-bottom: 16px;">${renderWhatsAppDeliveryBox(newOrder)}</div>` : `
         <div class="vault-delivery-card" style="margin-bottom: 16px;">
           <div class="vault-header">
             <span>🔐 CONTENU DU PRODUIT DÉBLOQUÉ</span>
             <span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">● Accès Immédiat & Clé Unique</span>
           </div>
           ${renderVaultContentDisplay(newOrder)}
-        </div>
+        </div>`}
 
         <div class="order-recap-mini">
-          <div><span>N° Commande :</span> <strong>${newOrder.id}</strong></div>
+          <div><span>N° Commande :</span> <strong>${escapeHtml(newOrder.id)}</strong></div>
           <div><span>Article :</span> <strong>${escapeHtml(prod.name)} (x${newOrder.quantity})</strong></div>
-          <div><span>Montant débité :</span> <strong style="color: var(--primary-600);">$${total.toFixed(2)}</strong></div>
+          <div><span>Montant payé :</span> <strong style="color: var(--primary-600);">$${newOrder.amount.toFixed(2)}</strong></div>
           <div><span>Nouveau solde :</span> <strong style="color: var(--emerald-600);">$${userBalAfter.toFixed(2)}</strong></div>
           <div><span>Règlement :</span> <strong>${escapeHtml(newOrder.method)}</strong></div>
-          ${contactVal ? `<div><span>Contact :</span> <strong>${escapeHtml(contactVal)}</strong></div>` : ''}
+          ${newOrder.contactInfo ? `<div><span>Contact :</span> <strong>${escapeHtml(newOrder.contactInfo)}</strong></div>` : ''}
         </div>
         <div style="display: flex; gap: 10px; margin-top: 20px;">
           <button type="button" class="btn-secondary" style="flex: 1;" onclick="closePayModal()">Continuer mes achats</button>
@@ -1208,11 +1299,63 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, 
     `;
   }
 
-  showToast('🎉 Félicitations ! Votre produit a été débloqué et livré.', 'success');
+  showToast(manualPending
+    ? 'Commande enregistrée : contactez-nous sur WhatsApp pour recevoir votre produit.'
+    : '🎉 Félicitations ! Votre produit a été débloqué et livré.', 'success');
   updateNavbar();
+  if (typeof syncProductsFromServer === 'function') syncProductsFromServer();
   renderConnectedCatalog();
   renderLandingCatalog();
 }
+
+// Mobile Money confirmé : le montant a été crédité sur le solde côté serveur ; on passe maintenant la VRAIE commande
+// (débit du solde + livraison des clés / du fichier / livraison WhatsApp), au lieu d'afficher une clé fictive.
+async function completeMobileMoneyPurchase(prod, total, qty, contactVal) {
+  var session = DB.get('session');
+  var token = session && session.token ? session.token : '';
+  try {
+    var res = await fetch('/api/data/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ productId: prod.id, quantity: qty, contactInfo: contactVal || '', paymentLabel: 'Mobile Money Instantané' })
+    });
+    var data = await res.json().catch(function() { return {}; });
+    if (res.ok && data && data.success && data.order) {
+      if (typeof data.newBalance === 'number') updateUserBalance(data.newBalance);
+      deliverCompletedOrder(prod, data.order.amount || total, qty, contactVal, 'Mobile Money Instantané', data.newBalance, data.order);
+      return;
+    }
+    showPurchaseProcessingNotice(prod, 'Paiement reçu et crédité sur votre solde, mais la commande n\'a pas pu être finalisée : ' +
+      ((data && data.error) || 'erreur inconnue') + '. Votre argent est disponible sur votre solde GetVirtu.');
+  } catch (e) {
+    showPurchaseProcessingNotice(prod, 'Paiement reçu et crédité sur votre solde. La connexion a été interrompue pendant la finalisation : réessayez l\'achat avec votre solde.');
+  }
+}
+
+// Crypto confirmé : la commande est créée par le serveur (webhook / vérification) ; on récupère la VRAIE commande.
+async function completeCryptoPurchase(txId, prod, total, qty, contactVal) {
+  var session = DB.get('session');
+  var token = session && session.token ? session.token : '';
+  var expectedId = 'ORD-' + (String(txId || '').replace('TXN-TB-', '').substring(0, 8));
+  for (var attempt = 0; attempt < 4; attempt++) {
+    try {
+      var res = await fetch('/api/data/orders?_t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' }
+      });
+      var data = await res.json().catch(function() { return {}; });
+      var list = (data && Array.isArray(data.orders)) ? data.orders : [];
+      var found = list.find(function(o) { return o && (o.transactionId === txId || o.id === expectedId); });
+      if (found) {
+        deliverCompletedOrder(prod, found.amount || total, qty, contactVal, 'Crypto Instantané (Trybit)', getUserBalance(), found);
+        return;
+      }
+    } catch (e) {}
+    await new Promise(function(r) { setTimeout(r, 1500); });
+  }
+  showPurchaseProcessingNotice(prod);
+}
+
 
 // RÈGLEMENT EXCLUSIF PAR SOLDE DU CLIENT AVEC TRANSACTION PERMANENTE EN BASE DE DONNÉES
 var isPurchaseProcessing = false;
@@ -1252,7 +1395,7 @@ async function processProductPayment() {
   }
 
   var rawContact = (document.getElementById('purchase-contact-input')?.value || '').trim();
-  var contactVal = typeof Security !== 'undefined' ? Security.escapeHtml(rawContact) : rawContact;
+  var contactVal = rawContact.slice(0, 120);
 
   var btn = document.getElementById('btn-submit-purchase');
   if (btn) {
@@ -1276,22 +1419,21 @@ async function processProductPayment() {
         productName: selectedPayProd.name,
         quantity: qty,
         contactInfo: contactVal,
-        productInfo: {
-          id: selectedPayProd.id,
-          name: selectedPayProd.name,
-          price: selectedPayProd.price,
-          category: selectedPayProd.category,
-          stock: selectedPayProd.stock
-        }
+        idempotencyKey: window._gvPurchaseKey || (window._gvPurchaseKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random()))
       })
     });
 
     var data = await res.json();
 
     if (!res.ok || !data.success) {
+      if (data && data.code === 'PRODUCT_UNAVAILABLE' && typeof syncProductsFromServer === 'function') {
+        // Produit supprimé ou masqué entre-temps : rafraîchir le catalogue affiché
+        syncProductsFromServer();
+      }
       throw new Error(data.error || 'Erreur lors du traitement de la commande par le serveur.');
     }
 
+    window._gvPurchaseKey = null; // achat terminé : la prochaine tentative est une nouvelle commande
     var serverBalance = (typeof data.newBalance === 'number') ? data.newBalance : Math.max(0, Math.round((userBal - total) * 100) / 100);
 
     // Mettre à jour immédiatement et définitivement le solde avec la valeur réelle renvoyée par le serveur
@@ -1333,7 +1475,7 @@ async function startPurchaseTrybitPayment(total, qty) {
   var prod = selectedPayProd;
 
   var rawContact = (document.getElementById('purchase-contact-input')?.value || '').trim();
-  var contactVal = typeof Security !== 'undefined' ? Security.escapeHtml(rawContact) : rawContact;
+  var contactVal = rawContact.slice(0, 120);
 
   var cryptoSelect = document.getElementById('purchase-crypto-select');
   var selectedCrypto = cryptoSelect ? cryptoSelect.value : '';
@@ -1350,7 +1492,7 @@ async function startPurchaseTrybitPayment(total, qty) {
     } else {
       safeEmail = getActiveCustomerEmail();
     }
-    if (safeEmail && (safeEmail.toLowerCase().includes('admin@') || safeEmail.toLowerCase().includes('virtushop.com'))) {
+    if (safeEmail && safeEmail.toLowerCase().includes('admin@')) {
       safeEmail = '';
     }
 
@@ -1406,7 +1548,7 @@ async function startPurchaseTrybitPayment(total, qty) {
             </div>
           </div>
           ${data.paymentUrl ? `<a href="${data.paymentUrl}" target="_blank" class="btn-primary" style="display: block; text-decoration: none; margin-bottom: 10px; width: 100%;">Ouvrir la page de paiement Trybit ↗</a>` : ''}
-          <button type="button" class="btn-secondary" onclick="checkOrderTrybitStatus('${data.transactionId}', '${data.invoiceUuid || ''}', ${total}, ${qty}, '${escapeHtml(contactVal)}')" style="width: 100%;">
+          <button type="button" class="btn-secondary" onclick="checkOrderTrybitStatus('${data.transactionId}', '${data.invoiceUuid || ''}', ${total}, ${qty}, decodeURIComponent('${encodeURIComponent(contactVal || '')}'))" style="width: 100%;">
             Vérifier le statut du paiement 🔄
           </button>
         </div>
@@ -1442,7 +1584,7 @@ function startOrderTrybitPolling(txId, invoiceUuid, prod, total, qty, contactVal
       if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
         clearInterval(orderTrybitPollingTimer);
         orderTrybitPollingTimer = null;
-        deliverCompletedOrder(prod, total, qty, contactVal, 'Crypto Instantané (Trybit)');
+        completeCryptoPurchase(txId, prod, total, qty, contactVal);
       }
     } catch (e) {}
   }, 3500);
@@ -1460,7 +1602,7 @@ async function checkOrderTrybitStatus(txId, invoiceUuid, total, qty, contactVal)
       if (orderTrybitPollingTimer) clearInterval(orderTrybitPollingTimer);
       orderTrybitPollingTimer = null;
       if (selectedPayProd) {
-        deliverCompletedOrder(selectedPayProd, total, qty, contactVal, 'Crypto Instantané (Trybit)');
+        completeCryptoPurchase(txId, selectedPayProd, total, qty, contactVal);
       } else {
         showToast('Paiement confirmé avec succès !', 'success');
       }
@@ -1479,7 +1621,7 @@ async function startPurchaseMomoPayment(total, qty) {
   var prod = selectedPayProd;
 
   var rawContact = (document.getElementById('purchase-contact-input')?.value || '').trim();
-  var contactVal = typeof Security !== 'undefined' ? Security.escapeHtml(rawContact) : rawContact;
+  var contactVal = rawContact.slice(0, 120);
 
   var phoneInput = document.getElementById('purchase-momo-phone');
   var phone = phoneInput ? phoneInput.value.trim() : '';
@@ -1502,7 +1644,7 @@ async function startPurchaseMomoPayment(total, qty) {
     } else {
       safeEmail = getActiveCustomerEmail();
     }
-    if (safeEmail && (safeEmail.toLowerCase().includes('admin@') || safeEmail.toLowerCase().includes('virtushop.com'))) {
+    if (safeEmail && safeEmail.toLowerCase().includes('admin@')) {
       safeEmail = '';
     }
 
@@ -1555,7 +1697,7 @@ async function startPurchaseMomoPayment(total, qty) {
               <strong>${escapeHtml(phone)}</strong>
             </div>
           </div>
-          <button type="button" class="btn-primary" onclick="checkOrderMomoStatus('${data.transactionId}', ${total}, ${qty}, '${escapeHtml(contactVal)}')" style="width: 100%;">
+          <button type="button" class="btn-primary" onclick="checkOrderMomoStatus('${data.transactionId}', ${total}, ${qty}, decodeURIComponent('${encodeURIComponent(contactVal || '')}'))" style="width: 100%;">
             J'ai validé sur mon téléphone ⚡
           </button>
         </div>
@@ -1589,7 +1731,7 @@ function startOrderMomoPolling(txId, prod, total, qty, contactVal) {
       if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
         clearInterval(orderMomoPollingTimer);
         orderMomoPollingTimer = null;
-        deliverCompletedOrder(prod, total, qty, contactVal, 'Mobile Money Instantané');
+        completeMobileMoneyPurchase(prod, total, qty, contactVal);
       }
     } catch (e) {}
   }, 3500);
@@ -1605,7 +1747,7 @@ async function checkOrderMomoStatus(txId, total, qty, contactVal) {
       if (orderMomoPollingTimer) clearInterval(orderMomoPollingTimer);
       orderMomoPollingTimer = null;
       if (selectedPayProd) {
-        deliverCompletedOrder(selectedPayProd, total, qty, contactVal, 'Mobile Money Instantané');
+        completeMobileMoneyPurchase(selectedPayProd, total, qty, contactVal);
       } else {
         showToast('Paiement confirmé avec succès !', 'success');
       }
@@ -1937,6 +2079,10 @@ function closeDepositModal() {
     clearInterval(momoPollingTimer);
     momoPollingTimer = null;
   }
+  if (trybitPollingTimer) {
+    clearInterval(trybitPollingTimer);
+    trybitPollingTimer = null;
+  }
 }
 
 function openSupportModal() {
@@ -1955,8 +2101,10 @@ function closeSupportModal() {
   if (modal) modal.classList.remove('active');
 }
 
-function submitSupportTicket(event) {
+var _isSubmittingSupport = false;
+async function submitSupportTicket(event) {
   if (event && event.preventDefault) event.preventDefault();
+  if (_isSubmittingSupport) return;
 
   var name = (document.getElementById('support-name-input')?.value || '').trim();
   var contact = (document.getElementById('support-contact-input')?.value || '').trim();
@@ -1968,37 +2116,57 @@ function submitSupportTicket(event) {
     return;
   }
 
-  var u = getCurrentUser();
-  var ticketId = 'TCK-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
-  var newTicket = {
-    id: ticketId,
-    userId: u ? u.id : null,
-    userName: name || (u ? u.name : 'Client'),
-    userContact: contact,
-    subject: subject,
-    message: message,
-    status: 'Ouvert',
-    date: new Date().toISOString()
-  };
+  _isSubmittingSupport = true;
+  var submitBtn = document.getElementById('btn-support-submit');
+  var prevBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>Envoi en cours... ⚡</span>';
+  }
 
-  var tickets = DB.get('tickets', []);
-  tickets.unshift(newTicket);
-  DB.set('tickets', tickets);
+  try {
+    var u = getCurrentUser();
+    var ticketId = 'TCK-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 5).toUpperCase();
+    var newTicket = {
+      id: ticketId,
+      userId: u ? u.id : null,
+      userName: name || (u ? u.name : 'Client'),
+      userContact: contact,
+      subject: subject,
+      message: message,
+      status: 'Ouvert',
+      date: new Date().toISOString()
+    };
 
-  // Synchronisation backend
-  var session = DB.get('session');
-  fetch('/api/data/tickets', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': (session && session.token) ? 'Bearer ' + session.token : ''
-    },
-    body: JSON.stringify(newTicket)
-  }).catch(function(e) { console.warn('Ticket sync:', e); });
+    var tickets = DB.get('tickets', []);
+    tickets.unshift(newTicket);
+    DB.set('tickets', tickets);
 
-  showToast('✓ Votre message a été envoyé à l\'équipe GetVirtu avec succès !', 'success');
-  closeSupportModal();
-  document.getElementById('support-ticket-form')?.reset();
+    // Synchronisation backend immédiate
+    var session = DB.get('session');
+    try {
+      await fetch('/api/data/tickets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+        },
+        body: JSON.stringify(newTicket)
+      });
+    } catch (e) {
+      console.warn('Ticket sync:', e);
+    }
+
+    showToast('✓ Votre message a été envoyé à l\'équipe GetVirtu avec succès !', 'success');
+    closeSupportModal();
+    document.getElementById('support-ticket-form')?.reset();
+  } finally {
+    _isSubmittingSupport = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = prevBtnHtml || '<span>Envoyer mon Message ⚡</span>';
+    }
+  }
 }
 
 function renderDepositMethodsTabs() {
@@ -2322,11 +2490,74 @@ function renderSasPayDepositContent(container) {
   `;
 }
 
+function copyToClipboard(text, successMsg) {
+  var str = String(text || '');
+  if (!str) return Promise.resolve(false);
+  var fallbackCopy = function() {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = str;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  };
+  if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(str).then(function() {
+      if (successMsg) showToast(successMsg, 'success');
+      return true;
+    }).catch(function() {
+      var ok = fallbackCopy();
+      if (ok && successMsg) showToast(successMsg, 'success');
+      return ok;
+    });
+  }
+  var okSync = fallbackCopy();
+  if (okSync && successMsg) showToast(successMsg, 'success');
+  return Promise.resolve(okSync);
+}
+window.copyToClipboard = copyToClipboard;
+
 function copyDepositAddress() {
   var input = document.getElementById('deposit-addr-value');
   if (!input) return;
-  input.select();
-  navigator.clipboard.writeText(input.value).then(function() { showToast('Copié dans le presse-papiers !', 'success'); });
+  copyToClipboard(input.value, 'Copié dans le presse-papiers !');
+}
+
+function compressImageFile(file, maxDim, quality) {
+  return new Promise(function(resolve) {
+    var reader = new FileReader();
+    reader.onerror = function() { resolve(null); };
+    reader.onload = function(e) {
+      var original = e.target.result;
+      var img = new Image();
+      img.onerror = function() { resolve(original); };
+      img.onload = function() {
+        var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        var scale = Math.min(1, maxDim / Math.max(w, h || 1));
+        try {
+          var c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(w * scale));
+          c.height = Math.max(1, Math.round(h * scale));
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          var out = c.toDataURL('image/jpeg', quality);
+          resolve(out.length < original.length ? out : original);
+        } catch (err) { resolve(original); }
+      };
+      img.src = original;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function handleDepositProofSelected(event) {
@@ -2334,7 +2565,8 @@ async function handleDepositProofSelected(event) {
   if (!file) return;
 
   if (typeof Security !== 'undefined') {
-    var check = await Security.validateImageFile(file, 2);
+    // Capture d'écran de téléphone acceptée jusqu'à 10 Mo : elle est compressée avant l'envoi
+    var check = await Security.validateImageFile(file, 10);
     if (!check.valid) {
       showToast(check.error, 'error');
       event.target.value = '';
@@ -2342,18 +2574,20 @@ async function handleDepositProofSelected(event) {
     }
   }
 
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    currentDepositProofBase64 = e.target.result;
-    var previewImg = document.getElementById('dep-preview-img');
-    var promptEl = document.getElementById('dep-prompt-text');
-    var previewWrapper = document.getElementById('dep-preview-wrapper');
-    if (previewImg) previewImg.src = currentDepositProofBase64;
-    if (promptEl) promptEl.classList.add('hidden');
-    if (previewWrapper) previewWrapper.classList.remove('hidden');
-    showToast('Capture enregistrée !', 'success');
-  };
-  reader.readAsDataURL(file);
+  var dataUrl = await compressImageFile(file, 1600, 0.82);
+  if (!dataUrl || dataUrl.length > 2.6 * 1024 * 1024) {
+    showToast('Image trop lourde : choisissez une capture plus légère.', 'error');
+    event.target.value = '';
+    return;
+  }
+  currentDepositProofBase64 = dataUrl;
+  var previewImg = document.getElementById('dep-preview-img');
+  var promptEl = document.getElementById('dep-prompt-text');
+  var previewWrapper = document.getElementById('dep-preview-wrapper');
+  if (previewImg) previewImg.src = currentDepositProofBase64;
+  if (promptEl) promptEl.classList.add('hidden');
+  if (previewWrapper) previewWrapper.classList.remove('hidden');
+  showToast('Capture enregistrée !', 'success');
 }
 
 async function submitSasPayDeposit(forcedMode) {
@@ -2975,7 +3209,9 @@ function onTrybitPaymentConfirmed(txId, amount, newBalance) {
   }
 }
 
+var _isSubmittingManualDeposit = false;
 async function submitDepositRequest() {
+  if (_isSubmittingManualDeposit) return;
   var u = getCurrentUser();
   if (!u) { openAuthModal('login'); return; }
 
@@ -2995,57 +3231,78 @@ async function submitDepositRequest() {
     }
   }
 
-  var methods = DB.get('payment_methods', []);
-  var m = methods.find(function(x) { return x.id == currentDepositMethodId; });
-  var txId = 'TXN-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
-
-  // 1. Enregistrement côté backend de production si disponible
-  try {
-    var resp = await fetch('/api/payments/deposit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: u.id,
-        amount: amount,
-        currency: 'USD',
-        paymentMethodId: m ? m.id : null,
-        proofImage: currentDepositProofBase64 || null
-      })
-    });
-    var data = await resp.json();
-    if (data && data.transaction && data.transaction.id) {
-      txId = data.transaction.id;
-    }
-  } catch (err) {
-    console.warn('[Payments] API locale/hors-ligne:', err.message);
+  _isSubmittingManualDeposit = true;
+  var manualBtn = document.getElementById('btn-submit-manual');
+  var prevBtnHtml = manualBtn ? manualBtn.innerHTML : '';
+  if (manualBtn) {
+    manualBtn.disabled = true;
+    manualBtn.innerHTML = 'Envoi en cours... ⚡';
   }
 
-  // 2. Création de la transaction en statut STRICT "En attente" (Zéro solde crédité à ce stade)
-  var recharges = DB.get('recharges', []);
-  var newRecharge = {
-    id: txId,
-    userId: u.id,
-    userName: u.name,
-    userEmail: u.email,
-    amount: amount,
-    methodId: m ? m.id : null,
-    methodName: m ? m.name : 'Recharge',
-    network: m && m.network ? m.network : '',
-    address: m ? m.address : '',
-    instructions: m ? m.instructions : '',
-    proofImage: currentDepositProofBase64 || null,
-    status: 'En attente',
-    date: new Date().toISOString()
-  };
+  try {
+    var methods = DB.get('payment_methods', []);
+    var m = methods.find(function(x) { return x.id == currentDepositMethodId; });
+    var txId = 'TXN-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    var session = DB.get('session');
+    var token = session ? session.token : null;
 
-  recharges.unshift(newRecharge);
-  DB.set('recharges', recharges);
+    // 1. Enregistrement côté backend de production si disponible
+    try {
+      var resp = await fetch('/api/payments/deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+        },
+        body: JSON.stringify({
+          userId: u.id,
+          amount: amount,
+          currency: 'USD',
+          paymentMethodId: m ? m.id : null,
+          proofImage: currentDepositProofBase64 || null
+        })
+      });
+      var data = await resp.json();
+      if (data && data.transaction && data.transaction.id) {
+        txId = data.transaction.id;
+      }
+    } catch (err) {
+      console.warn('[Payments] API locale/hors-ligne:', err.message);
+    }
 
-  showToast(`Demande de transaction initiée (+${amount.toFixed(2)} USD). Statut : En attente de vérification.`, 'success');
-  closeDepositModal();
+    // 2. Création de la transaction en statut STRICT "En attente" (Zéro solde crédité à ce stade)
+    var recharges = DB.get('recharges', []);
+    var newRecharge = {
+      id: txId,
+      userId: u.id,
+      userName: u.name,
+      userEmail: u.email,
+      amount: amount,
+      methodId: m ? m.id : null,
+      methodName: m ? m.name : 'Recharge',
+      network: m && m.network ? m.network : '',
+      address: m ? m.address : '',
+      instructions: m ? m.instructions : '',
+      proofImage: currentDepositProofBase64 || null,
+      status: 'En attente',
+      date: new Date().toISOString()
+    };
 
-  if (pendingPurchaseProductId) {
-    alert(`Votre demande de recharge de ${amount.toFixed(2)} USD est en cours de vérification.\n\nDès que la transaction est confirmée par le serveur ou l'administrateur, votre solde sera crédité et votre commande sera débloquée.`);
+    recharges.unshift(newRecharge);
+    DB.set('recharges', recharges);
+
+    closeDepositModal();
+    if (pendingPurchaseProductId) {
+      showToast(`Demande de recharge de $${amount.toFixed(2)} envoyée ! Votre solde sera crédité dès validation.`, 'success');
+    } else {
+      showToast(`Demande de transaction initiée (+${amount.toFixed(2)} USD). Statut : En attente de vérification.`, 'success');
+    }
+  } finally {
+    _isSubmittingManualDeposit = false;
+    if (manualBtn) {
+      manualBtn.disabled = false;
+      manualBtn.innerHTML = prevBtnHtml || 'Valider la Recharge de Solde ⚡';
+    }
   }
 }
 
@@ -3064,28 +3321,27 @@ function openOrdersModal() {
 
   // Synchronisation des commandes du compte depuis le serveur si en ligne
   if (session.token) {
-    fetch('/api/data/orders', {
-      headers: { 'Authorization': 'Bearer ' + session.token }
+    fetch('/api/data/orders?_t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { 'Authorization': 'Bearer ' + session.token, 'Cache-Control': 'no-cache' }
     }).then(function(r) { return r.json(); }).then(function(res) {
       if (res && res.orders && Array.isArray(res.orders)) {
-        var localList = DB.get('orders', []);
-        var updated = false;
-        res.orders.forEach(function(so) {
-          var existingIdx = localList.findIndex(function(lo) { return lo && lo.id === so.id; });
-          if (existingIdx === -1) {
-            localList.unshift(so);
-            updated = true;
-          } else {
-            localList[existingIdx] = Object.assign({}, localList[existingIdx], so);
-            updated = true;
-          }
-        });
-        if (updated) {
-          DB.set('orders', localList);
-          var modalOrders = document.getElementById('modal-orders');
-          if (modalOrders && modalOrders.classList.contains('active')) {
-            renderOrdersListInModal();
-          }
+        if (session.role === 'admin') {
+          DB.set('orders', res.orders);
+        } else {
+          var curId = String(session.userId);
+          var curEmail = (session.email || '').toLowerCase();
+          var otherOrders = (DB.get('orders', []) || []).filter(function(lo) {
+            if (!lo) return false;
+            var matchId = lo.userId && String(lo.userId) === curId;
+            var matchEmail = lo.userEmail && curEmail && lo.userEmail.toLowerCase() === curEmail;
+            return !matchId && !matchEmail;
+          });
+          DB.set('orders', res.orders.concat(otherOrders));
+        }
+        var modalOrders = document.getElementById('modal-orders');
+        if (modalOrders && modalOrders.classList.contains('active')) {
+          renderOrdersListInModal();
         }
       }
     }).catch(function() {});
@@ -3143,12 +3399,14 @@ function renderOrdersListInModal() {
             ${o.contactInfo ? `<div class="order-info-meta" style="color: var(--primary-600); font-weight: 600;">📱 Notification : ${escapeHtml(o.contactInfo)}</div>` : ''}
           </div>
           <div class="order-pricing-box">
-            <div class="order-amount-display">$${o.amount.toFixed(2)}</div>
+            <div class="order-amount-display">$${Number(o.amount || 0).toFixed(2)}</div>
             ${statusPill}
           </div>
         </div>
 
-        ${isPending ? `
+        ${isPending && o.deliveryMode === 'manual' ? renderWhatsAppDeliveryBox(o) : ''}
+
+        ${isPending && o.deliveryMode !== 'manual' ? `
           <div style="background: #fffbeb; border: 1px dashed #fde68a; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #b45309; line-height: 1.45;">
             ⏳ <strong>Commande en attente de validation</strong><br>
             Votre achat est en cours de traitement par l'administrateur. Vos identifiants ou fichiers seront automatiquement débloqués dans votre coffre-fort dès confirmation.
@@ -3158,7 +3416,7 @@ function renderOrdersListInModal() {
         ${isCancelled ? `
           <div style="background: #fff1f2; border: 1px dashed #fecdd3; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #e11d48; line-height: 1.45;">
             ✕ <strong>Commande annulée par l'administrateur</strong><br>
-            Cette commande a été annulée. Votre solde a été recrédité de $${o.amount.toFixed(2)}.
+            Cette commande a été annulée.${o.refunded ? ' Votre solde a été recrédité de $' + Number(o.amount || 0).toFixed(2) + '.' : ''}
           </div>
         ` : ''}
 
@@ -3177,98 +3435,124 @@ function renderOrdersListInModal() {
   container.innerHTML = html;
 }
 
+function jsStr(val) {
+  return String(val === null || val === undefined ? '' : val).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '\\x3c').replace(/\r?\n/g, ' ');
+}
+
+function isHttpUrl(u) {
+  try { var x = new URL(String(u)); return x.protocol === 'https:' || x.protocol === 'http:'; } catch (e) { return false; }
+}
+
 function renderVaultContentDisplay(order) {
   var v = order.vaultContent;
   if (!v) return '<p style="color: var(--text-muted); font-size: 11px; margin: 0;">En attente de livraison.</p>';
   var orderId = String(order.id);
+  var domId = orderId.replace(/[^a-zA-Z0-9_-]/g, '');
+  var safeIdJs = jsStr(orderId);
 
   var rawContent = '';
   var contentType = 'text';
   var fileName = 'licence.txt';
-
   if (typeof v === 'string') {
     rawContent = v.trim();
   } else if (typeof v === 'object' && v !== null) {
     contentType = v.type || 'text';
     fileName = v.fileName || 'licence.txt';
-    if (v.content) {
-      rawContent = typeof v.content === 'string' ? v.content.trim() : JSON.stringify(v.content);
-    } else if (v.key) {
-      rawContent = String(v.key).trim();
-    } else if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
-      rawContent = v.keys.map(function(k) {
-        return (k && typeof k === 'object' ? (k.content || k.key || '') : String(k || '')).trim();
-      }).filter(Boolean).join('\n');
-    } else {
-      rawContent = JSON.stringify(v);
-    }
+    if (v.content) rawContent = typeof v.content === 'string' ? v.content.trim() : JSON.stringify(v.content);
+    else if (v.key) rawContent = String(v.key).trim();
+    else if (Array.isArray(v.keys) && v.keys.length) rawContent = v.keys.map(function(k) { return (k && typeof k === 'object' ? (k.content || k.key || '') : String(k || '')).trim(); }).filter(Boolean).join('\n');
   }
 
-  if (!rawContent || rawContent === '{}') {
-    rawContent = 'GV-' + (order.productId || 'PROD') + '-' + String(orderId).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() + '-' + (order.quantity > 1 ? 'X' + order.quantity : 'KEY') + '-ACTIF';
+  // Fichier stocké sur le serveur : téléchargement authentifié
+  if (contentType === 'file' && v.blobId) {
+    return `
+      <div class="vault-content-field">
+        <span id="vault-text-${domId}">📄 Fichier : <strong>${escapeHtml(fileName)}</strong></span>
+      </div>
+      <div class="vault-actions-row">
+        <button type="button" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000;" onclick="downloadOrderFile('${safeIdJs}', '${jsStr(fileName)}')" title="Télécharger le fichier">📥 Télécharger</button>
+      </div>
+    `;
   }
 
-  // Stocker dans le cache mémoire pour les fonctions interactives
+  if (!rawContent) {
+    // Jamais de clé inventée : le contenu manquant est signalé honnêtement
+    return '<p style="color: #b45309; font-size: 12px; margin: 0;">Contenu en cours de préparation. Contactez le support si vous ne le recevez pas rapidement.</p>';
+  }
+
   if (!window._vaultSecretsCache) window._vaultSecretsCache = {};
   window._vaultSecretsCache[orderId] = rawContent;
-
   var safeContent = escapeHtml(rawContent);
+  var singleLine = rawContent.split(/\r?\n/).filter(Boolean).length === 1;
 
-  if (contentType === 'link' || rawContent.startsWith('http://') || rawContent.startsWith('https://')) {
+  if ((contentType === 'link' || /^https?:\/\//i.test(rawContent)) && singleLine && isHttpUrl(rawContent)) {
     return `
       <div class="vault-content-field">
-        <span id="vault-text-${orderId}" data-real="${safeContent}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-          ${safeContent}
-        </span>
+        <span id="vault-text-${domId}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${safeContent}</span>
       </div>
       <div class="vault-actions-row">
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier le lien">
-          <span id="vault-copy-icon-${orderId}">📋</span>
-          <span id="vault-copy-label-${orderId}">Copier</span>
+        <button type="button" class="btn-vault-action" id="btn-copy-${domId}" onclick="copyOrderVaultSecret('${safeIdJs}')" title="Copier le lien">
+          <span id="vault-copy-icon-${domId}">📋</span>
+          <span id="vault-copy-label-${domId}">Copier</span>
         </button>
-        <a href="${safeContent}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000; text-decoration: none;" title="Ouvrir le lien sécurisé">
-          🔗 Ouvrir le Lien &rarr;
-        </a>
-      </div>
-    `;
-  } else if (contentType === 'file') {
-    return `
-      <div class="vault-content-field">
-        <span id="vault-text-${orderId}" data-real="${safeContent}">
-          📄 Fichier : <strong>${escapeHtml(fileName)}</strong>
-        </span>
-      </div>
-      <div class="vault-actions-row">
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier les détails">
-          <span id="vault-copy-icon-${orderId}">📋</span>
-          <span id="vault-copy-label-${orderId}">Copier</span>
-        </button>
-        <button type="button" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000;" onclick="downloadVaultFile('${escapeHtml(fileName)}', '${encodeURIComponent(rawContent)}')" title="Télécharger le fichier">
-          📥 Télécharger
-        </button>
-      </div>
-    `;
-  } else {
-    return `
-      <div class="vault-content-field">
-        <span id="vault-text-${orderId}" data-real="${safeContent}" data-hidden="true" class="vault-secret-masked">
-          ••••••••••••••••
-        </span>
-      </div>
-      <div id="vault-breakdown-${orderId}" class="vault-breakdown-box" style="display: none; margin-top: 8px;"></div>
-      <div class="vault-actions-row">
-        <button type="button" class="btn-vault-action" id="btn-reveal-${orderId}" onclick="toggleVaultSecret('${orderId}')" title="Afficher ou masquer la clé">
-          <span id="vault-icon-${orderId}">👁️</span>
-          <span id="vault-label-${orderId}">Révéler</span>
-        </button>
-        <button type="button" class="btn-vault-action" id="btn-copy-${orderId}" onclick="copyOrderVaultSecret('${orderId}')" title="Copier la clé complète au format original">
-          <span id="vault-copy-icon-${orderId}">📋</span>
-          <span id="vault-copy-label-${orderId}">Copier la clé complète</span>
-        </button>
+        <a href="${safeContent}" target="_blank" rel="noopener noreferrer" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000; text-decoration: none;" title="Ouvrir le lien sécurisé">🔗 Ouvrir le Lien &rarr;</a>
       </div>
     `;
   }
+  if (contentType === 'file') {
+    return `
+      <div class="vault-content-field">
+        <span id="vault-text-${domId}">📄 Fichier : <strong>${escapeHtml(fileName)}</strong></span>
+      </div>
+      <div class="vault-actions-row">
+        <button type="button" class="btn-vault-action" id="btn-copy-${domId}" onclick="copyOrderVaultSecret('${safeIdJs}')" title="Copier le contenu">
+          <span id="vault-copy-icon-${domId}">📋</span>
+          <span id="vault-copy-label-${domId}">Copier</span>
+        </button>
+        <button type="button" class="btn-vault-action" style="background: var(--gold-500, #f59e0b); color: #000;" onclick="downloadVaultFile('${jsStr(fileName)}', '${encodeURIComponent(rawContent)}')" title="Télécharger le fichier">📥 Télécharger</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="vault-content-field">
+      <span id="vault-text-${domId}" data-real="${safeContent}" data-hidden="true" class="vault-secret-masked">••••••••••••••••</span>
+    </div>
+    <div id="vault-breakdown-${domId}" class="vault-breakdown-box" style="display: none; margin-top: 8px;"></div>
+    <div class="vault-actions-row">
+      <button type="button" class="btn-vault-action" id="btn-reveal-${domId}" onclick="toggleVaultSecret('${safeIdJs}')" title="Afficher ou masquer la clé">
+        <span id="vault-icon-${domId}">👁️</span>
+        <span id="vault-label-${domId}">Révéler</span>
+      </button>
+      <button type="button" class="btn-vault-action" id="btn-copy-${domId}" onclick="copyOrderVaultSecret('${safeIdJs}')" title="Copier la clé complète au format original">
+        <span id="vault-copy-icon-${domId}">📋</span>
+        <span id="vault-copy-label-${domId}">Copier la clé complète</span>
+      </button>
+    </div>
+  `;
 }
+
+// Téléchargement d'un fichier livré (stocké sur le serveur) avec la session du client
+async function downloadOrderFile(orderId, fileName) {
+  try {
+    var res = await fetch('/api/data/download?orderId=' + encodeURIComponent(orderId), { cache: 'no-store' });
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return {}; });
+      throw new Error(err.error || 'Téléchargement impossible.');
+    }
+    var blob = await res.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'livraison';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+  } catch (e) {
+    showToast(e.message || 'Téléchargement impossible.', 'error');
+  }
+}
+window.downloadOrderFile = downloadOrderFile;
 
 function renderKeyBreakdownHtml(keyString) {
   if (!keyString || typeof keyString !== 'string') return '';
@@ -3344,15 +3628,7 @@ function renderKeyBreakdownHtml(keyString) {
 }
 
 window.copySingleKeyPart = function(part, label) {
-  if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(part).then(function() {
-      showToast((label || 'Élément') + ' copié dans le presse-papiers !', 'success');
-    }).catch(function() {
-      showToast('Copié : ' + part, 'info');
-    });
-  } else {
-    showToast('Copié : ' + part, 'info');
-  }
+  copyToClipboard(part, (label || 'Élément') + ' copié dans le presse-papiers !');
 };
 
 window.toggleVaultSecret = function(orderId) {
@@ -3521,15 +3797,7 @@ window.copyOrderVaultSecret = function(orderId) {
 };
 
 window.copyText = function(val) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(val).then(function() {
-      showToast('✓ Copié dans le presse-papiers !', 'success');
-    }).catch(function() {
-      showToast('✓ Copié !', 'success');
-    });
-  } else {
-    showToast('✓ Copié !', 'success');
-  }
+  copyToClipboard(val, '✓ Copié dans le presse-papiers !');
 };
 
 function downloadVaultFile(filename, encodedContent) {
@@ -3770,11 +4038,14 @@ function applyAuthenticatedSession(data) {
 }
 
 // 1. CONNEXION AVEC EMAIL OU NOM D'UTILISATEUR ET MOT DE PASSE
+var _isLoginSubmitting = false;
 async function handleLoginSubmit(e) {
   e.preventDefault();
+  if (_isLoginSubmitting) return;
   var email = document.getElementById('login-email').value.trim().toLowerCase();
   var pass = document.getElementById('login-password').value;
   var err = document.getElementById('login-error-msg');
+  var loginBtn = document.getElementById('btn-login-submit');
   err.classList.add('hidden');
 
   // Anti brute-force côté client
@@ -3788,127 +4059,81 @@ async function handleLoginSubmit(e) {
     }
   }
 
-  // Tentative via l'API de production backend
+  _isLoginSubmitting = true;
+  if (loginBtn) {
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Connexion en cours... ⚡';
+  }
+
   try {
-    var res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: email, email: email, password: pass })
-    });
-    var data = await res.json();
+    // Tentative via l'API de production backend
+    try {
+      var res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: email, email: email, password: pass })
+      });
+      var data = await res.json();
 
-    if (res.ok && (data.success || data.session)) {
-      if (typeof Security !== 'undefined') Security.resetRateLimit('client_login');
+      if (res.ok && (data.success || data.session)) {
+        if (typeof Security !== 'undefined') Security.resetRateLimit('client_login');
 
-      if (data.user && data.user.role === 'admin') {
-        DB.set('session', data.session);
-        showToast('Connexion administrateur réussie ! 🔒', 'success');
-        setTimeout(function() { window.location.href = 'admin.html'; }, 350);
+        if (data.user && data.user.role === 'admin') {
+          DB.set('session', data.session);
+          DB.set('admin_session', data.session);
+          showToast('Connexion administrateur réussie ! 🔒', 'success');
+          setTimeout(function() { window.location.href = 'admin.html'; }, 200);
+          return;
+        }
+
+        AuthState.setAuthenticatedSession(data.session, data.user, 'password');
+        showToast('Bienvenue ' + data.user.name + ' ! 👋', 'success');
+        closeAuthModal();
+        if (data.user && data.user.mustChangePassword) {
+          setTimeout(function() { openAccountModal(true); }, 250);
+          return;
+        }
+
+        if (window.location.hash !== '#catalog') {
+          try { history.pushState(null, '', '#catalog'); } catch (e) {}
+        }
+
+        if (pendingPurchaseProductId) {
+          var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+          startProductPurchase(pId);
+        }
+        return;
+      } else if (res.status === 400 || res.status === 401 || res.status === 429) {
+        err.textContent = data.error || 'Adresse e-mail, nom d\'utilisateur ou mot de passe incorrect.';
+        err.style.color = 'var(--rose-500)';
+        err.classList.remove('hidden');
         return;
       }
-
-      AuthState.setAuthenticatedSession(data.session, data.user, 'password');
-      showToast('Bienvenue ' + data.user.name + ' ! 👋', 'success');
-      closeAuthModal();
-
-      if (window.location.hash !== '#catalog') {
-        try { history.pushState(null, '', '#catalog'); } catch (e) {}
-      }
-
-      if (pendingPurchaseProductId) {
-        var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-        startProductPurchase(pId);
-      }
+      err.textContent = (data && data.error) || 'Connexion impossible pour le moment. Veuillez réessayer.';
+      err.style.color = 'var(--rose-500)';
+      err.classList.remove('hidden');
       return;
-    } else if (res.status === 400 || res.status === 401 || res.status === 429) {
-      err.textContent = data.error || 'Adresse e-mail, nom d\'utilisateur ou mot de passe incorrect.';
+    } catch (apiErr) {
+      // Pas de connexion « locale » de secours : une session sans jeton serveur ne permettrait aucun achat.
+      err.textContent = 'Serveur injoignable. Vérifiez votre connexion internet puis réessayez.';
       err.style.color = 'var(--rose-500)';
       err.classList.remove('hidden');
       return;
     }
-  } catch (apiErr) {
-    console.warn('[Auth] Backend distant inaccessible, bascule sur authentification locale:', apiErr.message);
-  }
-
-  // Fallback local sécurisé
-  var isAdminEmail = (email === 'admin@getvirtu.shop' || email === 'admin@virtushop.com' || email === 'admin');
-  var isCorrectAdminPass = false;
-  if (typeof Security !== 'undefined') {
-    isCorrectAdminPass = await Security.verifyPassword(pass, ADMIN_HASH, ADMIN_SALT) || await Security.verifyPassword(pass, ADMIN_LEGACY_HASH, ADMIN_SALT);
-  } else {
-    isCorrectAdminPass = (pass === 'admin123' || pass === 'admin');
-  }
-
-  if (isAdminEmail && isCorrectAdminPass) {
-    if (typeof Security !== 'undefined') {
-      Security.resetRateLimit('client_login');
-      DB.set('session', Security.createSession(ADMIN, 'admin'));
-    } else {
-      DB.set('session', { userId: ADMIN.id, role: 'admin', name: ADMIN.name, email: ADMIN.email });
+  } finally {
+    _isLoginSubmitting = false;
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Se connecter';
     }
-    showToast('Connexion administrateur réussie ! 🔒', 'success');
-    setTimeout(function() { window.location.href = 'admin.html'; }, 350);
-    return;
-  }
-
-  var users = DB.get('users', []);
-  var matchedUser = null;
-  for (var i = 0; i < users.length; i++) {
-    var u = users[i];
-    if (!u) continue;
-    var matchEmail = (u.email && u.email.toLowerCase() === email) ||
-                     (u.username && u.username.toLowerCase() === email) ||
-                     (u.name && u.name.toLowerCase() === email);
-    if (!matchEmail) continue;
-
-    var passMatch = false;
-    if (u.passwordHash && typeof Security !== 'undefined') {
-      passMatch = await Security.verifyPassword(pass, u.passwordHash, ADMIN_SALT);
-    } else if (u.password_hash && typeof Security !== 'undefined') {
-      passMatch = await Security.verifyPassword(pass, u.password_hash, ADMIN_SALT);
-    }
-
-    if (passMatch) {
-      matchedUser = u;
-      break;
-    }
-  }
-
-  if (!matchedUser) {
-    if (typeof Security !== 'undefined') {
-      Security.recordFailedAttempt('client_login', 5 * 60 * 1000);
-      var rlAfter = Security.checkRateLimit('client_login', 5, 5 * 60 * 1000);
-      err.textContent = 'Adresse e-mail, identifiant ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '');
-    } else {
-      err.textContent = 'Adresse e-mail, identifiant ou mot de passe incorrect.';
-    }
-    err.style.color = 'var(--rose-500)';
-    err.classList.remove('hidden');
-    return;
-  }
-
-  if (typeof Security !== 'undefined') {
-    Security.resetRateLimit('client_login');
-  }
-  var sessionObj = (typeof Security !== 'undefined')
-    ? Security.createSession(matchedUser, matchedUser.role || 'client')
-    : { userId: matchedUser.id, role: matchedUser.role || 'client', name: matchedUser.name, email: matchedUser.email };
-
-  AuthState.setAuthenticatedSession(sessionObj, matchedUser, 'password_local');
-  showToast('Bienvenue ' + matchedUser.name + ' ! 👋', 'success');
-  closeAuthModal();
-  if (window.location.hash !== '#catalog') {
-    try { history.pushState(null, '', '#catalog'); } catch (e) {}
-  }
-  if (pendingPurchaseProductId) {
-    var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-    startProductPurchase(pId);
   }
 }
 
 // 2. INSCRIPTION AVEC EMAIL ET MOT DE PASSE (PRODUCTION : 0.00 $ DE SOLDE DE DÉPART)
+var _isRegisterSubmitting = false;
 async function handleRegisterSubmit(e) {
   e.preventDefault();
+  if (_isRegisterSubmitting) return;
   var name = document.getElementById('reg-name').value.trim();
   var usernameInput = document.getElementById('reg-username');
   var username = usernameInput ? usernameInput.value.trim().toLowerCase() : '';
@@ -3916,6 +4141,7 @@ async function handleRegisterSubmit(e) {
   var pass = document.getElementById('reg-password').value;
   var passConfirm = document.getElementById('reg-password-confirm').value;
   var err = document.getElementById('reg-error-msg');
+  var regBtn = document.getElementById('btn-register-submit');
   err.classList.add('hidden');
 
   // Validations strictes de production
@@ -3950,92 +4176,62 @@ async function handleRegisterSubmit(e) {
     err.classList.remove('hidden'); return;
   }
 
-  // 1. Appel du backend de production
+  _isRegisterSubmitting = true;
+  if (regBtn) {
+    regBtn.disabled = true;
+    regBtn.textContent = 'Création du compte... ⚡';
+  }
+
   try {
-    var res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: name,
-        username: username,
-        email: email,
-        password: pass,
-        confirmPassword: passConfirm
-      })
-    });
-    var data = await res.json();
+    // 1. Appel du backend de production
+    try {
+      var res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          username: username,
+          email: email,
+          password: pass,
+          confirmPassword: passConfirm
+        })
+      });
+      var data = await res.json();
 
-    if (res.ok && (data.success || data.session)) {
-      AuthState.setAuthenticatedSession(data.session, data.user, 'register');
-      showToast(`Compte créé avec succès ! Bienvenue ${data.user.name} ⚡`, 'success');
-      closeAuthModal();
+      if (res.ok && (data.success || data.session)) {
+        AuthState.setAuthenticatedSession(data.session, data.user, 'register');
+        showToast(`Compte créé avec succès ! Bienvenue ${data.user.name} ⚡`, 'success');
+        closeAuthModal();
 
-      if (window.location.hash !== '#catalog') {
-        try { history.pushState(null, '', '#catalog'); } catch (e) {}
+        if (window.location.hash !== '#catalog') {
+          try { history.pushState(null, '', '#catalog'); } catch (e) {}
+        }
+
+        if (pendingPurchaseProductId) {
+          var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
+          startProductPurchase(pId);
+        }
+        return;
+      } else if (res.status === 400 || res.status === 409) {
+        err.textContent = data.error || 'Erreur lors de l\'inscription.';
+        err.classList.remove('hidden');
+        return;
       }
-
-      if (pendingPurchaseProductId) {
-        var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-        startProductPurchase(pId);
-      }
+      err.textContent = (data && data.error) || 'Inscription impossible pour le moment. Veuillez réessayer.';
+      err.classList.remove('hidden');
       return;
-    } else if (res.status === 400 || res.status === 409) {
-      err.textContent = data.error || 'Erreur lors de l\'inscription.';
+    } catch (apiErr) {
+      // Pas de compte « local » de secours : il n'existerait pas sur le serveur.
+      err.textContent = 'Serveur injoignable. Vérifiez votre connexion internet puis réessayez.';
       err.classList.remove('hidden');
       return;
     }
-  } catch (apiErr) {
-    console.warn('[Auth] Backend distant inaccessible, bascule sur inscription locale:', apiErr.message);
-  }
-
-  // Fallback local si backend hors-ligne
-  var users = DB.get('users', []);
-  if (users.some(function(u) { return u.email && u.email.toLowerCase() === email; })) {
-    err.textContent = 'Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter.';
-    err.classList.remove('hidden'); return;
-  }
-  if (username && users.some(function(u) { return u.username && u.username.toLowerCase() === username; })) {
-    err.textContent = 'Ce nom d\'utilisateur est déjà pris. Veuillez en choisir un autre.';
-    err.classList.remove('hidden'); return;
-  }
-
-  var passwordHash = typeof Security !== 'undefined'
-    ? await Security.hashPassword(pass, ADMIN_SALT)
-    : pass;
-
-  var safeName = typeof Security !== 'undefined' ? Security.escapeHtml(name) : name;
-
-  // Strict zéro solde de départ en production (0.00 USD)
-  var newUser = {
-    id: 'user-' + Date.now(),
-    name: safeName,
-    username: username || email.split('@')[0],
-    email: email,
-    password_hash: passwordHash,
-    role: 'client',
-    balance: 0.00, // Zéro strict
-    avatarColor: '#2563eb',
-    created_at: new Date().toISOString()
-  };
-
-  users.push(newUser);
-  DB.set('users', users);
-
-  var sessionObj = (typeof Security !== 'undefined')
-    ? Security.createSession(newUser, 'client')
-    : { userId: newUser.id, role: 'client', name: newUser.name, email: newUser.email };
-
-  AuthState.setAuthenticatedSession(sessionObj, newUser, 'register_local');
-  showToast(`Compte créé avec succès ! Bienvenue ${newUser.name} ⚡`, 'success');
-  closeAuthModal();
-
-  if (window.location.hash !== '#catalog') {
-    try { history.pushState(null, '', '#catalog'); } catch (e) {}
-  }
-
-  if (pendingPurchaseProductId) {
-    var pId = pendingPurchaseProductId; pendingPurchaseProductId = null;
-    startProductPurchase(pId);
+  } finally {
+    _isRegisterSubmitting = false;
+    if (regBtn) {
+      regBtn.disabled = false;
+      regBtn.textContent = "S'inscrire";
+    }
   }
 }
 
@@ -4056,6 +4252,143 @@ async function handleLogout() {
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// ========== MON COMPTE : PROFIL & MOT DE PASSE ==========
+var _accountForced = false;
+function openAccountModal(forced) {
+  var s = AuthState.getSession();
+  if (!s || !s.userId) { openAuthModal('login'); return; }
+  _accountForced = Boolean(forced);
+  var u = AuthState.getUser() || {};
+  document.getElementById('account-subtitle').textContent = (u.email || s.email || '') + (u.username ? ' • @' + u.username : '');
+  document.getElementById('account-name').value = u.name || s.name || '';
+  document.getElementById('account-force-banner').classList.toggle('hidden', !_accountForced);
+  document.getElementById('account-current-pwd-field').classList.toggle('hidden', _accountForced);
+  document.getElementById('account-close-btn').classList.toggle('hidden', _accountForced);
+  ['account-current-pwd', 'account-new-pwd', 'account-confirm-pwd'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('account-pwd-msg').classList.add('hidden');
+  document.getElementById('modal-account').classList.add('active');
+}
+function closeAccountModal() {
+  if (_accountForced) return; // changement obligatoire après un mot de passe temporaire
+  document.getElementById('modal-account').classList.remove('active');
+}
+async function saveAccountProfile(e) {
+  e.preventDefault();
+  var name = document.getElementById('account-name').value.trim();
+  var btn = document.getElementById('btn-account-profile');
+  btn.disabled = true;
+  try {
+    var res = await fetch('/api/auth/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) throw new Error(data.error || 'Mise à jour impossible.');
+    var s = AuthState.getSession();
+    if (s) { s.name = data.user.name; AuthState.setAuthenticatedSession(s, data.user, 'profile'); }
+    showToast('Nom mis à jour.', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally { btn.disabled = false; }
+}
+async function saveAccountPassword(e) {
+  e.preventDefault();
+  var cur = document.getElementById('account-current-pwd').value;
+  var nw = document.getElementById('account-new-pwd').value;
+  var conf = document.getElementById('account-confirm-pwd').value;
+  var msg = document.getElementById('account-pwd-msg');
+  var btn = document.getElementById('btn-account-password');
+  msg.classList.add('hidden');
+  var fail = function(t) { msg.textContent = t; msg.style.color = 'var(--rose-500)'; msg.classList.remove('hidden'); };
+  if (nw.length < 8 || !/[A-Za-z]/.test(nw) || !/[0-9]/.test(nw)) return fail('Le mot de passe doit contenir au moins 8 caractères, avec des lettres et des chiffres.');
+  if (nw !== conf) return fail('Les deux mots de passe ne correspondent pas.');
+  btn.disabled = true;
+  try {
+    var body = { newPassword: nw, confirmPassword: conf };
+    if (!_accountForced) body.currentPassword = cur;
+    var res = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) throw new Error(data.error || 'Changement impossible.');
+    if (data.session) AuthState.setAuthenticatedSession(data.session, Object.assign({}, AuthState.getUser(), { mustChangePassword: false }), 'password_change');
+    _accountForced = false;
+    document.getElementById('account-close-btn').classList.remove('hidden');
+    document.getElementById('modal-account').classList.remove('active');
+    showToast('Mot de passe modifié. Vos autres appareils ont été déconnectés.', 'success');
+  } catch (err) {
+    fail(err.message);
+  } finally { btn.disabled = false; }
+}
+
+// ========== MOT DE PASSE OUBLIÉ ==========
+function openForgotPasswordModal() {
+  closeAuthModal();
+  document.getElementById('forgot-result').classList.add('hidden');
+  document.getElementById('forgot-form').classList.remove('hidden');
+  var em = document.getElementById('login-email');
+  var f = document.getElementById('forgot-email');
+  if (em && f && em.value.indexOf('@') > 0) f.value = em.value.trim();
+  document.getElementById('modal-forgot').classList.add('active');
+}
+function closeForgotPasswordModal() { document.getElementById('modal-forgot').classList.remove('active'); }
+async function submitForgotPassword(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btn-forgot-submit');
+  var out = document.getElementById('forgot-result');
+  btn.disabled = true;
+  try {
+    var res = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: document.getElementById('forgot-email').value.trim() }) });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) throw new Error(data.error || 'Demande impossible pour le moment.');
+    var wa = getWhatsAppNumber ? getWhatsAppNumber() : '';
+    out.innerHTML = escapeHtml(data.message) + (data.emailDelivery ? '' :
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+      (wa ? '<a class="btn-primary btn-sm" style="text-decoration:none;" target="_blank" rel="noopener noreferrer" href="https://wa.me/' + encodeURIComponent(wa) + '?text=' + encodeURIComponent('Bonjour, je souhaite réinitialiser le mot de passe de mon compte GetVirtu (' + document.getElementById('forgot-email').value.trim() + ').') + '">💬 WhatsApp</a>' : '') +
+      '<button type="button" class="btn-secondary btn-sm" onclick="closeForgotPasswordModal(); openSupportModal();">Formulaire de support</button></div>');
+    out.classList.remove('hidden');
+    document.getElementById('forgot-form').classList.add('hidden');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally { btn.disabled = false; }
+}
+
+// ========== NOUVEAU MOT DE PASSE VIA LIEN (#reset-password=<jeton>) ==========
+var _pendingResetToken = null;
+function checkResetPasswordLink() {
+  var m = /^#reset-password=([A-Za-z0-9_\-%]+)$/.exec(window.location.hash || '');
+  if (!m) return;
+  _pendingResetToken = decodeURIComponent(m[1]);
+  try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+  document.getElementById('modal-reset-password').classList.add('active');
+}
+function closeResetPasswordModal() { _pendingResetToken = null; document.getElementById('modal-reset-password').classList.remove('active'); }
+async function submitResetPassword(e) {
+  e.preventDefault();
+  var nw = document.getElementById('reset-new-pwd').value;
+  var conf = document.getElementById('reset-confirm-pwd').value;
+  var msg = document.getElementById('reset-pwd-msg');
+  var btn = document.getElementById('btn-reset-pwd-submit');
+  msg.classList.add('hidden');
+  btn.disabled = true;
+  try {
+    var res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: _pendingResetToken, newPassword: nw, confirmPassword: conf }) });
+    var data = await res.json().catch(function() { return {}; });
+    if (!res.ok) throw new Error(data.error || 'Réinitialisation impossible.');
+    closeResetPasswordModal();
+    showToast(data.message || 'Mot de passe réinitialisé.', 'success');
+    openAuthModal('login', 'Connectez-vous avec votre nouveau mot de passe.');
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.style.color = 'var(--rose-500)';
+    msg.classList.remove('hidden');
+  } finally { btn.disabled = false; }
+}
+window.openAccountModal = openAccountModal;
+window.closeAccountModal = closeAccountModal;
+window.saveAccountProfile = saveAccountProfile;
+window.saveAccountPassword = saveAccountPassword;
+window.openForgotPasswordModal = openForgotPasswordModal;
+window.closeForgotPasswordModal = closeForgotPasswordModal;
+window.submitForgotPassword = submitForgotPassword;
+window.closeResetPasswordModal = closeResetPasswordModal;
+window.submitResetPassword = submitResetPassword;
 
 function toggleFaq(btn) {
   var item = btn.parentElement;
@@ -4086,6 +4419,7 @@ function renderFooterBadges() {
 function showToast(msg, type) {
   var t = document.getElementById('toast');
   if (!t) return;
+  if (window._toastHideTimer) clearTimeout(window._toastHideTimer);
   var icon = type === 'success' ? '✓' : (type === 'error' ? '⚠️' : 'ℹ️');
   t.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-text">${escapeHtml(msg)}</span>`;
   t.className = 'toast-' + (type || 'info');
@@ -4094,7 +4428,7 @@ function showToast(msg, type) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function() {
     t.style.animation = 'toastCenterOut 0.22s ease forwards';
-    setTimeout(function() {
+    window._toastHideTimer = setTimeout(function() {
       t.style.display = 'none';
       t.style.animation = '';
     }, 220);
@@ -4102,8 +4436,13 @@ function showToast(msg, type) {
 }
 
 function escapeHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 window.addEventListener('storage', function(e) {
@@ -4111,6 +4450,11 @@ window.addEventListener('storage', function(e) {
 });
 
 window.addEventListener('hashchange', function() {
+  var h = (window.location.hash || '').replace('#', '').trim();
+  if (h && ['how-it-works', 'faq', 'features', 'reviews', 'hero'].indexOf(h) !== -1) {
+    navigateShopSection(h);
+    return;
+  }
   routeUserExperience();
 });
 
@@ -4131,6 +4475,9 @@ function startApp() {
   console.log('[GetVirtu] Initialisation client (Production)...');
   try {
     initDB();
+    // Le catalogue affiché provient toujours du serveur (jamais d'un cache potentiellement périmé)
+    DB.set('products', []);
+    window._gvCatalogState = 'loading';
 
     // Vérification d'intégrité : si la session active est un compte client, purger tout reliquat d'admin_session
     var currentS = DB.get('session');
@@ -4179,7 +4526,10 @@ function startApp() {
     trackVisitor();
 
     // Routage immédiat et synchrone
+    initMobileViewportUX();
+    initModalInteractionsUX();
     routeUserExperience();
+    checkResetPasswordLink();
     initGoogleIdentity();
     syncUserSessionAndBalance();
     syncProductsFromServer();
@@ -4189,33 +4539,189 @@ function startApp() {
   }
 }
 
-// Synchronisation des produits du catalogue depuis le serveur / Edge Config
-async function syncProductsFromServer() {
-  try {
-    var res = await fetch('/api/data/products');
-    if (res.ok) {
-      var data = await res.json();
-      if (data && Array.isArray(data.products) && data.products.length > 0) {
-        DB.set('products', data.products);
-        if (typeof renderLandingShowcase === 'function') renderLandingShowcase();
-        if (typeof renderLandingCatalog === 'function') renderLandingCatalog();
-        if (typeof renderConnectedCatalog === 'function') renderConnectedCatalog();
-      }
-    }
-  } catch (e) {}
+var _modalUXInitialized = false;
+function initModalInteractionsUX() {
+  if (_modalUXInitialized) return;
+  _modalUXInitialized = true;
+
+  var authModal = document.getElementById('auth-modal');
+  if (authModal) {
+    authModal.addEventListener('click', function(e) {
+      if (e.target === authModal) closeAuthModal();
+    });
+  }
+
+  document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+    backdrop.addEventListener('click', function(e) {
+      if (e.target !== backdrop) return;
+      if (backdrop.id === 'modal-pay') closePayModal();
+      else if (backdrop.id === 'modal-deposit') closeDepositModal();
+      else if (backdrop.id === 'modal-support') closeSupportModal();
+      else if (backdrop.id === 'modal-orders') closeOrdersModal();
+      else backdrop.classList.remove('active');
+    });
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    if (authModal && authModal.classList.contains('active')) closeAuthModal();
+    var mPay = document.getElementById('modal-pay');
+    if (mPay && mPay.classList.contains('active')) closePayModal();
+    var mDep = document.getElementById('modal-deposit');
+    if (mDep && mDep.classList.contains('active')) closeDepositModal();
+    var mSup = document.getElementById('modal-support');
+    if (mSup && mSup.classList.contains('active')) closeSupportModal();
+    var mOrd = document.getElementById('modal-orders');
+    if (mOrd && mOrd.classList.contains('active')) closeOrdersModal();
+    var uDrop = document.getElementById('user-dropdown');
+    if (uDrop && uDrop.classList.contains('active')) uDrop.classList.remove('active');
+  });
 }
 
-// Synchronisation des méthodes de paiement actives depuis le serveur
-async function syncPaymentMethodsFromServer() {
+// Stabilisation fluide du viewport mobile (iOS Safari / Android) à l'ouverture et fermeture du clavier virtuel
+var _mobileViewportInitialized = false;
+function initMobileViewportUX() {
+  if (_mobileViewportInitialized) return;
+  _mobileViewportInitialized = true;
+
+  var savedScrollY = 0;
+  var hasFocusedField = false;
+  var blurTimer = null;
+
+  function isFormField(el) {
+    if (!el || !el.tagName) return false;
+    var tag = el.tagName.toUpperCase();
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag === 'INPUT') {
+      var type = (el.type || 'text').toLowerCase();
+      return type !== 'checkbox' && type !== 'radio' && type !== 'button' && type !== 'submit' && type !== 'reset' && type !== 'file' && type !== 'range';
+    }
+    return Boolean(el.isContentEditable);
+  }
+
+  function isMobileViewport() {
+    return window.innerWidth <= 768 || (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+  }
+
+  document.addEventListener('focusin', function(e) {
+    if (!isMobileViewport() || !isFormField(e.target)) return;
+    if (blurTimer) {
+      clearTimeout(blurTimer);
+      blurTimer = null;
+    }
+    if (!hasFocusedField) {
+      savedScrollY = window.scrollY || window.pageYOffset || 0;
+      hasFocusedField = true;
+    }
+    document.documentElement.classList.add('gv-keyboard-open');
+  }, { passive: true });
+
+  document.addEventListener('focusout', function(e) {
+    if (!isMobileViewport() || !isFormField(e.target)) return;
+    if (blurTimer) clearTimeout(blurTimer);
+    blurTimer = setTimeout(function() {
+      if (isFormField(document.activeElement)) return;
+      hasFocusedField = false;
+      document.documentElement.classList.remove('gv-keyboard-open');
+
+      var activeModal = document.querySelector('.modal-backdrop.active');
+      if (activeModal) {
+        window.scrollTo(0, savedScrollY);
+      } else if (window.scrollX !== 0) {
+        window.scrollTo(0, window.scrollY || window.pageYOffset || 0);
+      }
+    }, 120);
+  }, { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function() {
+      if (!isMobileViewport()) return;
+      if (!isFormField(document.activeElement) && window.scrollX !== 0) {
+        window.scrollTo(0, window.scrollY || window.pageYOffset || 0);
+      }
+    }, { passive: true });
+  }
+}
+
+// Synchronisation des produits du catalogue depuis le serveur / Edge Config
+// État du catalogue : 'loading' (premier chargement), 'ready' ou 'error'.
+// Le catalogue n'est jamais affiché depuis un ancien cache local (évite de montrer des produits supprimés).
+window._gvCatalogState = window._gvCatalogState || 'loading';
+
+function catalogPlaceholderHtml(compact) {
+  if (window._gvCatalogState === 'loading') {
+    return compact
+      ? '<div style="text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13px;">Chargement du catalogue…</div>'
+      : '<div style="grid-column: 1/-1; text-align: center; padding: 48px 20px; color: var(--text-muted); font-size: 14px;">Chargement du catalogue…</div>';
+  }
+  if (window._gvCatalogState === 'error') {
+    return (compact ? '<div style="text-align: center; padding: 24px 16px;' : '<div style="grid-column: 1/-1; text-align: center; padding: 40px 20px;') +
+      ' color: var(--text-secondary); font-size: 13.5px;">Impossible de charger le catalogue pour le moment. <a href="javascript:void(0)" onclick="syncProductsFromServer()" style="color: var(--primary-600); font-weight: 700;">Réessayer</a></div>';
+  }
+  return null;
+}
+
+function rerenderCatalogViews() {
+  if (typeof renderLandingShowcase === 'function') renderLandingShowcase();
+  if (typeof renderLandingCategories === 'function') renderLandingCategories();
+  if (typeof renderLandingCatalog === 'function') renderLandingCatalog();
+  if (typeof renderConnectedCategories === 'function') renderConnectedCategories();
+  if (typeof renderConnectedCatalog === 'function') renderConnectedCatalog();
+}
+
+async function syncProductsFromServer() {
   try {
-    var res = await fetch('/api/data/methods');
+    var res = await fetch('/api/data/products?_t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     if (res.ok) {
       var data = await res.json();
-      if (data && Array.isArray(data.methods) && data.methods.length > 0) {
-        DB.set('payment_methods', data.methods);
+      if (data && Array.isArray(data.products)) {
+        window._gvCatalogState = 'ready';
+        DB.set('products', data.products);
+        if (data.products.length === 0) {
+          DB.set('vault', {});
+          currentLandingCat = 'all';
+          currentConnectedCat = 'all';
+        } else {
+          var validCats = data.products.map(function(p) { return p && p.category; }).filter(Boolean);
+          if (currentLandingCat !== 'all' && validCats.indexOf(currentLandingCat) === -1) {
+            currentLandingCat = 'all';
+          }
+          if (currentConnectedCat !== 'all' && validCats.indexOf(currentConnectedCat) === -1) {
+            currentConnectedCat = 'all';
+          }
+        }
+        rerenderCatalogViews();
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    if (window._gvCatalogState !== 'ready') {
+      window._gvCatalogState = 'error';
+      rerenderCatalogViews();
+    }
+  }
+}
+
+// Synchronisation parallèle des méthodes de paiement actives et paramètres depuis le serveur
+async function syncPaymentMethodsFromServer() {
+  var ts = Date.now();
+  var results = await Promise.allSettled([
+    fetch('/api/data/methods?_t=' + ts, { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }),
+    fetch('/api/data/settings?_t=' + ts, { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; })
+  ]);
+
+  var data = results[0].status === 'fulfilled' ? results[0].value : null;
+  if (data && Array.isArray(data.methods) && data.methods.length > 0) {
+    DB.set('payment_methods', data.methods);
+  }
+
+  var sData = results[1].status === 'fulfilled' ? results[1].value : null;
+  if (sData && sData.settings && typeof sData.settings.min_recharge === 'number') {
+    DB.set('min_recharge', sData.settings.min_recharge);
+  }
+  if (sData && sData.settings && sData.settings.whatsapp_number) {
+    DB.set('whatsapp_number', String(sData.settings.whatsapp_number));
+  }
 }
 
 // Basculement vers le tableau de bord administrateur
@@ -4229,7 +4735,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202610131029_87dbf3',
+  currentVersion: 'v202611141926_ca96c0',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

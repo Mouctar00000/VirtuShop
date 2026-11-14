@@ -2,9 +2,29 @@
   "version": 2,
   "cleanUrls": true,
   "trailingSlash": false,
+  "functions": {
+    "api/*.js": { "maxDuration": 30 }
+  },
+  "redirects": [
+    { "source": "/data/:path*", "destination": "/", "permanent": false },
+    { "source": "/backend/:path*", "destination": "/", "permanent": false },
+    { "source": "/tests/:path*", "destination": "/", "permanent": false },
+    { "source": "/scripts/:path*", "destination": "/", "permanent": false },
+    { "source": "/docs/:path*", "destination": "/", "permanent": false },
+    { "source": "/node_modules/:path*", "destination": "/", "permanent": false },
+    { "source": "/package.json", "destination": "/", "permanent": false },
+    { "source": "/package-lock.json", "destination": "/", "permanent": false },
+    { "source": "/server.js", "destination": "/", "permanent": false },
+    { "source": "/version.json", "destination": "/api/version", "permanent": false },
+    { "source": "/vercel.json", "destination": "/", "permanent": false },
+    { "source": "/README.md", "destination": "/", "permanent": false },
+    { "source": "/CNAME", "destination": "/", "permanent": false },
+    { "source": "/(\\.env.*|\\.git.*|\\.vercel.*)", "destination": "/", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/api/version", "destination": "/api/data?resource=version" },
+    { "source": "/media/:id", "destination": "/api/data?resource=media&id=:id" },
     { "source": "/api/auth/:path*", "destination": "/api/auth" },
     { "source": "/api/payments/:path*", "destination": "/api/payments" },
     { "source": "/api/trybit/:path*", "destination": "/api/payments" },
@@ -16,25 +36,22 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "X-XSS-Protection", "value": "1; mode=block" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdn.jsdelivr.net https://accounts.google.com https://fonts.googleapis.com https://fonts.gstatic.com https://api.saspay.me https://checkout.saspay.me https://pay.wave.com https://api.trybit.com https://pay.trybit.com https://cdn.trybit.com https://cdn.cryptocloud.plus https://static.trybit.com;" }
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=()" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com; frame-src https://accounts.google.com; form-action 'self' https://accounts.google.com; base-uri 'self'; object-src 'none'; frame-ancestors 'self'" }
       ]
     },
     {
-      "source": "/(index\\.html|admin\\.html|admin|$)",
+      "source": "/(index\\.html|admin\\.html|admin|)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate, s-maxage=0" },
-        { "key": "Pragma", "value": "no-cache" },
-        { "key": "Expires", "value": "0" }
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     },
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0" },
-        { "key": "Pragma", "value": "no-cache" },
-        { "key": "Expires", "value": "0" }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" }
       ]
     },
     {
@@ -44,7 +61,7 @@
       ]
     },
     {
-      "source": "/(.*)\\.(png|jpg|jpeg|svg|webp|ico|woff|woff2)",
+      "source": "/(favicon\\.ico|favicon\\.svg)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]

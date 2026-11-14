@@ -5442,9 +5442,10 @@ html, body {
     margin-bottom: 2px !important;
   }
   .momo-select {
-    padding: 2px 6px !important;
-    height: 29px !important;
-    font-size: 11.5px !important;
+    padding: 5px 8px !important;
+    min-height: 38px !important;
+    height: auto !important;
+    font-size: 16px !important;
   }
   .momo-networks-grid {
     margin-bottom: 3px !important;
@@ -5468,8 +5469,11 @@ html, body {
     font-size: 12.5px !important;
   }
   .phone-input-group input {
-    height: 30px !important;
-    font-size: 12px !important;
+    min-height: 38px !important;
+    height: auto !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+    font-size: 16px !important;
   }
   .phone-prefix {
     padding: 0 6px !important;
@@ -6216,5 +6220,104 @@ html, body {
   cursor: not-allowed;
   transform: none;
 }
+
+/* ==================== GLOBAL MOBILE ANTI-AUTO-ZOOM & VIRTUAL KEYBOARD UX ==================== */
+/* Prevents iOS Safari & mobile browsers from zooming in on input focus and staying zoomed in,
+   while preserving 100% manual pinch-to-zoom accessibility and desktop styling. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media screen and (max-width: 768px), (hover: none) and (pointer: coarse) {
+  html body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+  html body textarea,
+  html body select,
+  .modal-window input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+  .modal-window textarea,
+  .modal-window select,
+  .search-box input,
+  #landing-search,
+  #connected-search,
+  #deposit-amount-input,
+  .modal-deposit-compact #deposit-amount-input,
+  #momo-phone-input,
+  #momo-otp-input,
+  #momo-country-select,
+  #purchase-qty-input,
+  #purchase-contact-input,
+  .optional-contact-input-compact,
+  .order-status-badge-select {
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+
+  .optional-contact-input-compact {
+    min-height: 38px !important;
+    height: auto !important;
+    padding: 6px 10px !important;
+  }
+
+  .modal-backdrop {
+    height: 100vh;
+    height: 100dvh;
+    overflow-x: hidden !important;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  html body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+  html body textarea,
+  html body select,
+  .modal-deposit-compact #deposit-amount-input {
+    font-size: 16px !important;
+    line-height: 1.35 !important;
+  }
+}
+
+/* ==================== ULTRA-FAST TACTILE BUTTON RESPONSE (ZERO TAP DELAY) ==================== */
+button,
+[role="button"],
+a.btn-primary,
+a.btn-secondary,
+a.brand-link,
+.nav-link,
+.nav-tab-connected,
+.dropdown-item,
+.cat-pill,
+.auth-tab,
+.faq-question,
+.payment-method-tab,
+.momo-network-btn,
+.crypto-card-item,
+.btn-qty-step,
+.btn-vault-action,
+.btn-copy-address,
+.pm-scroll-nav-btn,
+.btn-vip-contact {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+button:active:not(:disabled),
+a.btn-primary:active,
+a.btn-secondary:active,
+.cat-pill:active,
+.payment-method-tab:active,
+.momo-network-btn:active,
+.crypto-card-item:active,
+.btn-qty-step:active:not(:disabled),
+.btn-vault-action:active,
+.btn-copy-address:active {
+  transform: scale(0.97);
+  transition: transform 0.06s ease-out;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+
 
 

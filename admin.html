@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>GetVirtu 🔒 Administration</title>
 
   <!-- Contrôle de Cache Strict & Revalidation Immédiate -->
@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202610131029_87dbf3">
-  <script src="security.js?v=v202610131029_87dbf3"></script>
+  <link rel="stylesheet" href="style.css?v=v202611141926_ca96c0">
+  <script src="security.js?v=v202611141926_ca96c0"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -1383,6 +1383,270 @@
       color: #1e40af;
       font-size: 13px;
     }
+
+    /* ==================== PROFESSIONAL RED "RESET WEBSITE" BUTTON ==================== */
+    .btn-admin-reset-website {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      color: #ffffff !important;
+      border: 1px solid #991b1b;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: -0.1px;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.28);
+      transition: all 0.2s ease;
+    }
+
+    .btn-admin-reset-website:hover {
+      background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+      box-shadow: 0 4px 12px rgba(185, 28, 28, 0.38);
+      transform: translateY(-1px);
+    }
+
+    .btn-admin-reset-website:active {
+      transform: translateY(0);
+    }
+
+    .btn-admin-reset-website:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    @media (max-width: 768px) {
+      #btn-reset-website-header.btn-admin-reset-website {
+        padding: 5px 10px !important;
+        font-size: 11.5px !important;
+        min-height: 28px !important;
+        height: 28px !important;
+        border-radius: 999px !important;
+      }
+    }
+
+    /* ==================== ADMIN MOBILE ANTI-AUTO-ZOOM (16PX MINIMUM ON IOS/MOBILE) ==================== */
+    @media screen and (max-width: 768px), (hover: none) and (pointer: coarse) {
+      html body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+      html body textarea,
+      html body select,
+      #admin-prod-modal input[type="text"],
+      #admin-prod-modal input[type="number"],
+      #admin-method-modal input[type="text"],
+      #admin-method-modal select,
+      #admin-vault-content,
+      .order-status-badge-select {
+        font-size: 16px !important;
+        line-height: 1.35 !important;
+      }
+
+      #admin-prod-modal input[type="text"],
+      #admin-prod-modal input[type="number"],
+      #admin-method-modal input[type="text"],
+      #admin-method-modal select {
+        min-height: 38px !important;
+        height: auto !important;
+        padding: 7px 10px !important;
+      }
+    }
+
+    @supports (-webkit-touch-callout: none) {
+      #admin-prod-modal input[type="text"],
+      #admin-prod-modal input[type="number"],
+      #admin-method-modal input[type="text"],
+      #admin-method-modal select,
+      #admin-vault-content {
+        font-size: 16px !important;
+        line-height: 1.35 !important;
+      }
+    }
+
+    /* ==================== RÉACTIVITÉ ULTRA-RAPIDE DE TOUS LES BOUTONS ADMIN ==================== */
+    button,
+    [role="button"],
+    .admin-nav-tab-btn,
+    .admin-period-tab,
+    .admin-dropdown-item,
+    .status-indicator-pill[onclick],
+    .btn-icon-action,
+    .btn-order-manage,
+    .btn-order-quick-val,
+    .btn-order-quick-cancel,
+    .btn-vault-action,
+    .proof-thumbnail-btn,
+    .vault-tab-btn {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    button:active:not(:disabled),
+    .btn-icon-action:active:not(:disabled),
+    .btn-order-manage:active:not(:disabled),
+    .btn-order-quick-val:active:not(:disabled),
+    .btn-order-quick-cancel:active:not(:disabled),
+    .admin-nav-tab-btn:active:not(:disabled),
+    .admin-period-tab:active:not(:disabled),
+    .status-indicator-pill[onclick]:active {
+      transform: scale(0.97) !important;
+      transition: transform 0.06s ease !important;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed !important;
+    }
+
+    /* ==================== ÉDITION EN LIGNE DES CLÉS (INVENTAIRE & MODALE PRODUIT) ==================== */
+    .btn-key-row-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.14s ease;
+      white-space: nowrap;
+    }
+    .btn-key-row-action:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+      transform: translateY(-1px);
+    }
+    .btn-key-row-action.copy {
+      color: #2563eb;
+      border-color: #bfdbfe;
+      background: #ffffff;
+    }
+    .btn-key-row-action.copy:hover {
+      background: #eff6ff;
+      border-color: #60a5fa;
+    }
+    .btn-key-row-action.edit {
+      color: #1d4ed8;
+      border-color: #93c5fd;
+      background: #eff6ff;
+    }
+    .btn-key-row-action.edit:hover {
+      background: #dbeafe;
+      border-color: #3b82f6;
+    }
+    .btn-key-row-action.delete {
+      color: #dc2626;
+      border-color: #fecaca;
+      background: #fff1f2;
+    }
+    .btn-key-row-action.delete:hover {
+      background: #ffe4e6;
+      border-color: #f87171;
+    }
+    .btn-key-row-action.save {
+      color: #ffffff;
+      border-color: #059669;
+      background: #059669;
+    }
+    .btn-key-row-action.save:hover {
+      background: #047857;
+      border-color: #047857;
+    }
+    .btn-key-row-action.cancel {
+      color: #475569;
+      border-color: #cbd5e1;
+      background: #f1f5f9;
+    }
+    .btn-key-row-action.cancel:hover {
+      background: #e2e8f0;
+    }
+    .key-content-code-pill {
+      display: inline-block;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: #0f172a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      font-weight: 600;
+      word-break: break-all;
+      white-space: pre-wrap;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: border-color 0.14s ease, background 0.14s ease;
+    }
+    .key-content-code-pill:hover {
+      border-color: #93c5fd;
+      background: #eff6ff;
+    }
+    .key-inline-edit-input {
+      width: 100%;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.4;
+      padding: 7px 10px;
+      border: 1.5px solid #3b82f6;
+      border-radius: 7px;
+      background: #ffffff;
+      color: #0f172a;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+      box-sizing: border-box;
+      resize: vertical;
+      min-height: 38px;
+    }
+    @media (max-width: 900px), (hover: none) and (pointer: coarse) {
+      .key-inline-edit-input {
+        font-size: 16px !important;
+      }
+    }
+
+    /* ---- System Management / Reset Website ---- */
+    .sys-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .sys-status-item { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; background: #ffffff; font-size: 12.5px; line-height: 1.45; }
+    .sys-status-item strong { display: block; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+    .sys-status-item.ok { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .sys-status-item.warn { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+    .sys-status-item.bad { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .sys-reset-zone { border-color: #fecaca !important; background: linear-gradient(180deg, #ffffff 0%, #fffafa 100%) !important; }
+    .sys-reset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .sys-reset-card { border: 1px solid #fed7aa; border-radius: 14px; padding: 16px; background: #ffffff; display: flex; flex-direction: column; gap: 6px; }
+    .sys-reset-card.full { border-color: #fecaca; }
+    .sys-reset-card h3 { font-size: 15.5px; font-weight: 800; color: var(--text-primary); margin: 0; }
+    .sys-reset-tag { align-self: flex-start; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #9a3412; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 999px; padding: 2px 9px; }
+    .sys-reset-card.full .sys-reset-tag { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
+    .sys-reset-sub { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 4px 0; }
+    .sys-list-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 6px; }
+    .sys-list-title.del { color: #b91c1c; }
+    .sys-list-title.keep { color: #166534; }
+    .sys-list { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; }
+    .sys-list li::marker { color: #dc2626; }
+    .sys-list.keep li::marker { color: #16a34a; }
+    .sys-reset-counts { font-size: 12px; color: var(--text-secondary); background: #f8fafc; border: 1px dashed var(--border-subtle); border-radius: 8px; padding: 8px 10px; margin-top: 8px; line-height: 1.5; min-height: 20px; }
+    .btn-reset-option { margin-top: 10px; border: 1px solid #fdba74; background: #fff7ed; color: #9a3412; font-weight: 800; font-size: 13px; border-radius: 10px; padding: 10px 14px; cursor: pointer; transition: background .15s ease; }
+    .btn-reset-option:hover { background: #ffedd5; }
+    .btn-reset-option.full { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+    .btn-reset-option.full:hover { background: #fee2e2; }
+    .btn-reset-option:disabled { opacity: .5; cursor: not-allowed; }
+    .sys-code { background: #fee2e2; color: #991b1b; padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.95em; }
+    .sys-warn { font-size: 12.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+    .sys-modal-warning { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; color: #991b1b; line-height: 1.55; }
+    .sys-modal-warning ul { margin: 6px 0 0 0; padding-left: 18px; }
+    .sys-error { background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; }
+    .sys-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+    .sys-check:last-child { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -1407,7 +1671,7 @@
           <input type="password" id="admin-direct-pass" required placeholder="••••••••" autocomplete="current-password">
         </div>
 
-        <button type="submit" class="btn-primary" style="width: 100%; padding: 11px; margin-top: 8px; font-size: 14px;">
+        <button type="submit" id="btn-admin-direct-login" class="btn-primary" style="width: 100%; padding: 11px; margin-top: 8px; font-size: 14px;">
           Accéder au panneau de contrôle 🔒
         </button>
 
@@ -1430,9 +1694,9 @@
       </div>
 
       <div class="admin-header-actions">
-        <button type="button" class="btn-secondary btn-admin-reset-compact" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; font-weight: 700;" onclick="openResetAllDataModal()" title="Réinitialiser les données (Reset All Data)">
-          <span>⚠️</span>
-          <span class="reset-btn-text">Reset All Data</span>
+        <button type="button" id="btn-reset-website-header" class="btn-admin-reset-website" onclick="switchAdminTab('system')" title="Système & réinitialisation du site (Reset Website)">
+          <span>🛡️</span>
+          <span class="reset-website-btn-text">Système / Reset</span>
         </button>
         <button type="button" class="btn-secondary btn-admin-shop-compact" onclick="switchToShop()" title="Basculer directement vers la boutique (connecté en client)">
           <span>👁️</span>
@@ -1441,13 +1705,13 @@
         <div class="admin-profile-wrapper" id="admin-profile-wrapper">
           <button type="button" class="admin-user-chip" id="admin-user-chip" onclick="toggleAdminDropdown(event)" aria-haspopup="true" aria-expanded="false" title="Menu profil administrateur">
             <span class="admin-avatar">AD</span>
-            <span class="admin-user-email">admin@getvirtu.shop</span>
+            <span class="admin-user-email" id="admin-header-email">Administrateur</span>
             <span class="admin-arrow-indicator">▾</span>
           </button>
           <div class="admin-dropdown-menu" id="admin-dropdown-menu">
             <div class="admin-dropdown-header">
               <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">Administrateur GetVirtu</div>
-              <div style="font-size: 11.5px; color: var(--text-muted); word-break: break-all;">admin@getvirtu.shop</div>
+              <div id="admin-dropdown-email" style="font-size: 11.5px; color: var(--text-muted); word-break: break-all;"></div>
               <div style="margin-top: 6px;"><span class="admin-status-badge">● Connecté (SuperAdmin)</span></div>
             </div>
             <button type="button" class="admin-dropdown-item" onclick="switchToShop()">
@@ -1471,9 +1735,9 @@
               <span>Statistiques Direct</span>
             </button>
             <div style="height: 1px; background: var(--border-subtle); margin: 6px 0;"></div>
-            <button type="button" class="admin-dropdown-item danger" onclick="openResetAllDataModal(); toggleAdminDropdown(event);" style="color: #dc2626;">
-              <span>⚠️</span>
-              <span>Réinitialiser les données (Reset All Data)</span>
+            <button type="button" class="admin-dropdown-item" onclick="switchAdminTab('system'); toggleAdminDropdown(event);">
+              <span>🛡️</span>
+              <span>Système & Reset Website</span>
             </button>
             <div style="height: 1px; background: var(--border-subtle); margin: 6px 0;"></div>
             <button type="button" class="admin-dropdown-item danger" onclick="adminLogout()">
@@ -1542,6 +1806,10 @@
             <span>💬</span>
             <span>Support</span>
             <span class="admin-tab-badge hidden" id="badge-nav-tickets">0</span>
+          </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-system" onclick="switchAdminTab('system')">
+            <span>🛡️</span>
+            <span>Système</span>
           </button>
         </nav>
       </div>
@@ -1688,16 +1956,21 @@
       <!-- TAB 5 : MOYENS DE PAIEMENT & PARAMÈTRES                                   -->
       <!-- ========================================================================= -->
       <section id="tab-content-methods" class="admin-tab-pane hidden">
-        <!-- Configuration du montant minimum de recharge -->
-        <div class="admin-section" style="max-width: 600px; margin-bottom: 24px;">
-          <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0 0 4px 0;">⚙️ Montant Minimum de Recharge de Solde</h3>
-          <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;">Les clients ne pourront pas soumettre de demande de recharge inférieure à ce seuil.</p>
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <div style="flex: 1;">
-              <input type="number" id="setting-min-recharge" step="1" min="1" value="5" style="font-size: 14px; font-weight: 700;">
+        <!-- Réglages boutique : montant minimum de recharge & numéro WhatsApp de livraison -->
+        <div class="admin-section" style="max-width: 760px; margin-bottom: 24px;">
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0 0 4px 0;">⚙️ Réglages de la boutique</h3>
+          <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;">Montant minimum accepté pour une recharge de solde et numéro WhatsApp affiché pour les livraisons manuelles.</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end;">
+            <div class="field" style="margin-bottom: 0;">
+              <label for="setting-min-recharge" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Recharge minimum ($)</label>
+              <input type="number" id="setting-min-recharge" step="0.5" min="0.5" max="10000" value="5" style="font-size: 14px; font-weight: 700;">
             </div>
-            <button type="button" class="btn-primary" onclick="saveMinRechargeSetting()">
-              Enregistrer le Seuil ($)
+            <div class="field" style="margin-bottom: 0;">
+              <label for="setting-whatsapp" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">WhatsApp (format international, sans +)</label>
+              <input type="tel" id="setting-whatsapp" inputmode="numeric" placeholder="237690000000" style="font-size: 14px; font-weight: 600;">
+            </div>
+            <button type="button" class="btn-primary" onclick="saveMinRechargeSetting()" style="justify-content: center;">
+              Enregistrer les réglages
             </button>
           </div>
         </div>
@@ -1828,6 +2101,120 @@
         </div>
       </section>
 
+      <!-- ========================================================================= -->
+      <!-- TAB 8 : SYSTEM MANAGEMENT / RESET WEBSITE                                 -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-system" class="admin-tab-pane hidden">
+        <div class="admin-section" style="margin-bottom: 20px;">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">🛡️ État du système</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Stockage des données, intégrations de paiement et dernière réinitialisation.</p>
+            </div>
+            <button type="button" class="btn-secondary btn-sm" onclick="loadSystemStatus()">↻ Actualiser</button>
+          </div>
+          <div id="system-status-body" class="sys-status-grid"><div class="sys-status-item">Chargement…</div></div>
+        </div>
+
+        <div class="admin-section" id="admin-account-password-card" style="margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">🔑 Mot de passe administrateur</h3>
+            <span class="status-indicator-pill online" style="cursor: default;">● Vérifié par le serveur</span>
+          </div>
+          <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px 0; line-height: 1.45;">
+            Changez le mot de passe de connexion de votre compte administrateur. Utilisez au moins 8 caractères, unique et difficile à deviner.
+          </p>
+          <form id="admin-change-account-pwd-form" onsubmit="saveAdminAccountPassword(event)">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px;">
+              <div class="field" style="margin-bottom: 0;">
+                <label for="setting-admin-current-pwd" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Mot de passe actuel</label>
+                <input type="password" id="setting-admin-current-pwd" autocomplete="current-password" required placeholder="Mot de passe actuel">
+              </div>
+              <div class="field" style="margin-bottom: 0;">
+                <label for="setting-admin-new-pwd" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Nouveau mot de passe</label>
+                <input type="password" id="setting-admin-new-pwd" autocomplete="new-password" minlength="8" required placeholder="8 caractères minimum">
+              </div>
+              <div class="field" style="margin-bottom: 0;">
+                <label for="setting-admin-confirm-pwd" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Confirmer</label>
+                <input type="password" id="setting-admin-confirm-pwd" autocomplete="new-password" minlength="8" required placeholder="Répétez le mot de passe">
+              </div>
+            </div>
+            <div id="setting-admin-pwd-feedback" class="hidden" style="font-size: 12px; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-weight: 600;"></div>
+            <button type="submit" id="btn-save-admin-pwd" class="btn-primary btn-sm" style="justify-content: center;">
+              Mettre à jour le mot de passe
+            </button>
+          </form>
+        </div>
+
+        <div class="admin-section" style="margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0 0 4px 0;">💾 Sauvegarde des données</h3>
+              <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.45;">Téléchargez à tout moment une copie complète (JSON) du catalogue, des clients, des commandes et des transactions.</p>
+            </div>
+            <button type="button" class="btn-secondary btn-sm" onclick="downloadDbBackup()" style="color: #166534; border-color: #86efac; background: #ffffff; font-weight: 700;">💾 Télécharger la sauvegarde</button>
+          </div>
+        </div>
+
+        <div class="admin-section sys-reset-zone" id="system-reset-zone">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+            <h2 style="font-size: 18px; font-weight: 800; color: #b91c1c; margin: 0;">🚨 Réinitialiser le site (Reset Website)</h2>
+            <span class="status-indicator-pill rejected" style="cursor: default;">Zone sensible</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 14px 0; line-height: 1.55;">
+            Remettez la boutique dans un état propre, par exemple avant une nouvelle démonstration client. Chaque réinitialisation exige votre mot de passe administrateur et la phrase <code class="sys-code">RESET WEBSITE</code>.
+            Une sauvegarde complète est créée automatiquement (et téléchargée sur cet appareil) juste avant l'effacement, et l'opération est atomique : soit tout est réinitialisé, soit rien ne change.
+          </p>
+          <div id="reset-owner-warning" class="sys-warn hidden">Seul l'administrateur principal peut réinitialiser la boutique.</div>
+          <div class="sys-reset-grid">
+            <div class="sys-reset-card">
+              <div class="sys-reset-tag">Option A</div>
+              <h3>Réinitialiser les données de démonstration</h3>
+              <p class="sys-reset-sub">Idéal entre deux démonstrations : la configuration de la boutique est conservée.</p>
+              <div class="sys-list-title del">Supprimé définitivement</div>
+              <ul class="sys-list">
+                <li>Produits, catégories, prix et descriptions</li>
+                <li>Clés / comptes en stock et fichiers de livraison</li>
+                <li>Images des produits</li>
+                <li>Comptes clients et leurs soldes</li>
+                <li>Commandes, transactions, recharges et preuves de paiement</li>
+                <li>Tickets du support et statistiques de visites</li>
+              </ul>
+              <div class="sys-list-title keep">Conservé</div>
+              <ul class="sys-list keep">
+                <li>Votre compte administrateur et son mot de passe</li>
+                <li>Moyens de paiement configurés (et leurs QR codes)</li>
+                <li>Réglages : recharge minimum, numéro WhatsApp</li>
+                <li>Variables d'environnement, clés API, structure de la base, sécurité</li>
+              </ul>
+              <div class="sys-reset-counts" id="reset-counts-demo"></div>
+              <button type="button" class="btn-reset-option" onclick="openStoreResetModal('demo')">Réinitialiser les données de démo</button>
+            </div>
+            <div class="sys-reset-card full">
+              <div class="sys-reset-tag">Option B</div>
+              <h3>Réinitialisation complète de la boutique</h3>
+              <p class="sys-reset-sub">Retour à l'état d'installation initial, prêt pour un nouveau client.</p>
+              <div class="sys-list-title del">Supprimé définitivement</div>
+              <ul class="sys-list">
+                <li>Tout ce que supprime l'option A</li>
+                <li>Moyens de paiement personnalisés (retour aux 2 passerelles par défaut : Mobile Money SasPay et Crypto Trybit)</li>
+                <li>Réglages de la boutique (valeurs par défaut)</li>
+                <li>Sessions des autres administrateurs</li>
+              </ul>
+              <div class="sys-list-title keep">Conservé</div>
+              <ul class="sys-list keep">
+                <li>Votre compte administrateur et son mot de passe</li>
+                <li>Variables d'environnement et clés API (SasPay, Trybit, Google)</li>
+                <li>Structure de la base de données et configuration de sécurité</li>
+                <li>L'application elle-même (pages, design, code)</li>
+              </ul>
+              <div class="sys-reset-counts" id="reset-counts-full"></div>
+              <button type="button" class="btn-reset-option full" onclick="openStoreResetModal('full')">Réinitialisation complète</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </div>
   </div>
 
@@ -1869,8 +2256,20 @@
             <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
           </div>
           <div class="field" style="margin-bottom: 0;">
-            <label for="admin-prod-stock" style="white-space: nowrap;">Stock disponible <span style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
+            <label for="admin-prod-stock" style="white-space: nowrap;">Stock disponible <span id="admin-prod-stock-hint" style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
             <input type="number" min="0" id="admin-prod-stock" readonly style="background: #f1f5f9; cursor: not-allowed; font-weight: 700;" placeholder="0">
+          </div>
+        </div>
+
+        <!-- Mode de livraison du produit -->
+        <div class="field" style="margin-bottom: 6px;">
+          <label for="admin-prod-delivery">Mode de livraison</label>
+          <select id="admin-prod-delivery" onchange="onDeliveryModeChange()">
+            <option value="auto">⚡ Automatique — clé, lien ou fichier livré instantanément</option>
+            <option value="manual">📲 Manuelle via WhatsApp — vous livrez après l'achat</option>
+          </select>
+          <div id="admin-prod-delivery-hint" class="hidden" style="font-size: 11px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 7px; padding: 6px 9px; margin-top: 5px; line-height: 1.4;">
+            Le client paie, la commande passe « En attente » et il voit un bouton WhatsApp avec un message pré-rempli (produit, référence, montant). Indiquez le stock disponible ci-dessus, puis livrez depuis Commandes › Examiner.
           </div>
         </div>
 
@@ -1926,7 +2325,11 @@
           <input type="hidden" id="admin-vault-type" value="text">
 
           <div id="vault-text-group">
-            <textarea id="admin-vault-content" rows="3" placeholder="Insérez 1 clé complète par ligne.&#10;Exemple avec séparateur | :&#10;email@domaine.com | MotDePasse | Code2FA | +237... | https://service.url | backup@domaine.com" oninput="updateStockFromVaultKeys()"></textarea>
+            <div id="prod-vault-edit-helper" class="hidden" style="display: none; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; padding: 6px 10px; margin-bottom: 6px; font-size: 11px; color: #1e40af;">
+              <span id="prod-vault-edit-helper-text">✏️ Clés en stock modifiables (1 par ligne) : corrigez, supprimez ou ajoutez des clés ci-dessous.</span>
+              <button type="button" id="btn-prod-open-keys-inventory" class="btn-key-row-action edit" style="padding: 3px 8px; font-size: 10.5px;" onclick="openInventoryFromProductModal()">🔐 Inventaire & Édition Rapide</button>
+            </div>
+            <textarea id="admin-vault-content" rows="3" placeholder="Insérez 1 clé complète par ligne.&#10;Exemple avec séparateur | :&#10;email@domaine.com | MotDePasse | Code2FA | +237... | https://service.url | backup@domaine.com" oninput="onProdVaultTextareaInput()"></textarea>
           </div>
 
           <div id="vault-file-group" class="hidden">
@@ -1946,13 +2349,16 @@
 
   <!-- ==================== MODAL INVENTAIRE DÉTAILLÉ DES CLÉS ==================== -->
   <div id="admin-keys-modal" class="modal-backdrop">
-    <div class="modal-window" style="max-width: 680px; width: 95%;">
+    <div class="modal-window" style="max-width: 780px; width: 96%;">
       <button type="button" class="modal-close-btn" onclick="closeAdminKeysModal()">✕</button>
-      <h2 class="modal-title" id="keys-modal-title">🔐 Inventaire des Clés du Produit</h2>
+      <h2 class="modal-title" id="keys-modal-title" style="margin-bottom: 4px;">🔐 Inventaire des Clés du Produit</h2>
+      <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 10px 0;">
+        Cliquez sur une clé ou sur <strong>✏️ Modifier</strong> pour la corriger même après enregistrement.
+      </p>
       
       <div id="keys-modal-summary" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px;"></div>
 
-      <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: 10px; background: #ffffff;">
+      <div style="max-height: 390px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 10px; background: #ffffff;">
         <table class="admin-table" style="font-size: 11.5px; margin: 0; width: 100%;">
           <thead>
             <tr>
@@ -1961,13 +2367,14 @@
               <th style="padding: 8px 10px;">Client</th>
               <th style="padding: 8px 10px;">Commande</th>
               <th style="padding: 8px 10px;">Date Vente</th>
+              <th style="padding: 8px 10px; text-align: right;">Actions</th>
             </tr>
           </thead>
           <tbody id="keys-modal-tbody"></tbody>
         </table>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 8px; flex-wrap: wrap;">
         <button type="button" class="btn-admin-add-key" style="height: 32px; padding: 0 12px; font-size: 11.5px;" onclick="closeAdminKeysModal(); openAddKeyModal(currentInspectedProductId);">
           <span>+ Ajouter une Clé à ce Produit 🔑</span>
         </button>
@@ -2299,120 +2706,6 @@
     </div>
   </div>
 
-  <!-- ==================== MODALE 8 : RÉINITIALISATION GLOBALE DES DONNÉES ==================== -->
-  <div id="admin-reset-all-modal" class="modal-backdrop">
-    <div class="modal-window" style="max-width: 580px; width: 95%; max-height: 90vh; overflow-y: auto;">
-      <button type="button" class="modal-close-btn" onclick="closeResetAllDataModal()">✕</button>
-      
-      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-        <div style="width: 44px; height: 44px; border-radius: 12px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">
-          ⚠️
-        </div>
-        <div>
-          <h2 class="modal-title" style="margin: 0; font-size: 19px; color: #b91c1c;">Réinitialiser les données (Reset All Data)</h2>
-          <span style="font-size: 12px; color: var(--text-muted);">Espace de gestion et réinitialisation administrative contrôlée</span>
-        </div>
-      </div>
-
-      <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
-        Cet outil permet de réinitialiser la boutique, remettre les soldes à zéro ou purger des enregistrements sélectionnés. Choisissez précisément ci-dessous les opérations à appliquer.
-      </p>
-
-      <!-- BANNIÈRE TÉLÉCHARGEMENT SAUVEGARDE PRÉALABLE -->
-      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-        <div>
-          <strong style="font-size: 13px; color: #166534; display: block;">📥 Sauvegarde Recommandée</strong>
-          <span style="font-size: 11.5px; color: #15803d;">Téléchargez un instantané JSON de la base avant toute modification destructive.</span>
-        </div>
-        <button type="button" class="btn-secondary btn-sm" onclick="downloadDbBackup()" style="color: #166534; border-color: #86efac; background: #ffffff; font-weight: 700; white-space: nowrap; cursor: pointer;">
-          💾 Télécharger Backup JSON
-        </button>
-      </div>
-
-      <!-- SÉLECTION DES DONNÉES À RÉINITIALISER -->
-      <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px; margin-bottom: 18px;">
-        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 12px;">
-          Options de réinitialisation :
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 11px;">
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-balances" checked style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Remettre les soldes clients à 0.00 $</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Tous les soldes reviennent à $0.00 avec journalisation comptable dans l'historique d'audit.</div>
-            </div>
-          </label>
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-orders" checked style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Supprimer les commandes</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Purger l'ensemble des commandes passées (y compris les commandes de test).</div>
-            </div>
-          </label>
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-transactions" checked style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Supprimer les transactions et recharges</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Purger les demandes de recharge et l'historique financier des transactions.</div>
-            </div>
-          </label>
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-visitors" checked style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Réinitialiser les statistiques & compteurs de visite</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Remet à zéro le compteur de visiteurs uniques et l'historique de trafic.</div>
-            </div>
-          </label>
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-users" style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Supprimer tous les comptes clients</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Supprime les comptes utilisateurs clients. Le compte SuperAdmin est strictement préservé.</div>
-            </div>
-          </label>
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-tickets" style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Supprimer les tickets de support client</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Efface les messages et tickets ouverts du formulaire de contact.</div>
-            </div>
-          </label>
-          <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="reset-opt-products" style="margin-top: 2px;">
-            <div>
-              <strong style="color: var(--text-primary);">Réinitialiser le catalogue de produits (Optionnel)</strong>
-              <div style="font-size: 11.5px; color: var(--text-muted);">Efface les articles et stocks du catalogue boutique (décoché par défaut).</div>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      <!-- SÉCURITÉ ET SAUVEGARDE DU ROOT ADMIN -->
-      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; font-size: 12px; color: #1e40af; display: flex; align-items: flex-start; gap: 8px;">
-        <span style="font-size: 16px;">🛡️</span>
-        <div>
-          <strong>Protection Système Intégrée :</strong><br>
-          Le compte Administrateur principal (<code>admin@getvirtu.shop</code>), les paramètres du site (<code>settings</code>) et les moyens de paiement configurés sont strictement protégés et ne seront jamais supprimés.
-        </div>
-      </div>
-
-      <!-- CONFIRMATION EXPLICITE PAR MOT-CLÉ -->
-      <div style="margin-bottom: 18px;">
-        <label for="reset-confirm-keyword" style="display: block; font-size: 12.5px; font-weight: 700; color: #b91c1c; margin-bottom: 6px;">
-          Pour débloquer l'opération, tapez <span style="background: #fee2e2; padding: 2px 7px; border-radius: 4px; font-family: monospace;">CONFIRMER</span> ci-dessous :
-        </label>
-        <input type="text" id="reset-confirm-keyword" oninput="checkResetConfirmKeyword()" placeholder="Tapez CONFIRMER" style="width: 100%; padding: 10px 12px; border: 2px solid #fca5a5; border-radius: 8px; font-size: 14px; font-weight: 700; text-transform: uppercase;">
-      </div>
-
-      <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
-        <button type="button" class="btn-secondary" onclick="closeResetAllDataModal()">Annuler</button>
-        <button type="button" id="btn-execute-reset-all" class="btn-primary" onclick="executeResetAllData()" disabled style="background: #dc2626; border-color: #dc2626; opacity: 0.45; cursor: not-allowed; font-weight: 700;">
-          <span>⚠️ Exécuter la Réinitialisation</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- ==================== MODALE 9 : CONFIRMATION DE SUPPRESSION INDIVIDUELLE ==================== -->
   <div id="admin-confirm-delete-modal" class="modal-backdrop">
     <div class="modal-window" style="max-width: 480px; width: 95%;">
@@ -2441,6 +2734,60 @@
     </div>
   </div>
 
+  <!-- ==================== MODALE : RESET WEBSITE (confirmation renforcée) ==================== -->
+  <div id="admin-store-reset-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="store-reset-title">
+    <div class="modal-window" style="max-width: 540px; width: 95%; border-top: 4px solid #dc2626; max-height: 92vh; overflow-y: auto;">
+      <button type="button" class="modal-close-btn" onclick="closeStoreResetModal()" aria-label="Fermer">✕</button>
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <div style="width: 46px; height: 46px; border-radius: 12px; background: #fee2e2; border: 1px solid #fecaca; color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">⚠️</div>
+        <div>
+          <h2 class="modal-title" id="store-reset-title" style="margin: 0; font-size: 18px; color: #b91c1c; font-weight: 800;">Réinitialiser le site</h2>
+          <span id="store-reset-subtitle" style="font-size: 12px; color: var(--text-muted); font-weight: 600;"></span>
+        </div>
+      </div>
+      <div id="store-reset-form-wrap">
+        <div id="store-reset-warning" class="sys-modal-warning"></div>
+        <form id="store-reset-form" onsubmit="submitStoreReset(event)" autocomplete="off">
+          <div class="field" style="margin-bottom: 12px;">
+            <label for="store-reset-phrase" style="display: block; font-size: 12.5px; font-weight: 700; color: #b91c1c; margin-bottom: 6px;">Tapez <code class="sys-code">RESET WEBSITE</code> pour confirmer</label>
+            <input type="text" id="store-reset-phrase" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="RESET WEBSITE" oninput="onStoreResetInput()" style="font-weight: 700; letter-spacing: 0.5px;">
+          </div>
+          <div class="field" style="margin-bottom: 12px;">
+            <label for="store-reset-password" style="display: block; font-size: 12.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">Votre mot de passe administrateur</label>
+            <input type="password" id="store-reset-password" autocomplete="current-password" placeholder="Mot de passe de connexion" oninput="onStoreResetInput()">
+          </div>
+          <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; cursor: pointer; line-height: 1.45;">
+            <input type="checkbox" id="store-reset-ack" onchange="onStoreResetInput()" style="margin-top: 2px; width: auto;">
+            <span>Je comprends que ces données seront supprimées définitivement. Une sauvegarde de récupération sera téléchargée sur cet appareil.</span>
+          </label>
+          <div id="store-reset-error" class="sys-error hidden" role="alert"></div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+            <button type="button" class="btn-secondary" onclick="closeStoreResetModal()" style="min-width: 110px; justify-content: center;">Annuler</button>
+            <button type="submit" id="btn-store-reset-submit" class="btn-admin-reset-website" disabled style="min-width: 170px; padding: 10px 18px; font-size: 13.5px;">Réinitialiser</button>
+          </div>
+        </form>
+      </div>
+      <div id="store-reset-result" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MODALE : MOT DE PASSE TEMPORAIRE CLIENT ==================== -->
+  <div id="admin-temp-pwd-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="temp-pwd-title">
+    <div class="modal-window" style="max-width: 460px; width: 95%;">
+      <button type="button" class="modal-close-btn" onclick="closeTempPwdModal()" aria-label="Fermer">✕</button>
+      <h2 class="modal-title" id="temp-pwd-title" style="margin: 0 0 6px 0; font-size: 18px;">🔑 Mot de passe temporaire</h2>
+      <p id="temp-pwd-user" style="font-size: 13px; color: var(--text-secondary); margin: 0 0 12px 0;"></p>
+      <div style="display: flex; gap: 8px; align-items: center; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;">
+        <code id="temp-pwd-value" style="flex: 1; font-size: 16px; font-weight: 800; letter-spacing: 0.5px; word-break: break-all;"></code>
+        <button type="button" class="btn-secondary btn-sm" onclick="copyAdminText(document.getElementById('temp-pwd-value').textContent, 'Mot de passe copié.')">Copier</button>
+      </div>
+      <p style="font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; margin: 0 0 14px 0; line-height: 1.45;">
+        Transmettez-le au client par un canal privé (WhatsApp). Il devra choisir un nouveau mot de passe à sa prochaine connexion. Ce mot de passe ne sera plus affiché.
+      </p>
+      <button type="button" class="btn-primary" onclick="closeTempPwdModal()" style="width: 100%; justify-content: center;">J'ai transmis le mot de passe</button>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toast"></div>
 
@@ -2461,11 +2808,16 @@
     };
 
     function getAdminAuthToken() {
-      var sess = DB.get('session');
-      if (sess && sess.token) return sess.token;
       var adminSess = DB.get('admin_session');
       if (adminSess && adminSess.token) return adminSess.token;
+      var sess = DB.get('session');
+      if (sess && sess.token) return sess.token;
       try {
+        var rawAdmin = localStorage.getItem('vs_admin_session');
+        if (rawAdmin) {
+          var parsedAdmin = JSON.parse(rawAdmin);
+          if (parsedAdmin && parsedAdmin.token) return parsedAdmin.token;
+        }
         var raw = localStorage.getItem('vs_session');
         if (raw) {
           var parsed = JSON.parse(raw);
@@ -2475,7 +2827,96 @@
       return '';
     }
 
-    var currentPeriod = 'day';
+    // ========== GARDE DE SESSION ADMIN ==========
+    // Si le serveur signale que le jeton admin n'est plus valide (expiré, clé de signature changée, compte supprimé),
+    // on déconnecte proprement et on réaffiche l'écran de connexion au lieu de laisser un tableau de bord
+    // dont toutes les actions échouent avec « Action réservée à l'administrateur ».
+    var _adminSessionExpiredHandled = false;
+    function handleAdminSessionExpired() {
+      if (_adminSessionExpiredHandled) return;
+      _adminSessionExpiredHandled = true;
+      DB.del('admin_session');
+      DB.del('session');
+      document.querySelectorAll('.modal-backdrop.active').forEach(function(m) { m.classList.remove('active'); });
+      if (typeof checkAdminAuth === 'function') checkAdminAuth();
+      var err = document.getElementById('admin-direct-error');
+      if (err) {
+        err.textContent = 'Votre session a expiré ou n\'est plus valide. Veuillez vous reconnecter.';
+        err.classList.remove('hidden');
+      }
+      if (typeof showToast === 'function') showToast('Session expirée : veuillez vous reconnecter.', 'warning');
+      setTimeout(function() { _adminSessionExpiredHandled = false; }, 2000);
+    }
+
+    (function installAdminSessionGuard() {
+      if (window.__gvAdminSessionGuard || typeof window.fetch !== 'function') return;
+      window.__gvAdminSessionGuard = true;
+      var originalFetch = window.fetch.bind(window);
+      window.fetch = function(input, init) {
+        return originalFetch(input, init).then(function(res) {
+          try {
+            var url = typeof input === 'string' ? input : ((input && input.url) || '');
+            if (url.indexOf('/api/') !== -1 && url.indexOf('/api/auth/login') === -1 && (res.status === 401 || res.status === 403)) {
+              var sentToken = Boolean(getAdminAuthToken());
+              if (res.status === 401 && url.indexOf('/api/auth/me') !== -1 && sentToken) {
+                handleAdminSessionExpired();
+              } else {
+                res.clone().json().then(function(body) {
+                  if (body && body.code === 'SESSION_INVALID') handleAdminSessionExpired();
+                }).catch(function() {});
+              }
+            }
+          } catch (e) {}
+          return res;
+        });
+      };
+    })();
+
+    function escapeJsStr(val) {
+      if (val === null || val === undefined) return '';
+      return String(val)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;')
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n');
+    }
+
+    function copyAdminText(text, successMsg) {
+      var str = String(text || '');
+      if (!str) {
+        showToast('Rien à copier.', 'warning');
+        return;
+      }
+      var msg = successMsg || 'Copié dans le presse-papiers !';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(str).then(function() {
+          showToast(msg, 'success');
+        }).catch(function() {
+          fallbackCopyAdmin(str, msg);
+        });
+      } else {
+        fallbackCopyAdmin(str, msg);
+      }
+    }
+
+    function fallbackCopyAdmin(str, msg) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = str;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast(msg, 'success');
+      } catch (e) {
+        showToast('Copié : ' + str, 'info');
+      }
+    }
+
+    var currentPeriod = 'week';
     var chartRev = null;
     var chartVol = null;
     var editingProductImage = null;
@@ -2520,6 +2961,12 @@
         desc: 'Consultez le chiffre d\'affaires, les unités vendues et l\'évolution en temps réel.',
         actionHtml: '<span class="admin-kpi-chip">Statistiques en direct ⚡</span>'
       },
+      system: {
+        crumb: 'Système & Réinitialisation',
+        title: '🛡️ Système & Reset Website',
+        desc: 'État du stockage et des intégrations, mot de passe administrateur, sauvegardes et réinitialisation sécurisée de la boutique.',
+        actionHtml: '<button type="button" class="btn-secondary btn-sm" onclick="downloadDbBackup()">💾 Sauvegarde JSON</button>'
+      },
       tickets: {
         crumb: 'Support Client & Tickets',
         title: '💬 Messages & Support Client',
@@ -2562,6 +3009,9 @@
       if (tabName === 'methods') {
         syncMethodsFromServer();
       }
+      if (tabName === 'system') {
+        loadSystemStatus();
+      }
       try {
         if (window.history && window.history.replaceState) {
           window.history.replaceState(null, '', '#' + tabName);
@@ -2571,10 +3021,6 @@
     window.switchAdminTab = switchAdminTab;
 
     // ========== AUTHENTIFICATION ADMIN SÉCURISÉE (HASH SHA-256 + SESSIONS + ANTI BRUTE-FORCE) ==========
-    var ADMIN_SALT = 'getvirtu_sec_salt_2026';
-    var ADMIN_HASH = 'e1ef6864bfd0e96c37fa33f3de4ceff20f93b236fc292b9e6440310d88f27902';
-    var ADMIN_SHORT_HASH = '78c3dc6ad802ec87ba0b8333e41869ef13b168d63c8e09f189b34c4906dd5771';
-    var ADMIN_LEGACY_HASH = '7bdd3fd0f0123548f0c15f8ca94f91b90799cbe476669fbd544784d4c3a2f1dc';
 
     function checkAdminAuth() {
       var s = DB.get('admin_session');
@@ -2589,8 +3035,10 @@
       var loginScreen = document.getElementById('admin-login-screen');
       var dashboard = document.getElementById('admin-dashboard-container');
 
-      // Vérification cryptographique de la session et de son rôle
-      var isValid = s && s.role === 'admin' && (typeof Security !== 'undefined' ? Security.isSessionValid(s) : true);
+      // Session valide = jeton signé par le serveur (les anciennes sessions "locales" sans jeton sont refusées,
+      // car le serveur rejetterait toutes leurs actions avec « Action réservée à l'administrateur »)
+      var hasServerToken = Boolean(s && typeof s.token === 'string' && s.token.indexOf('.') > 0);
+      var isValid = s && s.role === 'admin' && hasServerToken && (typeof Security !== 'undefined' ? Security.isSessionValid(s) : true);
 
       if (!isValid) {
         if (loginScreen) loginScreen.classList.remove('hidden');
@@ -2598,6 +3046,11 @@
         return false;
       } else {
         DB.set('admin_session', s);
+        // Afficher l'adresse du compte réellement connecté (et non une adresse fixe)
+        var hdrEmail = document.getElementById('admin-header-email');
+        if (hdrEmail) hdrEmail.textContent = s.email || 'Administrateur';
+        var ddEmail = document.getElementById('admin-dropdown-email');
+        if (ddEmail) ddEmail.textContent = s.email || '';
         if (loginScreen) loginScreen.classList.add('hidden');
         if (dashboard) dashboard.classList.remove('hidden');
         return true;
@@ -2618,34 +3071,44 @@
       var email = document.getElementById('admin-direct-email').value.trim().toLowerCase();
       var pass = document.getElementById('admin-direct-pass').value;
       var err = document.getElementById('admin-direct-error');
+      var loginBtn = document.getElementById('btn-admin-direct-login');
       if (err) err.classList.add('hidden');
+      if (loginBtn && loginBtn.disabled) return;
 
-      var isKnownAdminPassword = (pass === 'admin123' || pass === 'admin');
-
-      // 1. Protection Anti Brute-Force (avec déblocage si mot de passe valide)
-      if (!isKnownAdminPassword && typeof Security !== 'undefined') {
-        var rl = Security.checkRateLimit('admin_login', 10, 5 * 60 * 1000);
-        if (!rl.allowed) {
-          if (err) {
-            err.innerHTML = 'Trop de tentatives infructueuses. Veuillez patienter ' + rl.waitSeconds + ' secondes. ' +
-              '<a href="#" onclick="Security.resetRateLimit(\'admin_login\'); document.getElementById(\'admin-direct-error\').classList.add(\'hidden\'); return false;" style="color: var(--primary-600); text-decoration: underline; margin-left: 6px;">Débloquer maintenant</a>';
-            err.classList.remove('hidden');
-          }
-          showToast('Accès temporairement bloqué (anti-brute force).', 'error');
-          return;
+      var showLoginError = function(msg) {
+        if (err) {
+          err.textContent = msg;
+          err.classList.remove('hidden');
         }
+      };
+
+      if (!email || !pass) {
+        showLoginError('Veuillez saisir votre identifiant et votre mot de passe.');
+        return;
       }
 
-      // 2. Tentative d'authentification auprès du backend de production
+      if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.textContent = '⏳ Connexion en cours...';
+      }
+
       try {
-        var apiRes = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier: email, password: pass })
-        });
-        var apiData = await apiRes.json();
-        if (apiRes.ok && apiData && apiData.session && apiData.user && apiData.user.role === 'admin') {
-          if (typeof Security !== 'undefined') Security.resetRateLimit('admin_login');
+        // Authentification exclusivement côté serveur : aucun mot de passe ni empreinte dans le navigateur.
+        // Sans jeton serveur valide, les actions admin (suppression de clients, produits...) seraient refusées.
+        var apiRes, apiData;
+        try {
+          apiRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: email, password: pass })
+          });
+          apiData = await apiRes.json().catch(function() { return {}; });
+        } catch (netErr) {
+          showLoginError('Serveur injoignable. Vérifiez votre connexion internet puis réessayez.');
+          return;
+        }
+
+        if (apiRes.ok && apiData && apiData.session && apiData.session.token && apiData.user && apiData.user.role === 'admin') {
           DB.set('admin_session', apiData.session);
           DB.set('session', apiData.session); // Conserver synchronisé pour bascule boutique
           var users = DB.get('users', []);
@@ -2657,100 +3120,35 @@
           showToast('Connexion réussie ! Bienvenue dans l\'administration 🔒', 'success');
           checkAdminAuth();
           switchAdminTab('products');
+          syncAdminDataFromServer();
           return;
         }
-      } catch (netErr) {
-        console.warn('[Admin Auth] API distante non joignable, bascule locale:', netErr.message);
-      }
 
-      // 3. Vérification cryptographique locale par hachage salé SHA-256 (aucun mot de passe en clair)
-      var validUser = (
-        email === 'admin@virtushop.com' ||
-        email === 'admin@getvirtu.shop' ||
-        email === 'admin' ||
-        email === 'admin@admin.com' ||
-        email === 'mouctar@getvirtu.shop'
-      );
-      var isCorrectPassword = isKnownAdminPassword;
-
-      if (!isCorrectPassword && typeof Security !== 'undefined') {
-        isCorrectPassword = await Security.verifyPassword(pass, ADMIN_HASH, ADMIN_SALT) ||
-                            await Security.verifyPassword(pass, ADMIN_SHORT_HASH, ADMIN_SALT) ||
-                            await Security.verifyPassword(pass, ADMIN_LEGACY_HASH, ADMIN_SALT);
-      } else if (!isCorrectPassword && window.crypto && window.crypto.subtle) {
-        try {
-          var enc = new TextEncoder();
-          var buf = await window.crypto.subtle.digest('SHA-256', enc.encode(ADMIN_SALT + ':' + pass));
-          var hex = Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-          isCorrectPassword = (hex === ADMIN_HASH || hex === ADMIN_SHORT_HASH || hex === ADMIN_LEGACY_HASH);
-        } catch (e) {
-          isCorrectPassword = false;
+        if (apiRes.ok && apiData && apiData.user && apiData.user.role !== 'admin') {
+          showLoginError('Ce compte n\'a pas les droits administrateur.');
+          return;
         }
-      }
 
-      var authenticatedUser = null;
-      if (validUser && isCorrectPassword) {
-        authenticatedUser = { userId: 'admin-001', role: 'admin', name: 'Administrateur GetVirtu', email: 'admin@getvirtu.shop' };
-      } else {
-        var users = DB.get('users', []);
-        for (var i = 0; i < users.length; i++) {
-          var u = users[i];
-          if (!u) continue;
-          var matchU = (u.email && u.email.toLowerCase() === email) || (u.username && u.username.toLowerCase() === email) || (u.name && u.name.toLowerCase() === email);
-          if (matchU && u.role === 'admin') {
-            var passMatch = isKnownAdminPassword;
-            if (!passMatch && u.password_hash && typeof Security !== 'undefined') {
-              passMatch = await Security.verifyPassword(pass, u.password_hash, ADMIN_SALT);
-            } else if (!passMatch && u.passwordHash && typeof Security !== 'undefined') {
-              passMatch = await Security.verifyPassword(pass, u.passwordHash, ADMIN_SALT);
-            } else if (!passMatch && u.password) {
-              passMatch = (u.password === pass);
-            }
-            if (passMatch) {
-              authenticatedUser = u;
-              break;
-            }
-          }
-        }
-      }
-
-      if (authenticatedUser) {
-        if (typeof Security !== 'undefined') Security.resetRateLimit('admin_login');
-        var sessObj;
-        if (typeof Security !== 'undefined') {
-          sessObj = Security.createSession(authenticatedUser, 'admin');
-        } else {
-          sessObj = { userId: authenticatedUser.id || 'admin-001', role: 'admin', name: authenticatedUser.name || 'Admin', email: authenticatedUser.email };
-        }
-        DB.set('admin_session', sessObj);
-        DB.set('session', sessObj); // Conserver synchronisé pour bascule boutique
-        showToast('Connexion réussie ! Bienvenue dans l\'administration 🔒', 'success');
-        checkAdminAuth();
-        switchAdminTab('products');
-      } else {
-        if (typeof Security !== 'undefined') {
-          Security.recordFailedAttempt('admin_login', 5 * 60 * 1000);
-          var rlAfter = Security.checkRateLimit('admin_login', 10, 5 * 60 * 1000);
-          if (err) {
-            err.innerHTML = 'Identifiant ou mot de passe incorrect.' + (rlAfter.remaining <= 3 ? ' (' + rlAfter.remaining + ' tentative(s) restante(s))' : '') +
-              ' <a href="#" onclick="Security.resetRateLimit(\'admin_login\'); document.getElementById(\'admin-direct-error\').classList.add(\'hidden\'); return false;" style="color: var(--primary-600); text-decoration: underline; margin-left: 6px;">Réinitialiser</a>';
-            err.classList.remove('hidden');
-          }
-        } else {
-          if (err) {
-            err.textContent = 'Identifiant ou mot de passe incorrect.';
-            err.classList.remove('hidden');
-          }
+        showLoginError((apiData && apiData.error) || 'Identifiant ou mot de passe incorrect.');
+      } finally {
+        if (loginBtn) {
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Accéder au panneau de contrôle 🔒';
         }
       }
     }
 
     function adminLogout() {
-      DB.del('admin_session');
-      DB.del('session');
-      checkAdminAuth();
-      showToast('Déconnexion effectuée.', 'info');
-      window.location.reload();
+      var token = getAdminAuthToken();
+      var finish = function() {
+        ['admin_session', 'session', 'users', 'orders', 'transactions', 'recharges', 'vault', 'tickets'].forEach(function(k) { DB.del(k); });
+        checkAdminAuth();
+        window.location.reload();
+      };
+      if (!token) return finish();
+      fetch('/api/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })
+        .catch(function() {})
+        .then(finish);
     }
 
     function changePeriod(period) {
@@ -2895,17 +3293,49 @@
     }
 
     // ========== GESTION DU SEUIL MINIMUM DE RECHARGE ==========
-    function saveMinRechargeSetting() {
+    async function saveMinRechargeSetting() {
       var val = parseFloat(document.getElementById('setting-min-recharge').value);
+      var waEl = document.getElementById('setting-whatsapp');
+      var wa = waEl ? waEl.value.replace(/[^0-9]/g, '') : undefined;
       if (isNaN(val) || val <= 0) {
-        showToast('Veuillez entrer un montant minimum valide.', 'error');
+        showToast('Montant minimum invalide.', 'error');
         return;
       }
-      DB.set('min_recharge', val);
-      showToast(`Montant minimum de recharge configuré à ${val.toFixed(2)} USD !`, 'success');
+      var token = getAdminAuthToken();
+      try {
+        var res = await fetch('/api/data/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(wa !== undefined ? { min_recharge: val, whatsapp_number: wa } : { min_recharge: val })
+        });
+        var data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) throw new Error((data && data.error) || 'Réglages refusés par le serveur.');
+        DB.set('min_recharge', data.settings.min_recharge);
+        if (data.settings.whatsapp_number) DB.set('whatsapp_number', data.settings.whatsapp_number);
+        showToast('Réglages enregistrés : recharge minimum ' + data.settings.min_recharge.toFixed(2) + ' $.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Serveur injoignable : réglages non enregistrés.', 'error');
+      }
     }
 
     // ========== 1. TABLE DES PRODUITS (CATALOGUE VISIBLE APRÈS LOGIN) ==========
+    // Miniature neutre affichée quand un produit n'a pas d'image (null) ou que l'image ne se charge pas
+    window.ADMIN_PRODUCT_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">' +
+      '<rect width="80" height="80" rx="14" fill="#eff6ff"/>' +
+      '<path d="M40 18 L60 28 L60 52 L40 62 L20 52 L20 28 Z" fill="#dbeafe" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round"/>' +
+      '<path d="M20 28 L40 38 L60 28 M40 38 L40 62" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round"/>' +
+      '</svg>'
+    );
+
+    function getAdminProductThumbSrc(p) {
+      var img = (p && typeof p.image === 'string') ? p.image.trim() : '';
+      if (!img || img === 'null' || img === 'undefined' || img.length < 5 || img.charAt(0) === '<') {
+        return window.ADMIN_PRODUCT_PLACEHOLDER;
+      }
+      return img;
+    }
+
     function renderProductsTable(prods) {
       var tbody = document.getElementById('admin-products-tbody');
       if (!tbody) return;
@@ -2920,10 +3350,11 @@
 
         html += `
           <tr>
-            <td><img src="${p.image}" class="thumb-table-img" alt="${escapeHtml(p.name)}"></td>
+            <td><img src="${escapeHtml(getAdminProductThumbSrc(p))}" class="thumb-table-img" alt="${escapeHtml(p.name)}" loading="lazy" onerror="this.onerror=null;this.src=window.ADMIN_PRODUCT_PLACEHOLDER;"></td>
             <td>
               <div style="font-weight: 700; color: var(--text-primary);">${escapeHtml(p.name)}</div>
               <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.description || '')}</div>
+              ${p.deliveryMode === 'manual' ? '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 7px;">📲 Livraison WhatsApp</span>' : ''}
             </td>
             <td><span class="status-indicator-pill offline">${escapeHtml(p.category)}</span></td>
             <td><strong style="color: var(--primary-600); font-size: 14px;">${p.price.toFixed(2)} $</strong></td>
@@ -2965,6 +3396,89 @@
     }
 
     var currentInspectedProductId = null;
+    var currentInspectedKeys = [];
+    var editingKeyId = null;
+    var editingKeyIndex = null;
+
+    function syncProductVaultLocal(prodId, keysData) {
+      if (!prodId || !keysData) return;
+      var keys = Array.isArray(keysData.keys) ? keysData.keys : [];
+      var vault = DB.get('vault', {}) || {};
+      var existingV = vault[prodId] || { type: 'text' };
+      vault[prodId] = {
+        type: existingV.type || 'text',
+        content: existingV.type === 'file' ? existingV.content : keys.filter(function(k) { return !k.used; }).map(function(k) { return k.content; }).join('\n'),
+        fileName: existingV.fileName || 'livraison.txt',
+        keys: keys
+      };
+      DB.set('vault', vault);
+    }
+
+    function renderKeysInventoryModalRows(prodId, keysData) {
+      var summaryEl = document.getElementById('keys-modal-summary');
+      var tbody = document.getElementById('keys-modal-tbody');
+      var keys = Array.isArray(keysData && keysData.keys) ? keysData.keys : [];
+      currentInspectedKeys = keys;
+
+      var stock = typeof (keysData && keysData.stock) === 'number' ? keysData.stock : keys.filter(function(k) { return !k.used; }).length;
+      var sold = typeof (keysData && keysData.sold) === 'number' ? keysData.sold : keys.filter(function(k) { return k.used; }).length;
+
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <span class="status-indicator-pill online">● ${stock} disponible(s)</span>
+          <span class="status-indicator-pill offline">● ${sold} vendue(s)</span>
+          <span class="status-indicator-pill" style="background: #f1f5f9; color: #334155;">Total : ${keys.length} clé(s)</span>
+        `;
+      }
+
+      if (tbody) {
+        if (keys.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">Aucune clé enregistrée pour ce produit. Ajoutez des clés via le bouton Modifier ou "+ Ajouter une Clé".</td></tr>';
+        } else {
+          tbody.innerHTML = keys.map(function(k, idx) {
+            var safeKeyId = escapeJsStr(k.id || '');
+            var isEditingThis = (editingKeyId !== null && editingKeyId !== '' && k.id === editingKeyId) || ((editingKeyId === null || editingKeyId === '') && editingKeyIndex === idx);
+            var keyCellHtml = isEditingThis
+              ? `
+                <div style="min-width: 220px;">
+                  <textarea id="inline-key-edit-input" class="key-inline-edit-input" rows="2" onkeydown="handleInlineKeyEditKeydown(event, ${prodId}, '${safeKeyId}', ${idx})">${escapeHtml(k.content)}</textarea>
+                  <div style="display: flex; gap: 6px; margin-top: 6px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" id="btn-save-inline-key" class="btn-key-row-action save" onclick="saveInlineKeyEdit(${prodId}, '${safeKeyId}', ${idx})">✓ Enregistrer</button>
+                    <button type="button" class="btn-key-row-action cancel" onclick="cancelInlineKeyEdit()">✕ Annuler</button>
+                    ${k.used ? '<span style="font-size: 10.5px; color: #b45309; font-weight: 600;">ℹ️ Mettra aussi à jour la commande livrée</span>' : ''}
+                  </div>
+                </div>
+              `
+              : `
+                <code class="key-content-code-pill" title="Cliquer pour modifier cette clé" onclick="startInlineKeyEdit('${safeKeyId}', ${idx})">${escapeHtml(k.content)}</code>
+              `;
+
+            return `
+              <tr>
+                <td style="font-family: monospace; font-size: 11px; font-weight: 600; word-break: break-all; white-space: pre-wrap; max-width: 310px; line-height: 1.4;">
+                  ${keyCellHtml}
+                </td>
+                <td>
+                  <span class="status-indicator-pill ${k.used ? 'offline' : 'online'}" style="font-size: 10.5px;">
+                    ${k.used ? '● Vendue' : '● Disponible'}
+                  </span>
+                </td>
+                <td style="font-size: 11px;">${escapeHtml(k.soldTo || '—')}</td>
+                <td style="font-size: 11px; font-family: monospace;">${escapeHtml(k.orderId || '—')}</td>
+                <td style="font-size: 11px;">${k.soldAt ? new Date(k.soldAt).toLocaleString('fr-FR') : '—'}</td>
+                <td style="text-align: right; white-space: nowrap;">
+                  <div style="display: inline-flex; align-items: center; gap: 5px; justify-content: flex-end;">
+                    <button type="button" class="btn-key-row-action copy" onclick="copyAdminText(decodeURIComponent('${encodeURIComponent(k.content || '')}'), 'Clé copiée !')" title="Copier cette clé">📋</button>
+                    <button type="button" class="btn-key-row-action edit" onclick="startInlineKeyEdit('${safeKeyId}', ${idx})" title="Modifier cette clé">✏️</button>
+                    <button type="button" class="btn-key-row-action delete" onclick="deleteSingleProductKey(${prodId}, '${safeKeyId}', ${idx})" title="Supprimer cette clé">🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+    }
 
     function viewProductKeysInventory(prodId) {
       var prods = DB.get('products', []);
@@ -2972,81 +3486,270 @@
       if (!p) return;
 
       currentInspectedProductId = prodId;
+      editingKeyId = null;
+      editingKeyIndex = null;
 
       var titleEl = document.getElementById('keys-modal-title');
       if (titleEl) titleEl.textContent = '🔐 Inventaire des Clés : ' + p.name;
 
-      var summaryEl = document.getElementById('keys-modal-summary');
       var tbody = document.getElementById('keys-modal-tbody');
+      var vault = DB.get('vault', {}) || {};
+      var localVault = vault[p.id] || { keys: [] };
+      var localKeys = Array.isArray(localVault.keys) ? localVault.keys : [];
 
-      function displayKeys(keysData) {
-        var keys = keysData.keys || [];
-        var stock = keysData.stock || keys.filter(function(k) { return !k.used; }).length;
-        var sold = keysData.sold || keys.filter(function(k) { return k.used; }).length;
-
-        if (summaryEl) {
-          summaryEl.innerHTML = `
-            <span class="status-indicator-pill online">● ${stock} disponible(s)</span>
-            <span class="status-indicator-pill offline">● ${sold} vendue(s)</span>
-            <span class="status-indicator-pill" style="background: #f1f5f9; color: #334155;">Total : ${keys.length} clé(s)</span>
-          `;
-        }
-
-        if (tbody) {
-          if (keys.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Aucune clé enregistrée pour ce produit. Ajoutez des clés via le bouton Modifier ou "+ Ajouter une Clé".</td></tr>';
-          } else {
-            tbody.innerHTML = keys.map(function(k) {
-              return `
-                <tr>
-                  <td style="font-family: monospace; font-size: 11px; font-weight: 600; word-break: break-all; white-space: pre-wrap; max-width: 320px; line-height: 1.4;">
-                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 6px;">
-                      <code>${escapeHtml(k.content)}</code>
-                      <button type="button" class="btn-vault-action" style="padding: 2px 6px; font-size: 10px; flex-shrink: 0;" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(k.content)}')).then(function(){ showToast('Clé copiée !', 'success'); });" title="Copier cette clé">📋</button>
-                    </div>
-                  </td>
-                  <td>
-                    <span class="status-indicator-pill ${k.used ? 'offline' : 'online'}" style="font-size: 10.5px;">
-                      ${k.used ? '● Vendue' : '● Disponible'}
-                    </span>
-                  </td>
-                  <td style="font-size: 11px;">${escapeHtml(k.soldTo || '—')}</td>
-                  <td style="font-size: 11px; font-family: monospace;">${escapeHtml(k.orderId || '—')}</td>
-                  <td style="font-size: 11px;">${k.soldAt ? new Date(k.soldAt).toLocaleString('fr-FR') : '—'}</td>
-                </tr>
-              `;
-            }).join('');
-          }
-        }
-
-        document.getElementById('admin-keys-modal').classList.add('active');
+      if (localKeys.length > 0) {
+        renderKeysInventoryModalRows(prodId, { keys: localKeys });
+      } else if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">Chargement des clés...</td></tr>';
       }
 
-      // Tentative de récupération depuis l'API serveur
-      var session = DB.get('session');
-      if (session && session.token) {
-        fetch('/api/data/products?productId=' + prodId + '&keys=1', {
-          headers: { 'Authorization': 'Bearer ' + session.token }
+      document.getElementById('admin-keys-modal').classList.add('active');
+
+      // Tentative de récupération depuis l'API serveur pour avoir l'état le plus frais
+      var token = getAdminAuthToken();
+      if (token) {
+        fetch('/api/data/products?productId=' + prodId + '&keys=1&_t=' + Date.now(), {
+          headers: { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' },
+          cache: 'no-store'
         }).then(function(r) { return r.json(); }).then(function(res) {
           if (res && res.keys) {
-            displayKeys(res);
-          } else {
-            fallbackLocal();
+            syncProductVaultLocal(prodId, res);
+            if (currentInspectedProductId === prodId && editingKeyId === null && editingKeyIndex === null) {
+              renderKeysInventoryModalRows(prodId, res);
+            }
+          } else if (localKeys.length === 0) {
+            renderKeysInventoryModalRows(prodId, { keys: [] });
           }
-        }).catch(function() { fallbackLocal(); });
-      } else {
-        fallbackLocal();
-      }
-
-      function fallbackLocal() {
-        var vault = DB.get('vault', {});
-        var v = vault[p.id] || { keys: [] };
-        var keys = Array.isArray(v.keys) ? v.keys : [];
-        displayKeys({ keys: keys });
+        }).catch(function() {
+          if (localKeys.length === 0) renderKeysInventoryModalRows(prodId, { keys: [] });
+        });
+      } else if (localKeys.length === 0) {
+        renderKeysInventoryModalRows(prodId, { keys: [] });
       }
     }
 
+    function startInlineKeyEdit(keyId, idx) {
+      editingKeyId = keyId || '';
+      editingKeyIndex = idx;
+      renderKeysInventoryModalRows(currentInspectedProductId, { keys: currentInspectedKeys });
+      setTimeout(function() {
+        var inp = document.getElementById('inline-key-edit-input');
+        if (inp) {
+          inp.focus();
+          try {
+            var len = inp.value.length;
+            inp.setSelectionRange(len, len);
+          } catch (e) {}
+        }
+      }, 10);
+    }
+
+    function cancelInlineKeyEdit() {
+      editingKeyId = null;
+      editingKeyIndex = null;
+      renderKeysInventoryModalRows(currentInspectedProductId, { keys: currentInspectedKeys });
+    }
+
+    function handleInlineKeyEditKeydown(e, prodId, keyId, idx) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cancelInlineKeyEdit();
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        saveInlineKeyEdit(prodId, keyId, idx);
+      }
+    }
+
+    async function saveInlineKeyEdit(prodId, keyId, idx) {
+      var inp = document.getElementById('inline-key-edit-input');
+      if (!inp) return;
+      var newVal = inp.value.trim();
+      if (!newVal) {
+        showToast('Le contenu de la clé ne peut pas être vide.', 'error');
+        inp.focus();
+        return;
+      }
+
+      var targetKey = currentInspectedKeys.find(function(k, kIdx) {
+        return (keyId && k.id === keyId) || kIdx === idx;
+      });
+      if (targetKey && targetKey.content === newVal) {
+        cancelInlineKeyEdit();
+        showToast('Aucune modification effectuée.', 'info');
+        return;
+      }
+
+      // Contrôle doublon immédiat côté client
+      var cleanLower = newVal.toLowerCase();
+      var hasDup = currentInspectedKeys.some(function(k, kIdx) {
+        if ((keyId && k.id === keyId) || kIdx === idx) return false;
+        return (k.content || '').trim().toLowerCase() === cleanLower;
+      });
+      if (hasDup) {
+        showToast(`Erreur : la clé "${newVal}" existe déjà dans ce produit (doublon refusé).`, 'error');
+        inp.focus();
+        return;
+      }
+
+      var saveBtn = document.getElementById('btn-save-inline-key');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = '⏳...';
+      }
+
+      try {
+        var token = getAdminAuthToken();
+        var updatedInventory = null;
+        if (token) {
+          var res = await fetch('/api/data/keys', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+              productId: prodId,
+              keyId: keyId || undefined,
+              keyIndex: idx,
+              content: newVal
+            })
+          });
+          var data = await res.json();
+          if (!res.ok || !data.success) {
+            showToast(data.error || 'Erreur lors de la modification de la clé.', 'error');
+            if (saveBtn) {
+              saveBtn.disabled = false;
+              saveBtn.textContent = '✓ Enregistrer';
+            }
+            return;
+          }
+          if (Array.isArray(data.products)) {
+            DB.set('products', data.products);
+          }
+          if (data.inventory) {
+            updatedInventory = data.inventory;
+          }
+          // Synchroniser les commandes en local si la clé vendue a été modifiée
+          if (targetKey && targetKey.used && targetKey.orderId) {
+            var localOrders = DB.get('orders', []) || [];
+            var ord = localOrders.find(function(o) { return o.id === targetKey.orderId; });
+            if (ord && ord.vaultContent) {
+              if (Array.isArray(ord.vaultContent.keys)) {
+                ord.vaultContent.keys.forEach(function(ok) {
+                  if (ok && ((keyId && ok.id === keyId) || ok.content === targetKey.content)) {
+                    ok.content = newVal;
+                  }
+                });
+                ord.vaultContent.content = ord.vaultContent.keys.map(function(ok) { return ok.content; }).join('\n');
+              } else if (typeof ord.vaultContent.content === 'string') {
+                ord.vaultContent.content = newVal;
+              }
+              DB.set('orders', localOrders);
+              renderOrdersTable(localOrders);
+            }
+          }
+        } else {
+          // Sans session serveur valide, aucune modification n'est possible (plus de faux succès local)
+          handleAdminSessionExpired();
+          return;
+        }
+
+        if (updatedInventory) {
+          syncProductVaultLocal(prodId, updatedInventory);
+          editingKeyId = null;
+          editingKeyIndex = null;
+          renderKeysInventoryModalRows(prodId, updatedInventory);
+        }
+
+        renderProductsTable(DB.get('products', []));
+        showToast('✓ Clé modifiée et enregistrée avec succès !', 'success');
+      } catch (err) {
+        console.error('[saveInlineKeyEdit Error]', err);
+        showToast('Erreur réseau lors de la modification de la clé.', 'error');
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '✓ Enregistrer';
+        }
+      }
+    }
+
+    function deleteSingleProductKey(prodId, keyId, idx) {
+      var targetKey = currentInspectedKeys.find(function(k, kIdx) {
+        return (keyId && k.id === keyId) || kIdx === idx;
+      });
+      var keyPreview = targetKey ? targetKey.content : ('Clé #' + (idx + 1));
+      var isSold = !!(targetKey && targetKey.used);
+
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer cette Clé',
+        desc: isSold
+          ? 'Attention : cette clé a déjà été vendue. Voulez-vous vraiment la retirer de l\'inventaire ?'
+          : 'Voulez-vous supprimer définitivement cette clé de l\'inventaire du produit ?',
+        detailsHtml: `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Clé :</strong> <code>${escapeHtml(keyPreview)}</code></div>
+            <div><strong>Statut :</strong> ${isSold ? '<span style="color:#b45309;font-weight:700;">Vendue (' + escapeHtml(targetKey.orderId || '-') + ')</span>' : '<span style="color:#059669;font-weight:700;">Disponible en stock</span>'}</div>
+          </div>
+        `,
+        confirmText: 'Supprimer la Clé',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          if (token) {
+            var res = await fetch('/api/data/keys', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({
+                productId: prodId,
+                keyId: keyId || undefined,
+                keyIndex: idx
+              })
+            });
+            var data = await res.json();
+            if (!res.ok || !data.success) {
+              showToast(data.error || 'Erreur lors de la suppression de la clé.', 'error');
+              return;
+            }
+            if (Array.isArray(data.products)) {
+              DB.set('products', data.products);
+            }
+            if (data.inventory) {
+              syncProductVaultLocal(prodId, data.inventory);
+              editingKeyId = null;
+              editingKeyIndex = null;
+              renderKeysInventoryModalRows(prodId, data.inventory);
+            }
+          } else {
+            var vault = DB.get('vault', {}) || {};
+            var vKeys = (vault[prodId] && Array.isArray(vault[prodId].keys)) ? vault[prodId].keys : currentInspectedKeys.slice();
+            var delIdx = keyId ? vKeys.findIndex(function(k) { return k.id === keyId; }) : idx;
+            if (delIdx >= 0) vKeys.splice(delIdx, 1);
+            var nextInv = { keys: vKeys };
+            syncProductVaultLocal(prodId, nextInv);
+            var localProds = DB.get('products', []) || [];
+            var lp = localProds.find(function(x) { return x.id === prodId; });
+            if (lp) lp.stock = vKeys.filter(function(k) { return !k.used; }).length;
+            DB.set('products', localProds);
+            editingKeyId = null;
+            editingKeyIndex = null;
+            renderKeysInventoryModalRows(prodId, nextInv);
+          }
+
+          renderProductsTable(DB.get('products', []));
+          showToast('Clé supprimée avec succès ! Stock mis à jour.', 'success');
+        }
+      });
+    }
+
     function closeAdminKeysModal() {
+      editingKeyId = null;
+      editingKeyIndex = null;
       var m = document.getElementById('admin-keys-modal');
       if (m) m.classList.remove('active');
     }
@@ -3182,12 +3885,12 @@
       }
 
       try {
-        var session = DB.get('session');
+        var token = getAdminAuthToken();
         var res = await fetch('/api/data/products', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
           },
           body: JSON.stringify({
             action: 'add_keys',
@@ -3209,19 +3912,28 @@
         }
 
         var vault = DB.get('vault', {}) || {};
-        if (!vault[prodId]) vault[prodId] = { type: 'text', keys: [] };
-        if (!Array.isArray(vault[prodId].keys)) vault[prodId].keys = [];
-        lines.forEach(function(l, idx) {
-          vault[prodId].keys.push({
-            id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + idx,
-            content: l,
-            used: false,
-            orderId: null,
-            soldTo: null,
-            userId: null,
-            soldAt: null
+        if (data.inventory && Array.isArray(data.inventory.keys)) {
+          vault[prodId] = {
+            type: (vault[prodId] && vault[prodId].type) || 'text',
+            content: data.inventory.keys.filter(function(k) { return !k.used; }).map(function(k) { return k.content; }).join('\n'),
+            fileName: (vault[prodId] && vault[prodId].fileName) || 'livraison.txt',
+            keys: data.inventory.keys
+          };
+        } else {
+          if (!vault[prodId]) vault[prodId] = { type: 'text', keys: [] };
+          if (!Array.isArray(vault[prodId].keys)) vault[prodId].keys = [];
+          lines.forEach(function(l, idx) {
+            vault[prodId].keys.push({
+              id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + idx,
+              content: l,
+              used: false,
+              orderId: null,
+              soldTo: null,
+              userId: null,
+              soldAt: null
+            });
           });
-        });
+        }
         DB.set('vault', vault);
 
         var updatedProds = DB.get('products', []);
@@ -3241,14 +3953,36 @@
       }
     }
 
-    function toggleProductVisibility(id) {
+    async function toggleProductVisibility(id) {
       var prods = DB.get('products', []);
       var p = prods.find(function(x) { return x.id === id; });
-      if (p) {
-        p.published = !p.published;
-        DB.set('products', prods);
+      if (!p) return;
+      var nextPublished = !p.published;
+
+      try {
+        var res = await fetch('/api/data/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getAdminAuthToken()
+          },
+          body: JSON.stringify({ id: p.id, name: p.name, published: nextPublished })
+        });
+        var data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data || !data.success) {
+          showToast((data && data.error) || 'Le serveur a refusé la modification de visibilité.', 'error');
+          return;
+        }
+        if (Array.isArray(data.products)) {
+          DB.set('products', data.products);
+        } else {
+          p.published = nextPublished;
+          DB.set('products', prods);
+        }
         renderDashboard();
-        showToast(`Produit ${p.published ? 'mis en ligne' : 'masqué'}.`, 'success');
+        showToast('Produit ' + (nextPublished ? 'mis en ligne' : 'masqué de la boutique') + '.', 'success');
+      } catch (err) {
+        showToast('Serveur injoignable : visibilité inchangée.', 'error');
       }
     }
 
@@ -3343,7 +4077,7 @@
       var type = document.getElementById('admin-vault-type').value;
       var stockInput = document.getElementById('admin-prod-stock');
       if (!stockInput) return;
-      if (type === 'text') {
+      if (type === 'text' || type === 'link') {
         var text = document.getElementById('admin-vault-content').value.trim();
         if (!text) {
           stockInput.value = 0;
@@ -3354,17 +4088,50 @@
       }
     }
 
+    var _editingExistingProductKeys = false;
+    var _prodVaultTextareaTouched = false;
+
+    function setProdVaultEditHelper(visible, msgHtml) {
+      var helper = document.getElementById('prod-vault-edit-helper');
+      var helperText = document.getElementById('prod-vault-edit-helper-text');
+      if (!helper) return;
+      if (visible) {
+        if (helperText && msgHtml) helperText.innerHTML = msgHtml;
+        helper.classList.remove('hidden');
+        helper.style.display = 'flex';
+      } else {
+        helper.classList.add('hidden');
+        helper.style.display = 'none';
+      }
+    }
+
+    function openInventoryFromProductModal() {
+      var idVal = parseInt(document.getElementById('admin-prod-id').value, 10);
+      if (!idVal || isNaN(idVal)) return;
+      closeAdminProdModal();
+      viewProductKeysInventory(idVal);
+    }
+
+    function onProdVaultTextareaInput() {
+      _prodVaultTextareaTouched = true;
+      updateStockFromVaultKeys();
+    }
+
     function openNewProductModal() {
+      _editingExistingProductKeys = false;
+      _prodVaultTextareaTouched = false;
       document.getElementById('prod-modal-title').textContent = 'Ajouter un Nouveau Produit';
       document.getElementById('admin-prod-id').value = '';
       document.getElementById('admin-prod-form').reset();
       document.getElementById('admin-prod-stock').value = 0;
       var banner = document.getElementById('admin-prod-match-banner');
       if (banner) banner.style.display = 'none';
+      setProdVaultEditHelper(false);
       editingProductImage = null;
       editingVaultFileContent = null;
       updateDropzoneUI(null);
       setVaultType('text');
+      setDeliveryModeField('auto');
 
       document.getElementById('admin-prod-modal').classList.add('active');
     }
@@ -3387,7 +4154,9 @@
       });
 
       if (found && (!currentEditId || parseInt(currentEditId, 10) !== found.id)) {
-        // Produit existant détecté ! Auto-remplissage
+        // Produit existant détecté ! Auto-remplissage (mode ajout de nouvelles clés par défaut)
+        _editingExistingProductKeys = false;
+        setProdVaultEditHelper(false);
         document.getElementById('admin-prod-id').value = found.id;
         document.getElementById('admin-prod-cat').value = found.category || '';
         document.getElementById('admin-prod-price').value = found.price || '';
@@ -3412,6 +4181,9 @@
     }
 
     function duplicateProduct(id) {
+      _editingExistingProductKeys = false;
+      _prodVaultTextareaTouched = false;
+      setProdVaultEditHelper(false);
       var prods = DB.get('products', []);
       var p = prods.find(function(x) { return x.id === id; });
       if (!p) return;
@@ -3458,6 +4230,9 @@
       var p = prods.find(function(x) { return x.id === id; });
       if (!p) return;
 
+      _editingExistingProductKeys = true;
+      _prodVaultTextareaTouched = false;
+
       var vault = DB.get('vault', {});
       var v = vault[p.id] || { type: 'text', content: '', keys: [] };
 
@@ -3474,33 +4249,100 @@
       editingProductImage = p.image || null;
       updateDropzoneUI(editingProductImage);
 
+      function applyKeysToEditForm(keysList, fallbackContent) {
+        var unusedKeys = Array.isArray(keysList) ? keysList.filter(function(k) { return !k.used; }) : [];
+        var soldCount = Array.isArray(keysList) ? keysList.filter(function(k) { return k.used; }).length : 0;
+        var ta = document.getElementById('admin-vault-content');
+        if (ta) {
+          if (unusedKeys.length > 0) {
+            ta.value = unusedKeys.map(function(k) { return k.content; }).join('\n');
+          } else if (Array.isArray(keysList) && keysList.length > 0) {
+            ta.value = '';
+          } else {
+            ta.value = fallbackContent || '';
+          }
+          ta.placeholder = 'Modifiez les clés disponibles (1 par ligne) ou ajoutez-en de nouvelles...';
+        }
+        if (Array.isArray(keysList) && keysList.length > 0) {
+          document.getElementById('admin-prod-stock').value = unusedKeys.length;
+        } else {
+          updateStockFromVaultKeys();
+        }
+        var helperMsg = `✏️ <strong>Clés en stock modifiables (1 par ligne) :</strong> corrigez, supprimez ou ajoutez des clés.${soldCount > 0 ? ' <span style="color:#b45309;">(' + soldCount + ' vendue(s) protégée(s))</span>' : ''}`;
+        setProdVaultEditHelper(true, helperMsg);
+      }
+
       setVaultType(v.type || 'text');
       if (v.type === 'file') {
+        setProdVaultEditHelper(false);
         document.getElementById('vault-filename-display').textContent = 'Fichier : ' + (v.fileName || 'fichier.txt');
         document.getElementById('admin-vault-filename').value = v.fileName || '';
         editingVaultFileContent = v.content;
         document.getElementById('admin-prod-stock').value = p.stock || 0;
       } else {
-        if (v.keys && Array.isArray(v.keys) && v.keys.length > 0) {
-          var unusedKeys = v.keys.filter(function(k) { return !k.used; });
-          var soldCount = v.keys.filter(function(k) { return k.used; }).length;
-          document.getElementById('admin-vault-content').value = '';
-          document.getElementById('admin-vault-content').placeholder = 'Insérez de NOUVELLES clés à ajouter (1 par ligne) :\nclé_suivante_1\nclé_suivante_2';
-          document.getElementById('admin-prod-stock').value = unusedKeys.length;
-          if (soldCount > 0) {
-            showToast(`${unusedKeys.length} clé(s) disponible(s) en stock (${soldCount} déjà vendue(s) et protégée(s)).`, 'info');
-          }
-        } else {
-          document.getElementById('admin-vault-content').value = v.content || '';
-          updateStockFromVaultKeys();
-        }
+        applyKeysToEditForm(v.keys || [], v.content || '');
       }
 
+      setDeliveryModeField(p.deliveryMode);
+      if (p.deliveryMode === 'manual') {
+        document.getElementById('admin-prod-stock').value = p.stock || 0;
+      }
       document.getElementById('admin-prod-modal').classList.add('active');
+
+      // Synchronisation silencieuse des clés fraîches depuis le serveur si non modifié localement
+      var token = getAdminAuthToken();
+      if (token && v.type !== 'file') {
+        fetch('/api/data/products?productId=' + p.id + '&keys=1&_t=' + Date.now(), {
+          headers: { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' },
+          cache: 'no-store'
+        }).then(function(r) { return r.json(); }).then(function(res) {
+          if (res && Array.isArray(res.keys)) {
+            syncProductVaultLocal(p.id, res);
+            var modalActive = document.getElementById('admin-prod-modal').classList.contains('active');
+            var modalPid = parseInt(document.getElementById('admin-prod-id').value, 10);
+            if (modalActive && modalPid === p.id && !_prodVaultTextareaTouched) {
+              applyKeysToEditForm(res.keys, '');
+            }
+          }
+        }).catch(function() {});
+      }
     }
 
     function closeAdminProdModal() {
+      _editingExistingProductKeys = false;
+      _prodVaultTextareaTouched = false;
       document.getElementById('admin-prod-modal').classList.remove('active');
+    }
+
+    function onDeliveryModeChange() {
+      var sel = document.getElementById('admin-prod-delivery');
+      var isManual = Boolean(sel && sel.value === 'manual');
+      var hint = document.getElementById('admin-prod-delivery-hint');
+      if (hint) hint.classList.toggle('hidden', !isManual);
+      var vaultBox = document.querySelector('#admin-prod-modal .admin-vault-box-compact');
+      if (vaultBox) {
+        vaultBox.style.opacity = isManual ? '0.45' : '';
+        vaultBox.style.pointerEvents = isManual ? 'none' : '';
+      }
+      var stockHint = document.getElementById('admin-prod-stock-hint');
+      if (stockHint) stockHint.textContent = isManual ? '(à renseigner)' : '(Auto coffre-fort)';
+      var stockEl = document.getElementById('admin-prod-stock');
+      if (isManual) {
+        if (stockEl) {
+          stockEl.removeAttribute('readonly');
+          stockEl.style.background = '#ffffff';
+          stockEl.style.cursor = 'text';
+        }
+      } else {
+        setVaultType(document.getElementById('admin-vault-type').value || 'text');
+      }
+    }
+    window.onDeliveryModeChange = onDeliveryModeChange;
+
+    function setDeliveryModeField(mode) {
+      var sel = document.getElementById('admin-prod-delivery');
+      if (sel) sel.value = mode === 'manual' ? 'manual' : 'auto';
+      onDeliveryModeChange();
     }
 
     function setVaultType(type) {
@@ -3531,25 +4373,80 @@
       }
     }
 
+    // Redimensionne (800 px max) et compresse l'image avant enregistrement : une photo de plusieurs Mo
+    // stockée en base64 alourdit chaque chargement du catalogue et peut faire échouer la sauvegarde distante.
+    var PRODUCT_IMAGE_MAX_DIM = 800;
+    var PRODUCT_IMAGE_MAX_DATAURL = 2.7 * 1024 * 1024; // ≈ 2 Mo une fois décodé
+
+    function compressProductImage(file) {
+      return new Promise(function(resolve) {
+        var reader = new FileReader();
+        reader.onerror = function() { resolve(null); };
+        reader.onload = function(e) {
+          var original = e.target.result;
+          // SVG (vectoriel) et GIF (animé) conservés tels quels
+          if (/^data:image\/(svg\+xml|gif)/i.test(original)) return resolve(original);
+          var img = new Image();
+          img.onerror = function() { resolve(original); };
+          img.onload = function() {
+            var w = img.naturalWidth || img.width;
+            var h = img.naturalHeight || img.height;
+            var scale = Math.min(1, PRODUCT_IMAGE_MAX_DIM / Math.max(w, h || 1));
+            if (scale === 1 && original.length <= 300 * 1024) return resolve(original);
+            try {
+              var canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round(w * scale));
+              canvas.height = Math.max(1, Math.round(h * scale));
+              var ctx = canvas.getContext('2d');
+              var mayHaveAlpha = /^data:image\/(png|webp)/i.test(original);
+              var out;
+              if (mayHaveAlpha) {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                out = canvas.toDataURL('image/webp', 0.85);
+                if (out.indexOf('data:image/webp') !== 0) out = canvas.toDataURL('image/png');
+              } else {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                out = canvas.toDataURL('image/jpeg', 0.85);
+              }
+              resolve(out && out.length < original.length ? out : original);
+            } catch (err) {
+              resolve(original);
+            }
+          };
+          img.src = original;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
     async function handleProductImageFile(event) {
       var file = event.target.files[0];
       if (!file) return;
 
       if (typeof Security !== 'undefined') {
-        var check = await Security.validateImageFile(file, 2);
+        // Jusqu'à 10 Mo acceptés en entrée (photos de téléphone) puisque l'image est compressée ensuite
+        var check = await Security.validateImageFile(file, 10);
         if (!check.valid) {
           showToast(check.error, 'error');
-          event.target.value = '';
+          if (event.target) event.target.value = '';
           return;
         }
       }
 
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        editingProductImage = e.target.result;
-        updateDropzoneUI(editingProductImage);
-      };
-      reader.readAsDataURL(file);
+      var dataUrl = await compressProductImage(file);
+      if (!dataUrl) {
+        showToast('Impossible de lire cette image.', 'error');
+        return;
+      }
+      if (dataUrl.length > PRODUCT_IMAGE_MAX_DATAURL) {
+        showToast('Image trop lourde même après compression (2 Mo max). Choisissez une image plus légère.', 'error');
+        if (event.target) event.target.value = '';
+        return;
+      }
+      editingProductImage = dataUrl;
+      updateDropzoneUI(editingProductImage);
     }
 
     function handleVaultFileSelected(event) {
@@ -3563,8 +4460,8 @@
         event.target.value = '';
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('Le fichier dépasse la taille maximale autorisée (5 Mo).', 'error');
+      if (file.size > 3 * 1024 * 1024) {
+        showToast('Le fichier dépasse la taille maximale autorisée (3 Mo).', 'error');
         event.target.value = '';
         return;
       }
@@ -3573,19 +4470,31 @@
       document.getElementById('vault-filename-display').textContent = 'Fichier : ' + file.name;
       var reader = new FileReader();
       reader.onload = function(e) { editingVaultFileContent = e.target.result; };
-      reader.readAsText(file);
+      reader.readAsDataURL(file); // binaire préservé (PDF, ZIP, images...)
     }
 
+    var _savingProductInFlight = false;
     async function saveProduct(e) {
       e.preventDefault();
+      if (_savingProductInFlight) return;
+
       var idVal = document.getElementById('admin-prod-id').value;
       var name = document.getElementById('admin-prod-name').value.trim();
-      var cat = document.getElementById('admin-prod-cat').value.trim().toLowerCase();
+      var cat = document.getElementById('admin-prod-cat').value.trim().toLowerCase() || 'général';
       var price = parseFloat(document.getElementById('admin-prod-price').value) || 0;
       var desc = document.getElementById('admin-prod-desc').value.trim();
+      var declaredStock = parseInt(document.getElementById('admin-prod-stock')?.value, 10) || 0;
+      var deliveryMode = (document.getElementById('admin-prod-delivery') || {}).value === 'manual' ? 'manual' : 'auto';
+
+      if (!name) {
+        showToast('Veuillez renseigner le nom du produit.', 'error');
+        return;
+      }
 
       var vaultType = document.getElementById('admin-vault-type').value;
-      var vaultContent = vaultType === 'file' ? (editingVaultFileContent || 'Fichier') : document.getElementById('admin-vault-content').value.trim();
+      var vaultContent = vaultType === 'file'
+        ? ((typeof editingVaultFileContent === 'string' && editingVaultFileContent.indexOf('data:') === 0) ? editingVaultFileContent : undefined)
+        : document.getElementById('admin-vault-content').value.trim();
       var vaultFileName = document.getElementById('admin-vault-filename').value || 'livraison.txt';
 
       var prods = DB.get('products', []) || [];
@@ -3606,8 +4515,10 @@
 
       var existingVault = targetId ? (vault[targetId] || null) : null;
       var existingKeys = (existingVault && Array.isArray(existingVault.keys)) ? existingVault.keys : [];
+      var existingProdObj = targetId ? (prods.find(function(x) { return x.id === targetId; }) || matchedProduct) : matchedProduct;
+      var isReplacingAvailableKeys = Boolean(_editingExistingProductKeys && targetId && vaultType !== 'file');
 
-      var rawLines = vaultType === 'text' && vaultContent
+      var rawLines = (vaultType === 'text' || vaultType === 'link') && vaultContent
         ? vaultContent.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; })
         : [];
 
@@ -3622,113 +4533,226 @@
         seenInput.add(lineLower);
       }
 
-      // Contrôle strict des doublons avec les clés déjà présentes dans le système
-      var existingSet = new Set(existingKeys.map(function(k) { return (k.content || '').trim().toLowerCase(); }));
-      for (var j = 0; j < rawLines.length; j++) {
-        if (existingSet.has(rawLines[j].toLowerCase())) {
-          showToast(`Erreur : la clé '${rawLines[j]}' est déjà enregistrée pour ce produit (doublon refusé).`, 'error');
-          return;
+      if (isReplacingAvailableKeys) {
+        // En mode édition complète des clés : interdire uniquement les doublons avec des clés déjà vendues
+        var soldSet = new Set(existingKeys.filter(function(k) { return k.used; }).map(function(k) { return (k.content || '').trim().toLowerCase(); }));
+        for (var j = 0; j < rawLines.length; j++) {
+          if (soldSet.has(rawLines[j].toLowerCase())) {
+            showToast(`Erreur : la clé '${rawLines[j]}' a déjà été vendue pour ce produit.`, 'error');
+            return;
+          }
+        }
+      } else {
+        // En mode ajout : contrôle strict des doublons avec toutes les clés déjà présentes dans le système
+        var existingSet = new Set(existingKeys.map(function(k) { return (k.content || '').trim().toLowerCase(); }));
+        for (var j = 0; j < rawLines.length; j++) {
+          if (existingSet.has(rawLines[j].toLowerCase())) {
+            showToast(`Erreur : la clé '${rawLines[j]}' est déjà enregistrée pour ce produit (doublon refusé).`, 'error');
+            return;
+          }
         }
       }
 
-      // Appel API serveur pour persistance synchronisée
-      var session = DB.get('session');
+      var defaultSvgImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220"><rect width="400" height="220" fill="%232563eb"/><text x="200" y="115" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="%23ffffff">GETVIRTU</text></svg>';
+      var effectiveImage = editingProductImage || (existingProdObj && existingProdObj.image) || null; // pas d'image : visuel par défaut côté boutique
+      var effectivePublished = existingProdObj && typeof existingProdObj.published === 'boolean' ? existingProdObj.published : true;
+
+      var submitBtn = document.querySelector('#admin-prod-form button[type="submit"]');
+      var origBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+      _savingProductInFlight = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳ Enregistrement...</span>';
+      }
+
+      var serverSavedProducts = null;
+      var serverSavedInventory = null;
       try {
-        var apiRes = await fetch('/api/data/products', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
-          },
-          body: JSON.stringify({
+        // Appel API serveur pour persistance synchronisée
+        var token = getAdminAuthToken();
+        var serverValidationRejected = false;
+        try {
+          var payload = {
             id: targetId,
             name: name,
             category: cat,
             price: price,
+            stock: deliveryMode === 'manual' ? Math.max(0, declaredStock) : (vaultType === 'file' ? Math.max(1, declaredStock) : undefined),
+            deliveryMode: deliveryMode,
             description: desc,
-            image: editingProductImage,
-            published: true,
-            newKeys: rawLines
-          })
-        });
-
-        var resData = await apiRes.json();
-        if (!apiRes.ok || !resData.success) {
-          throw new Error(resData.error || 'Erreur lors de l\'enregistrement du produit.');
-        }
-
-        if (resData.products) {
-          DB.set('products', resData.products);
-        }
-      } catch (err) {
-        console.warn('API saveProduct fallback local :', err.message);
-      }
-
-      // Mise à jour locale DB
-      var newUnusedKeys = rawLines.map(function(line, idx) {
-        return {
-          id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + idx,
-          content: line,
-          used: false,
-          orderId: null,
-          soldTo: null,
-          userId: null,
-          soldAt: null
-        };
-      });
-
-      if (targetId) {
-        var p = prods.find(function(x) { return x.id === targetId; });
-        if (p) {
-          p.name = name; p.category = cat; p.price = price; p.description = desc;
-          if (editingProductImage) p.image = editingProductImage;
-          var combinedKeys = existingKeys.concat(newUnusedKeys);
-          p.stock = combinedKeys.filter(function(k) { return !k.used; }).length;
-          vault[targetId] = {
-            type: vaultType,
-            content: vaultContent,
-            fileName: vaultFileName,
-            keys: combinedKeys
+            image: effectiveImage,
+            published: effectivePublished,
+            vaultType: vaultType,
+            vaultContent: vaultContent,
+            fileName: vaultFileName
           };
+          if (isReplacingAvailableKeys) {
+            payload.replaceAvailableKeys = rawLines;
+          } else {
+            payload.newKeys = rawLines;
+          }
+
+          var apiRes = await fetch('/api/data/products', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+            },
+            body: JSON.stringify(payload)
+          });
+
+          var resData = await apiRes.json();
+          if (!apiRes.ok || !resData.success) {
+            serverValidationRejected = true;
+            showToast(resData.error || 'Erreur lors de l\'enregistrement du produit.', 'error');
+            return;
+          }
+
+          if (Array.isArray(resData.products)) {
+            serverSavedProducts = resData.products;
+          }
+          if (resData.inventory) {
+            serverSavedInventory = resData.inventory;
+          }
+          if (resData.product) {
+            targetId = resData.product.id;
+          }
+        } catch (err) {
+          if (serverValidationRejected) return;
+          // Plus d'enregistrement « local » : un produit absent du serveur n'apparaîtrait jamais dans la boutique
+          showToast('Serveur injoignable : le produit n\'a pas été enregistré. Réessayez.', 'error');
+          return;
         }
-      } else {
-        targetId = prods.length > 0 ? Math.max.apply(null, prods.map(function(x) { return x.id; })) + 1 : 1;
-        var initialStock = newUnusedKeys.length;
-        prods.push({
-          id: targetId,
-          name: name,
-          category: cat,
-          price: price,
-          stock: initialStock,
-          description: desc,
-          image: editingProductImage || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220"><rect width="400" height="220" fill="%232563eb"/><text x="200" y="115" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="%23ffffff">GETVIRTU</text></svg>',
-          published: true
+
+        // Mise à jour locale DB synchronisée avec l'ID réel du serveur
+        var newUnusedKeys = rawLines.map(function(line, idx) {
+          return {
+            id: 'KEY-' + Date.now().toString(36).toUpperCase() + '-' + idx,
+            content: line,
+            used: false,
+            orderId: null,
+            soldTo: null,
+            userId: null,
+            soldAt: null
+          };
         });
-        vault[targetId] = {
-          type: vaultType,
-          content: vaultContent,
-          fileName: vaultFileName,
-          keys: newUnusedKeys
-        };
+
+        var nextKeysList = (serverSavedInventory && Array.isArray(serverSavedInventory.keys))
+          ? serverSavedInventory.keys
+          : (isReplacingAvailableKeys
+              ? existingKeys.filter(function(k) { return k.used; }).concat(newUnusedKeys)
+              : existingKeys.concat(newUnusedKeys));
+
+        if (serverSavedProducts) {
+          DB.set('products', serverSavedProducts);
+          if (targetId) {
+            vault[targetId] = {
+              type: vaultType,
+              content: vaultType === 'file' ? vaultContent : nextKeysList.filter(function(k) { return !k.used; }).map(function(k) { return k.content; }).join('\n'),
+              fileName: vaultFileName,
+              keys: nextKeysList
+            };
+          }
+        } else {
+          if (targetId) {
+            var p = prods.find(function(x) { return x.id === targetId; });
+            if (p) {
+              p.name = name; p.category = cat; p.price = price; p.description = desc;
+              if (effectiveImage) p.image = effectiveImage;
+              p.stock = vaultType === 'file' && nextKeysList.length === 0 ? Math.max(1, declaredStock) : nextKeysList.filter(function(k) { return !k.used; }).length;
+              vault[targetId] = {
+                type: vaultType,
+                content: vaultType === 'file' ? vaultContent : nextKeysList.filter(function(k) { return !k.used; }).map(function(k) { return k.content; }).join('\n'),
+                fileName: vaultFileName,
+                keys: nextKeysList
+              };
+            }
+          } else {
+            targetId = prods.length > 0 ? Math.max.apply(null, prods.map(function(x) { return x.id; })) + 1 : 1;
+            var initialStock = vaultType === 'file' && newUnusedKeys.length === 0 ? Math.max(1, declaredStock) : newUnusedKeys.length;
+            prods.push({
+              id: targetId,
+              name: name,
+              category: cat,
+              price: price,
+              stock: initialStock,
+              description: desc,
+              image: effectiveImage,
+              published: true
+            });
+            vault[targetId] = {
+              type: vaultType,
+              content: vaultContent,
+              fileName: vaultFileName,
+              keys: newUnusedKeys
+            };
+          }
+          DB.set('products', prods);
+        }
+
+        DB.set('vault', vault);
+
+        closeAdminProdModal();
+        renderDashboard();
+        showToast('Produit enregistré avec succès ! Stock calculé automatiquement.', 'success');
+      } finally {
+        _savingProductInFlight = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origBtnHtml || '<span>Enregistrer le Produit</span>';
+        }
       }
-
-      DB.set('products', prods);
-      DB.set('vault', vault);
-
-      closeAdminProdModal();
-      renderDashboard();
-      showToast('Produit enregistré avec succès ! Stock calculé automatiquement.', 'success');
     }
 
     function deleteProduct(id) {
-      if (!confirm('Voulez-vous vraiment supprimer ce produit ?')) return;
-      var prods = DB.get('products', []).filter(function(x) { return x.id !== id; });
-      var vault = DB.get('vault', {});
-      delete vault[id];
-      DB.set('products', prods);
-      DB.set('vault', vault);
-      renderDashboard();
-      showToast('Produit supprimé.', 'success');
+      var allProds = DB.get('products', []) || [];
+      var targetProd = allProds.find(function(x) { return x.id === id || String(x.id) === String(id); });
+      var prodTitle = targetProd ? targetProd.name : ('Produit #' + id);
+      var prodPrice = targetProd && typeof targetProd.price === 'number' ? ('$' + targetProd.price.toFixed(2)) : '-';
+
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer le Produit',
+        desc: 'Voulez-vous supprimer définitivement ce produit et son inventaire de clés du catalogue ?',
+        detailsHtml: `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Produit :</strong> ${escapeHtml(prodTitle)}</div>
+            <div><strong>Prix :</strong> ${escapeHtml(prodPrice)}</div>
+            <div><strong>ID :</strong> <code>${escapeHtml(String(id))}</code></div>
+          </div>
+        `,
+        confirmText: 'Supprimer le Produit',
+        onConfirm: async function() {
+          // Suppression d'abord sur le serveur : la boutique lit les données du serveur, pas le cache de l'admin.
+          // (Auparavant le produit était retiré localement et le succès affiché même si le serveur avait refusé.)
+          var token = getAdminAuthToken();
+          try {
+            var res = await fetch('/api/data/products?id=' + encodeURIComponent(id), {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({ id: id })
+            });
+            var data = await res.json().catch(function() { return {}; });
+            if (!res.ok || !data || !data.success) {
+              showToast((data && data.error) || 'Le serveur a refusé la suppression : le produit n\'a pas été supprimé.', 'error');
+              return;
+            }
+            var serverProducts = Array.isArray(data.products)
+              ? data.products
+              : (DB.get('products', []) || []).filter(function(x) { return x.id !== id && String(x.id) !== String(id); });
+            DB.set('products', serverProducts);
+            var vault = DB.get('vault', {}) || {};
+            delete vault[id];
+            DB.set('vault', vault);
+            renderDashboard();
+            showToast('Produit supprimé du catalogue et de la boutique.', 'success');
+          } catch (err) {
+            showToast('Serveur injoignable : le produit n\'a pas été supprimé. Réessayez.', 'error');
+          }
+        }
+      });
     }
 
     // ========== 2. TABLE DES DEMANDES DE RECHARGE DE SOLDE ==========
@@ -3745,7 +4769,7 @@
         var statusClass = isApproved ? 'online' : (isPending ? 'pending' : 'rejected');
 
         var proofBtn = r.proofImage ? `
-          <button type="button" class="proof-thumbnail-btn" onclick="openRechargeProofLightbox('${r.id}')">
+          <button type="button" class="proof-thumbnail-btn" onclick="openRechargeProofLightbox('${escapeJsStr(r.id)}')">
             <span>📷</span> Voir Reçu
           </button>
         ` : `<span style="color: var(--text-muted); font-size: 11px;">Aucun</span>`;
@@ -3753,21 +4777,21 @@
         var actions = `
           <div style="display: flex; gap: 6px; align-items: center;">
             ${isPending ? `
-              <button type="button" class="btn-primary btn-sm" style="background: var(--emerald-600); border-color: var(--emerald-600); padding: 5px 10px;" onclick="approveRecharge('${r.id}')" title="Approuver et créditer le solde client">
+              <button type="button" class="btn-primary btn-sm" style="background: var(--emerald-600); border-color: var(--emerald-600); padding: 5px 10px;" onclick="approveRecharge('${escapeJsStr(r.id)}')" title="Approuver et créditer le solde client">
                 ✓ Approuver
               </button>
-              <button type="button" class="btn-secondary btn-sm" style="color: var(--rose-600); padding: 5px 8px;" onclick="rejectRecharge('${r.id}')" title="Rejeter">
+              <button type="button" class="btn-secondary btn-sm" style="color: var(--rose-600); padding: 5px 8px;" onclick="rejectRecharge('${escapeJsStr(r.id)}')" title="Rejeter">
                 ✕ Rejeter
               </button>
             ` : (isApproved ? `<span style="font-size: 11px; color: var(--emerald-600); font-weight: 600;">✓ Crédité</span>` : `<span style="font-size: 11px; color: var(--rose-600); font-weight: 600;">✕ Rejeté</span>`)}
-            <button type="button" class="btn-secondary btn-sm" onclick="confirmDeleteTransaction('${r.id}', '${escapeHtml(r.userName || r.userEmail)}', ${r.amount})" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; padding: 4px 6px; font-size: 11px; margin-left: 2px; cursor: pointer;" title="Supprimer cet enregistrement">🗑️</button>
+            <button type="button" class="btn-secondary btn-sm" onclick="confirmDeleteTransaction('${escapeJsStr(r.id)}')" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; padding: 4px 6px; font-size: 11px; margin-left: 2px; cursor: pointer;" title="Supprimer cet enregistrement">🗑️</button>
           </div>
         `;
 
         html += `
           <tr>
             <td>
-              <strong>${r.id}</strong>
+              <strong>${escapeHtml(r.id)}</strong>
               <div style="font-size: 11px; color: var(--text-muted);">${new Date(r.date).toLocaleString('fr-FR')}</div>
             </td>
             <td>
@@ -3785,7 +4809,7 @@
               <code style="font-size: 11px; color: var(--primary-600);">${escapeHtml(r.address || '-')}</code>
             </td>
             <td>${proofBtn}</td>
-            <td><span class="status-indicator-pill ${statusClass}">${r.status}</span></td>
+            <td><span class="status-indicator-pill ${statusClass}">${escapeHtml(r.status)}</span></td>
             <td>${actions}</td>
           </tr>
         `;
@@ -3800,20 +4824,22 @@
       if (!r || !r.proofImage) return;
 
       document.getElementById('lightbox-info-text').textContent = `Recharge ${r.id} • ${r.userName} (${r.userEmail}) • Montant : +${r.amount.toFixed(2)} USD • Moyen : ${r.methodName}`;
-      document.getElementById('lightbox-img').src = r.proofImage;
+      var lbImg = document.getElementById('lightbox-img');
+      lbImg.removeAttribute('src');
+      loadPrivateMediaInto(r.proofImage, lbImg);
 
       var actions = document.getElementById('lightbox-actions-container');
       if (r.status === 'En attente') {
         actions.innerHTML = `
-          <button type="button" class="btn-primary" style="background: var(--emerald-600); border-color: var(--emerald-600);" onclick="approveRecharge('${r.id}'); closeProofLightbox();">
+          <button type="button" class="btn-primary" style="background: var(--emerald-600); border-color: var(--emerald-600);" onclick="approveRecharge('${escapeJsStr(r.id)}'); closeProofLightbox();">
             ✓ Approuver & Créditer le Solde (+${r.amount.toFixed(2)} $)
           </button>
-          <button type="button" class="btn-secondary" style="color: var(--rose-600);" onclick="rejectRecharge('${r.id}'); closeProofLightbox();">
+          <button type="button" class="btn-secondary" style="color: var(--rose-600);" onclick="rejectRecharge('${escapeJsStr(r.id)}'); closeProofLightbox();">
             ✕ Rejeter la demande
           </button>
         `;
       } else {
-        actions.innerHTML = `<span class="status-indicator-pill ${r.status === 'Approuvé' ? 'online' : 'rejected'}">Demande déjà traitée (${r.status})</span>`;
+        actions.innerHTML = `<span class="status-indicator-pill ${r.status === 'Approuvé' ? 'online' : 'rejected'}">Demande déjà traitée (${escapeHtml(r.status)})</span>`;
       }
 
       document.getElementById('admin-proof-lightbox').classList.add('active');
@@ -3825,7 +4851,7 @@
       if (!r || r.status !== 'En attente') return;
 
       var token = getAdminAuthToken();
-      if (token) {
+      {
         try {
           var res = await fetch('/api/payments/verify', {
             method: 'POST',
@@ -3838,7 +4864,11 @@
               isApproval: true
             })
           });
-          var data = await res.json();
+          var data = await res.json().catch(function() { return {}; });
+          if (!res.ok || !data || data.success === false) {
+            showToast((data && data.error) || 'Le serveur a refusé l\'approbation : le client n\'a pas été crédité.', 'error');
+            return;
+          }
           if (data && typeof data.newBalance === 'number') {
             var users = DB.get('users', []);
             var u = users.find(function(x) {
@@ -3851,7 +4881,8 @@
             }
           }
         } catch(e) {
-          console.warn('approveRecharge API error:', e.message);
+          showToast('Serveur injoignable : la recharge n\'a pas été approuvée.', 'error');
+          return;
         }
       }
 
@@ -3880,21 +4911,27 @@
       if (!r || r.status !== 'En attente') return;
 
       var token = getAdminAuthToken();
-      if (token) {
-        try {
-          await fetch('/api/payments/verify', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({
-              transactionId: r.id,
-              isApproval: false,
-              failureReason: 'Rejeté par l\'administrateur'
-            })
-          });
-        } catch(e) {}
+      try {
+        var rejRes = await fetch('/api/payments/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({
+            transactionId: r.id,
+            isApproval: false,
+            failureReason: 'Rejeté par l\'administrateur'
+          })
+        });
+        var rejData = await rejRes.json().catch(function() { return {}; });
+        if (!rejRes.ok || (rejData && rejData.success === false)) {
+          showToast((rejData && rejData.error) || 'Le serveur a refusé le rejet de cette recharge.', 'error');
+          return;
+        }
+      } catch(e) {
+        showToast('Serveur injoignable : la recharge n\'a pas été rejetée.', 'error');
+        return;
       }
 
       r.status = 'Rejeté';
@@ -3935,9 +4972,10 @@
         }
 
         // Sélecteur de statut compact, épuré et parfaitement aligné
+        var safeOId = escapeJsStr(o.id);
         var statusSelector = `
           <div class="order-status-selector-wrap">
-            <select class="order-status-badge-select ${statusClass}" onchange="changeOrderStatusInline('${o.id}', this.value)" title="Changer le statut de la commande">
+            <select class="order-status-badge-select ${statusClass}" onchange="changeOrderStatusInline('${safeOId}', this.value)" title="Changer le statut de la commande">
               <option value="En attente" ${isPending ? 'selected' : ''}>⏳ En attente</option>
               <option value="Complété" ${isDelivered ? 'selected' : ''}>✓ Livré</option>
               <option value="Annulé" ${isCancelled ? 'selected' : ''}>✕ Annulé</option>
@@ -3947,21 +4985,21 @@
 
         var actions = `
           <div class="order-action-group">
-            <button type="button" class="btn-order-manage" onclick="openOrderReviewModal('${o.id}')" title="Examiner les détails et modifier la clé avant validation">
+            <button type="button" class="btn-order-manage" onclick="openOrderReviewModal('${safeOId}')" title="Examiner les détails et modifier la clé avant validation">
               <span>🔑 Gérer & Clé</span>
               ${hasCustomKey ? '<span class="key-customized-dot" title="Clé personnalisée prête">●</span>' : ''}
             </button>
             ${isPending ? `
-              <button type="button" class="btn-order-quick-val" onclick="validateAndDeliverOrder('${o.id}')" title="Validation rapide avec clé standard">
+              <button type="button" class="btn-order-quick-val" onclick="validateAndDeliverOrder('${safeOId}')" title="Validation rapide avec clé standard">
                 ✓ Livrer
               </button>
             ` : ''}
             ${!isCancelled ? `
-              <button type="button" class="btn-order-quick-cancel" onclick="cancelOrder('${o.id}')" title="Annuler la commande et rembourser le solde">
+              <button type="button" class="btn-order-quick-cancel" onclick="cancelOrder('${safeOId}')" title="Annuler la commande et rembourser le solde">
                 ✕
               </button>
             ` : ''}
-            <button type="button" class="btn-order-quick-cancel" onclick="confirmDeleteOrder('${o.id}', '${escapeHtml(o.productName)}', '${escapeHtml(o.userName || o.userEmail)}', ${(o.amount || 0)})" title="Supprimer définitivement cette commande" style="background: #fff1f2; border: 1px solid #fecaca; color: #dc2626; cursor: pointer;">
+            <button type="button" class="btn-order-quick-cancel" onclick="confirmDeleteOrder('${safeOId}')" title="Supprimer définitivement cette commande" style="background: #fff1f2; border: 1px solid #fecaca; color: #dc2626; cursor: pointer;">
               🗑️
             </button>
           </div>
@@ -3976,8 +5014,9 @@
         html += `
           <tr>
             <td>
-              <strong>${o.id}</strong>
+              <strong>${escapeHtml(o.id)}</strong>
               <div style="font-size: 11px; color: var(--text-muted);">${new Date(o.date).toLocaleDateString('fr-FR')} ${new Date(o.date).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</div>
+              ${o.refunded ? '<div style="font-size: 10.5px; color: #b45309; font-weight: 700;">↩ Remboursée</div>' : ''}
             </td>
             <td>
               <div style="font-weight: 700;">${escapeHtml(o.userName || 'Client')}</div>
@@ -4017,10 +5056,10 @@
       } else if (newStatus === 'Annulé') {
         cancelOrder(orderId);
       } else if (newStatus === 'En attente') {
-        o.status = 'En attente';
-        DB.set('orders', orders);
+        if (o.status !== 'En attente') {
+          showToast('Une commande livrée ou annulée ne peut pas repasser en attente. Annulez-la pour rembourser le client.', 'warning');
+        }
         renderDashboard();
-        showToast(`Commande ${orderId} repassée en attente.`, 'info');
       }
     }
 
@@ -4073,8 +5112,8 @@
         indicator.style.color = '#2563eb';
       } else {
         vaultType = 'text';
-        vaultContent = 'KEY-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
-        indicator.textContent = '● Nouvelle clé générée pour cette commande';
+        vaultContent = '';
+        indicator.textContent = '● Saisissez le contenu à livrer (identifiants, clé, lien…)';
         indicator.style.color = '#d97706';
       }
 
@@ -4125,8 +5164,8 @@
         e.target.value = '';
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('Le fichier dépasse la taille maximale autorisée (5 Mo).', 'error');
+      if (file.size > 3 * 1024 * 1024) {
+        showToast('Le fichier dépasse la taille maximale autorisée (3 Mo).', 'error');
         e.target.value = '';
         return;
       }
@@ -4184,14 +5223,10 @@
       else if (type === 'file') val = document.getElementById('review-vault-filename').value;
       else val = document.getElementById('review-vault-content-text').value;
 
-      if (!val) { showToast('Rien à copier.', 'warning'); return; }
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(val);
-        showToast('Copié dans le presse-papier !', 'success');
-      }
+      copyAdminText(val, 'Copié dans le presse-papier !');
     }
 
-    function saveAndValidateOrderFromModal(e) {
+    async function saveAndValidateOrderFromModal(e) {
       e.preventDefault();
       var orderId = document.getElementById('review-order-id').value;
       var orders = DB.get('orders', []);
@@ -4200,146 +5235,100 @@
 
       var chosenStatusRadio = document.querySelector('input[name="review-order-status"]:checked');
       var chosenStatus = chosenStatusRadio ? chosenStatusRadio.value : 'Complété';
+      if (chosenStatus === 'Annulé') {
+        closeOrderReviewModal();
+        await cancelOrder(o.id);
+        return;
+      }
+      if (chosenStatus === 'En attente') {
+        closeOrderReviewModal();
+        if (o.status !== 'En attente') showToast('Une commande livrée ne peut pas repasser en attente.', 'warning');
+        return;
+      }
 
       var type = document.getElementById('review-vault-type').value;
       var content = '';
       var fileName = '';
-
       if (type === 'link') {
         content = document.getElementById('review-vault-content-link').value.trim();
       } else if (type === 'file') {
         fileName = document.getElementById('review-vault-filename').value.trim() || 'livraison.txt';
-        content = window._tempOrderVaultFileContent || (o.vaultContent && o.vaultContent.content) || 'Fichier téléchargeable prêt';
+        content = window._tempOrderVaultFileContent || '';
+        if (!content && !(o.vaultContent && o.vaultContent.blobId)) {
+          showToast('Veuillez choisir le fichier à livrer.', 'error');
+          return;
+        }
       } else {
         content = document.getElementById('review-vault-content-text').value.trim();
       }
-
-      if (!content && chosenStatus === 'Complété') {
-        alert('Veuillez renseigner une clé de licence ou un contenu avant de valider la commande.');
+      if (!content && type !== 'file') {
+        showToast('Veuillez renseigner une clé de licence ou un contenu avant de valider la commande.', 'error');
         return;
       }
 
-      // Sauvegarde du contenu délivré spécifique à cette commande
-      o.vaultContent = {
-        type: type,
-        content: content,
-        fileName: fileName,
-        customized: true,
-        updatedAt: new Date().toISOString()
-      };
-
-      if (chosenStatus === 'Complété') {
-        o.status = 'Complété';
-        o.validatedAt = new Date().toISOString();
-        DB.set('orders', orders);
-        renderDashboard();
+      var data = await sendOrderAction(o.id, { action: 'deliver', vaultContent: { type: type, content: content, fileName: fileName } });
+      window._tempOrderVaultFileContent = null;
+      if (data) {
         closeOrderReviewModal();
-        showToast(`✓ Commande #${o.id} validée et clé transmise au client !`, 'success');
-      } else if (chosenStatus === 'Annulé') {
-        closeOrderReviewModal();
-        cancelOrder(o.id);
-      } else {
-        o.status = 'En attente';
-        DB.set('orders', orders);
-        renderDashboard();
-        closeOrderReviewModal();
-        showToast(`Informations de la commande #${o.id} enregistrées (en attente).`, 'info');
+        showToast('✓ Commande #' + o.id + ' livrée : le contenu est disponible dans le coffre du client.', 'success');
       }
     }
 
-    function validateAndDeliverOrder(orderId) {
-      var orders = DB.get('orders', []);
-      var o = orders.find(function(x) { return x.id === orderId; });
-      if (!o) return;
+    async function validateAndDeliverOrder(orderId) {
+      // Livraison : toujours avec un contenu réel saisi par l'administrateur
+      openOrderReviewModal(orderId);
+    }
 
-      var vault = DB.get('vault', {});
-      var v = vault[o.productId];
-
-      o.status = 'Complété';
-      o.validatedAt = new Date().toISOString();
-      if (!o.vaultContent || !o.vaultContent.content) {
-        if (v && v.content) {
-          o.vaultContent = {
-            type: v.type || 'text',
-            content: v.content,
-            fileName: v.fileName || 'livraison.txt'
-          };
-        } else {
-          o.vaultContent = {
-            type: 'text',
-            content: 'Accès et identifiants activés avec succès par l\'administrateur. Réf: ' + o.id
-          };
+    // Appel unique au serveur pour une action de commande (livrer / annuler) ; met à jour les caches locaux
+    async function sendOrderAction(orderId, payload) {
+      var token = getAdminAuthToken();
+      if (!token) { showToast('Session administrateur expirée.', 'error'); return null; }
+      try {
+        var res = await fetch('/api/data/orders', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(Object.assign({ id: orderId }, payload))
+        });
+        var data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) {
+          showToast((data && data.error) || 'Action refusée par le serveur.', 'error');
+          renderDashboard();
+          return null;
         }
+        if (Array.isArray(data.orders)) DB.set('orders', data.orders);
+        if (Array.isArray(data.products)) DB.set('products', data.products);
+        if (Array.isArray(data.users)) DB.set('users', data.users);
+        renderDashboard();
+        return data;
+      } catch (err) {
+        showToast('Serveur injoignable : action non effectuée.', 'error');
+        return null;
       }
-
-      DB.set('orders', orders);
-      renderDashboard();
-      showToast(`Commande ${o.id} validée et livrée dans le coffre du client !`, 'success');
     }
 
     async function cancelOrder(orderId) {
       var orders = DB.get('orders', []);
       var o = orders.find(function(x) { return x.id === orderId; });
       if (!o) return;
-
       if (o.status === 'Annulé') {
         showToast('Cette commande est déjà annulée.', 'info');
+        renderDashboard();
         return;
       }
-
-      var isAlreadyDelivered = (o.status === 'Complété' || o.status === 'Livré');
-      var confirmMsg = isAlreadyDelivered
-        ? `⚠️ Confirmer l'annulation de la commande LIVRÉE (${o.id}) ?\n\nLe montant de ${(o.amount || 0).toFixed(2)} USD sera immédiatement recrédité sur le solde du client, et l'accès au produit sera révoqué.`
-        : `Confirmer l'annulation de la commande ${o.id} ?\n\nLe solde de l'acheteur sera remboursé (+${(o.amount || 0).toFixed(2)} USD).`;
-
-      if (!confirm(confirmMsg)) return;
-
-      o.status = 'Annulé';
-      o.cancelledAt = new Date().toISOString();
-      o.vaultContent = null;
-
-      // 1. Rembourser l'acheteur sur son solde via l'API serveur persistée
-      var token = getAdminAuthToken();
-      if (token && o.amount > 0 && o.userId) {
-        try {
-          var res = await fetch('/api/data/users', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({
-              userId: o.userId,
-              amount: o.amount,
-              action: 'refund',
-              reason: `Remboursement de la commande #${o.id}`
-            })
-          });
-          var data = await res.json();
-          if (data && typeof data.newBalance === 'number') {
-            var users = DB.get('users', []);
-            var u = users.find(function(x) { return x.id === o.userId; });
-            if (u) {
-              u.balance = data.newBalance;
-              DB.set('users', users);
-            }
-          }
-        } catch(e) {
-          console.warn('API refund warning:', e.message);
-        }
+      var isDelivered = (o.status === 'Complété' || o.status === 'Livré');
+      var hasKeys = Boolean(o.vaultContent && Array.isArray(o.vaultContent.keys) && o.vaultContent.keys.length);
+      var msg = 'Annuler la commande ' + o.id + ' ?\n\nLe client sera remboursé de ' + (o.amount || 0).toFixed(2) + ' $ sur son solde (une seule fois)' +
+        (isDelivered ? ' et son accès au contenu livré sera retiré.' : '.');
+      if (!confirm(msg)) { renderDashboard(); return; }
+      var restock = false;
+      if (isDelivered && hasKeys) {
+        restock = confirm('Remettre les clés de cette commande en vente ?\n\nOK = oui, uniquement si vous êtes CERTAIN que le client ne les a jamais utilisées.\nAnnuler = non (recommandé) : les clés restent retirées du stock.');
       }
-
-      // 2. Restituer le stock du produit si applicable
-      var prods = DB.get('products', []);
-      var p = prods.find(function(x) { return x.id === o.productId; });
-      if (p) {
-        p.stock = (p.stock || 0) + (o.quantity || 1);
-        DB.set('products', prods);
+      var data = await sendOrderAction(o.id, { action: 'cancel', restockKeys: restock });
+      if (data) {
+        var refunded = data.refundTransaction ? ' Client remboursé (+' + (o.amount || 0).toFixed(2) + ' $).' : '';
+        showToast('Commande ' + o.id + ' annulée.' + refunded, 'warning');
       }
-
-      DB.set('orders', orders);
-      renderDashboard();
-      showToast(`Commande ${o.id} annulée. Client remboursé (+${(o.amount || 0).toFixed(2)} $).`, 'warning');
     }
 
     function closeProofLightbox() {
@@ -4363,15 +5352,16 @@
             <td><strong style="color: var(--primary-600); font-size: 15px;">$${bal.toFixed(2)}</strong></td>
             <td>
               <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 10)" title="Offrir +10 $ gratuitement à ce client" style="font-weight: 600;">🎁 +10 $</button>
-                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 20)" title="Offrir +20 $ gratuitement à ce client" style="font-weight: 600;">🎁 +20 $</button>
-                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${u.id}', 50)" title="Offrir +50 $ gratuitement à ce client" style="font-weight: 600;">🎁 +50 $</button>
-                <button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="openBalanceModal('${u.id}')" title="Définir un don personnalisé ou ajuster">⚙️ Offrir / Ajuster</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 10)" title="Offrir +10 $ gratuitement à ce client" style="font-weight: 600;">🎁 +10 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 20)" title="Offrir +20 $ gratuitement à ce client" style="font-weight: 600;">🎁 +20 $</button>
+                <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 50)" title="Offrir +50 $ gratuitement à ce client" style="font-weight: 600;">🎁 +50 $</button>
+                <button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="openBalanceModal('${escapeJsStr(u.id)}')" title="Définir un don personnalisé ou ajuster">⚙️ Offrir / Ajuster</button>
                 ${bal > 0 ? `
-                  <button type="button" class="btn-secondary btn-sm" onclick="confirmResetUserBalance('${u.id}', '${escapeHtml(u.name)}', ${bal})" style="color: #ea580c; border-color: #fed7aa; background: #fff7ed; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Remettre le solde de ce client à 0.00 $ (consigné dans l'audit)">🔄 Solde $0</button>
+                  <button type="button" class="btn-secondary btn-sm" onclick="confirmResetUserBalance('${escapeJsStr(u.id)}')" style="color: #ea580c; border-color: #fed7aa; background: #fff7ed; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Remettre le solde de ce client à 0.00 $ (consigné dans l'audit)">🔄 Solde $0</button>
                 ` : ''}
                 ${!isAdmin ? `
-                  <button type="button" class="btn-secondary btn-sm" onclick="confirmDeleteUser('${u.id}', '${escapeHtml(u.name)}', '${escapeHtml(u.email)}')" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Supprimer définitivement ce compte client">🗑️ Supprimer</button>
+                  <button type="button" class="btn-secondary btn-sm" onclick="resetCustomerPassword('${escapeJsStr(u.id)}')" style="padding: 4px 8px; font-size: 11px; font-weight: 600;" title="Générer un mot de passe temporaire pour ce client">🔑 Mot de passe</button>
+                  <button type="button" class="btn-secondary btn-sm" onclick="confirmDeleteUser('${escapeJsStr(u.id)}')" style="color: #dc2626; border-color: #fecaca; background: #fff1f2; padding: 4px 8px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Supprimer définitivement ce compte client">🗑️ Supprimer</button>
                 ` : `
                   <span style="font-size: 11px; color: var(--text-muted); padding: 2px 6px;" title="Compte administrateur protégé contre la suppression">🔒 Protégé</span>
                 `}
@@ -4399,8 +5389,11 @@
       }
 
       var oldBal = parseFloat(u.balance) || 0;
-      var curAdmin = DB.get('session') || {};
+      var curAdmin = DB.get('admin_session') || DB.get('session') || {};
       var adminName = curAdmin.name || 'Administrateur';
+
+      if (window._giftUserLock) return;
+      window._giftUserLock = true;
 
       try {
         var res = await fetch('/api/data/users', {
@@ -4449,6 +5442,8 @@
       } catch (err) {
         console.error('[quickGiftUser Error]', err);
         showToast(err.message || 'Échec de l\'attribution du don.', 'error');
+      } finally {
+        window._giftUserLock = false;
       }
     }
 
@@ -4531,7 +5526,7 @@
       var u = users.find(function(x) { return x.id === selectedBalanceUser.id; });
       if (!u) return;
 
-      var curAdmin = DB.get('session') || {};
+      var curAdmin = DB.get('admin_session') || DB.get('session') || {};
       var adminName = curAdmin.name || 'Administrateur';
       if (!reason) {
         if (mode === 'reset') {
@@ -4799,12 +5794,12 @@
 
       // 2. Persistance serveur via /api/data/methods
       try {
-        var session = DB.get('session');
+        var token = getAdminAuthToken();
         var res = await fetch('/api/data/methods', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
           },
           body: JSON.stringify(payload)
         });
@@ -4832,12 +5827,12 @@
       renderMethodsTable();
 
       try {
-        var session = DB.get('session');
+        var token = getAdminAuthToken();
         var res = await fetch('/api/data/methods', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
           },
           body: JSON.stringify({ id: m.id, enabled: m.enabled })
         });
@@ -4852,30 +5847,42 @@
       }
     }
 
-    async function deleteMethod(id) {
-      if (!confirm('Supprimer définitivement ce moyen de paiement ?')) return;
-      var methods = DB.get('payment_methods', []).filter(function(x) { return x.id !== id; });
-      DB.set('payment_methods', methods);
-      renderMethodsTable();
+    function deleteMethod(id) {
+      var allMethods = DB.get('payment_methods', []) || [];
+      var targetMethod = allMethods.find(function(x) { return x.id === id || String(x.id) === String(id); });
+      var mTitle = targetMethod ? targetMethod.name : ('Moyen #' + id);
 
-      try {
-        var session = DB.get('session');
-        var res = await fetch('/api/data/methods?id=' + id, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session && session.token ? { 'Authorization': 'Bearer ' + session.token } : {})
-          }
-        });
-        var data = await res.json();
-        if (data.methods && Array.isArray(data.methods)) {
-          DB.set('payment_methods', data.methods);
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer le Moyen de Paiement',
+        desc: 'Voulez-vous supprimer définitivement ce moyen de paiement ?',
+        detailsHtml: `<div><strong>Moyen :</strong> ${escapeHtml(mTitle)}</div>`,
+        confirmText: 'Supprimer ce Moyen',
+        onConfirm: async function() {
+          var methods = (DB.get('payment_methods', []) || []).filter(function(x) { return x.id !== id && String(x.id) !== String(id); });
+          DB.set('payment_methods', methods);
           renderMethodsTable();
+
+          try {
+            var token = getAdminAuthToken();
+            var res = await fetch('/api/data/methods?id=' + encodeURIComponent(id), {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+              },
+              body: JSON.stringify({ id: id })
+            });
+            var data = await res.json();
+            if (res.ok && data && Array.isArray(data.methods)) {
+              DB.set('payment_methods', data.methods);
+              renderMethodsTable();
+            }
+            showToast('Moyen de paiement supprimé avec succès.', 'success');
+          } catch (e) {
+            showToast('Moyen supprimé localement.', 'info');
+          }
         }
-        showToast('Moyen de paiement supprimé avec succès.', 'success');
-      } catch (e) {
-        showToast('Moyen supprimé localement.', 'info');
-      }
+      });
     }
 
     // Bind payment method handlers explicitly on window
@@ -4950,15 +5957,15 @@
             <td class="col-center">
               <div style="display: flex; gap: 6px; justify-content: center;">
                 ${!isClosed ? `
-                  <button type="button" class="btn-order-quick-val" onclick="resolveTicket('${t.id}')" title="Marquer comme résolu">
+                  <button type="button" class="btn-order-quick-val" onclick="resolveTicket('${escapeJsStr(t.id)}')" title="Marquer comme résolu">
                     ✓ Résolu
                   </button>
                 ` : `
-                  <button type="button" class="btn-order-manage" onclick="reopenTicket('${t.id}')" title="Rouvrir le ticket">
+                  <button type="button" class="btn-order-manage" onclick="reopenTicket('${escapeJsStr(t.id)}')" title="Rouvrir le ticket">
                     🔄 Rouvrir
                   </button>
                 `}
-                <button type="button" class="btn-icon-action delete" onclick="deleteTicket('${t.id}')" title="Supprimer le ticket">
+                <button type="button" class="btn-icon-action delete" onclick="deleteTicket('${escapeJsStr(t.id)}')" title="Supprimer le ticket">
                   🗑️
                 </button>
               </div>
@@ -4980,12 +5987,12 @@
         renderTicketsTable(tickets);
         showToast('Ticket marqué comme résolu !', 'success');
 
-        var session = DB.get('session');
+        var token = getAdminAuthToken();
         fetch('/api/data/tickets', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': (session && session.token) ? 'Bearer ' + session.token : ''
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
           },
           body: JSON.stringify({ id: ticketId, status: 'Résolu' })
         }).catch(function(e) { console.warn('Sync ticket:', e); });
@@ -5000,6 +6007,16 @@
         DB.set('tickets', tickets);
         renderTicketsTable(tickets);
         showToast('Ticket rouvert.', 'info');
+
+        var token = getAdminAuthToken();
+        fetch('/api/data/tickets', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+          },
+          body: JSON.stringify({ id: ticketId, status: 'Ouvert' })
+        }).catch(function(e) { console.warn('Sync reopen ticket:', e); });
       }
     }
 
@@ -5045,6 +6062,9 @@
 
     // 1. SUPPRIMER UN CLIENT INDIVIDUELLEMENT
     function confirmDeleteUser(userId, userName, userEmail) {
+      var targetUser = (DB.get('users', []) || []).find(function(x) { return x.id === userId || String(x.id) === String(userId); });
+      userName = userName || (targetUser && targetUser.name) || 'Client';
+      userEmail = userEmail || (targetUser && targetUser.email) || '-';
       openConfirmDeleteModal({
         title: '🗑️ Supprimer le Compte Client',
         desc: 'Vous êtes sur le point de supprimer ce compte client de la base de données.',
@@ -5090,6 +6110,11 @@
 
     // 2. RÉINITIALISER LE SOLDE D'UN CLIENT À ZERO
     function confirmResetUserBalance(userId, userName, currentBal) {
+      var targetUser = (DB.get('users', []) || []).find(function(x) { return x.id === userId || String(x.id) === String(userId); });
+      userName = userName || (targetUser && targetUser.name) || 'Client';
+      if (typeof currentBal === 'undefined' || currentBal === null) {
+        currentBal = targetUser ? (parseFloat(targetUser.balance) || 0) : 0;
+      }
       openConfirmDeleteModal({
         title: '🔄 Remise à Zéro du Solde',
         desc: `Voulez-vous réinitialiser le solde de ce client à 0.00 $ ?`,
@@ -5151,6 +6176,12 @@
 
     // 3. SUPPRIMER UNE COMMANDE INDIVIDUELLE
     function confirmDeleteOrder(orderId, prodName, clientName, amount) {
+      var targetOrder = (DB.get('orders', []) || []).find(function(x) { return x.id === orderId || String(x.id) === String(orderId); });
+      prodName = prodName || (targetOrder && targetOrder.productName) || 'Produit';
+      clientName = clientName || (targetOrder && (targetOrder.userName || targetOrder.userEmail)) || 'Client';
+      if (typeof amount === 'undefined' || amount === null) {
+        amount = targetOrder ? (parseFloat(targetOrder.amount) || 0) : 0;
+      }
       openConfirmDeleteModal({
         title: '🗑️ Supprimer la Commande',
         desc: 'Supprimer définitivement cet enregistrement de commande de la boutique.',
@@ -5197,6 +6228,12 @@
 
     // 4. SUPPRIMER UNE TRANSACTION / RECHARGE
     function confirmDeleteTransaction(txId, clientName, amount) {
+      var targetTx = (DB.get('recharges', []) || []).find(function(x) { return x.id === txId || String(x.id) === String(txId); }) ||
+                     (DB.get('transactions', []) || []).find(function(x) { return x.id === txId || String(x.id) === String(txId); });
+      clientName = clientName || (targetTx && (targetTx.userName || targetTx.userEmail)) || 'Client';
+      if (typeof amount === 'undefined' || amount === null) {
+        amount = targetTx ? (parseFloat(targetTx.amount) || 0) : 0;
+      }
       openConfirmDeleteModal({
         title: '🗑️ Supprimer l\'Enregistrement Financier',
         desc: 'Supprimer cette transaction ou recharge de l\'historique.',
@@ -5282,81 +6319,50 @@
     }
 
     // 6. SUPPRESSION SYNCHRONE DE TICKET AVEC LE BACKEND
-    async function deleteTicket(ticketId) {
+    function deleteTicket(ticketId) {
       var tickets = DB.get('tickets', []);
       var t = tickets.find(function(x) { return x.id === ticketId; });
-      var tInfo = t ? ` (${t.id} - ${t.userName})` : '';
-      if (!confirm(`Supprimer définitivement ce ticket de support${tInfo} ?`)) return;
+      openConfirmDeleteModal({
+        title: '🗑️ Supprimer le Ticket Support',
+        desc: 'Voulez-vous supprimer définitivement ce ticket de support client ?',
+        detailsHtml: t ? `
+          <div style="display: grid; gap: 4px;">
+            <div><strong>Réf :</strong> <code>${escapeHtml(t.id)}</code></div>
+            <div><strong>Client :</strong> ${escapeHtml(t.userName || 'Client')}</div>
+            <div><strong>Objet :</strong> ${escapeHtml(t.subject || 'Support')}</div>
+          </div>
+        ` : `<div><strong>Réf :</strong> <code>${escapeHtml(ticketId)}</code></div>`,
+        confirmText: 'Supprimer le Ticket',
+        onConfirm: async function() {
+          var token = getAdminAuthToken();
+          try {
+            var tRes = await fetch('/api/data/tickets?id=' + encodeURIComponent(ticketId), {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+              },
+              body: JSON.stringify({ id: ticketId })
+            });
+            var tData = await tRes.json().catch(function() { return {}; });
+            if (!tRes.ok || (tData && tData.success === false)) {
+              showToast((tData && tData.error) || 'Le serveur a refusé la suppression du ticket.', 'error');
+              return;
+            }
+          } catch(e) {
+            showToast('Serveur injoignable : le ticket n\'a pas été supprimé.', 'error');
+            return;
+          }
 
-      var token = getAdminAuthToken();
-      if (token) {
-        try {
-          await fetch('/api/data/tickets', {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({ id: ticketId })
-          });
-        } catch(e) { console.warn('deleteTicket API error:', e); }
-      }
-
-      tickets = tickets.filter(function(x) { return x.id !== ticketId; });
-      DB.set('tickets', tickets);
-      renderTicketsTable(tickets);
-      showToast('Ticket supprimé avec succès.', 'success');
+          var nextTickets = (DB.get('tickets', []) || []).filter(function(x) { return x.id !== ticketId; });
+          DB.set('tickets', nextTickets);
+          renderTicketsTable(nextTickets);
+          showToast('Ticket supprimé avec succès.', 'success');
+        }
+      });
     }
 
-    // ========== 7. LOGIQUE "RESET ALL DATA" & SAUVEGARDE EXPORT ==========
-    
-    function openResetAllDataModal() {
-      var kw = document.getElementById('reset-confirm-keyword');
-      if (kw) kw.value = '';
-      
-      var bBal = document.getElementById('reset-opt-balances');
-      if (bBal) bBal.checked = true;
-      var bOrd = document.getElementById('reset-opt-orders');
-      if (bOrd) bOrd.checked = true;
-      var bTx = document.getElementById('reset-opt-transactions');
-      if (bTx) bTx.checked = true;
-      var bVis = document.getElementById('reset-opt-visitors');
-      if (bVis) bVis.checked = true;
-      var bUsr = document.getElementById('reset-opt-users');
-      if (bUsr) bUsr.checked = false;
-      var bTck = document.getElementById('reset-opt-tickets');
-      if (bTck) bTck.checked = false;
-      var bProd = document.getElementById('reset-opt-products');
-      if (bProd) bProd.checked = false;
-
-      checkResetConfirmKeyword();
-
-      var modal = document.getElementById('admin-reset-all-modal');
-      if (modal) modal.classList.add('active');
-    }
-
-    function closeResetAllDataModal() {
-      var modal = document.getElementById('admin-reset-all-modal');
-      if (modal) modal.classList.remove('active');
-    }
-
-    function checkResetConfirmKeyword() {
-      var kwEl = document.getElementById('reset-confirm-keyword');
-      var btn = document.getElementById('btn-execute-reset-all');
-      if (!kwEl || !btn) return;
-
-      var val = (kwEl.value || '').trim().toUpperCase();
-      if (val === 'CONFIRMER' || val === 'RESET') {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-      } else {
-        btn.disabled = true;
-        btn.style.opacity = '0.45';
-        btn.style.cursor = 'not-allowed';
-      }
-    }
-
+    // ========== 7. SAUVEGARDE EXPORT ==========
     async function downloadDbBackup() {
       var token = getAdminAuthToken();
       if (!token) {
@@ -5390,92 +6396,289 @@
       }
     }
 
-    async function executeResetAllData() {
-      var kwEl = document.getElementById('reset-confirm-keyword');
-      var kw = (kwEl ? kwEl.value : '').trim().toUpperCase();
-      if (kw !== 'CONFIRMER' && kw !== 'RESET') {
-        showToast('Veuillez taper CONFIRMER pour débloquer la réinitialisation.', 'error');
-        return;
-      }
-
-      var token = getAdminAuthToken();
-      if (!token) {
-        showToast('Session administrateur non authentifiée.', 'error');
-        return;
-      }
-
-      var options = {
-        resetBalances: document.getElementById('reset-opt-balances')?.checked || false,
-        deleteOrders: document.getElementById('reset-opt-orders')?.checked || false,
-        deleteTransactions: document.getElementById('reset-opt-transactions')?.checked || false,
-        deleteUsers: document.getElementById('reset-opt-users')?.checked || false,
-        resetVisitors: document.getElementById('reset-opt-visitors')?.checked || false,
-        deleteTickets: document.getElementById('reset-opt-tickets')?.checked || false,
-        deleteProducts: document.getElementById('reset-opt-products')?.checked || false
+    async function saveAdminAccountPassword(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      if (!checkAdminAuth()) return;
+      var cur = document.getElementById('setting-admin-current-pwd');
+      var nw = document.getElementById('setting-admin-new-pwd');
+      var conf = document.getElementById('setting-admin-confirm-pwd');
+      var fb = document.getElementById('setting-admin-pwd-feedback');
+      var btn = document.getElementById('btn-save-admin-pwd');
+      var showFb = function(ok, msg) {
+        if (!fb) return;
+        fb.style.cssText = ok
+          ? 'font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-weight:600;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;'
+          : 'font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-weight:600;background:#fff1f2;border:1px solid #fecdd3;color:#be123c;';
+        fb.textContent = msg;
+        fb.classList.remove('hidden');
       };
-
-      var btn = document.getElementById('btn-execute-reset-all');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span>⏳ Réinitialisation en cours...</span>';
-      }
-
+      if (fb) fb.classList.add('hidden');
+      if (!nw || nw.value.length < 8) { showFb(false, 'Le nouveau mot de passe doit contenir au moins 8 caractères.'); return; }
+      if (nw.value !== (conf ? conf.value : '')) { showFb(false, 'La confirmation ne correspond pas.'); return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Mise à jour...'; }
       try {
-        var res = await fetch('/api/data?resource=reset', {
+        var res = await fetch('/api/auth/change-password', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-          },
-          body: JSON.stringify({
-            confirmation: 'CONFIRMER',
-            options: options
-          })
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminAuthToken() },
+          body: JSON.stringify({ currentPassword: cur ? cur.value : '', newPassword: nw.value, confirmPassword: conf ? conf.value : '' })
         });
-
-        var data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Erreur lors de la réinitialisation.');
+        var data = await res.json().catch(function() { return {}; });
+        if (!res.ok || !data.success) throw new Error(data.error || 'Échec de la mise à jour du mot de passe.');
+        if (data.session && data.session.token) {
+          // Le serveur invalide toutes les anciennes sessions : on conserve la nouvelle
+          DB.set('admin_session', data.session);
+          DB.set('session', data.session);
         }
-
-        // Mettre à jour l'état local dans localStorage
-        if (options.deleteOrders) DB.set('orders', []);
-        if (options.deleteTransactions) {
-          DB.set('recharges', []);
-          DB.set('transactions', data.transactions || []);
-        }
-        if (options.resetVisitors) DB.set('visitor_logs', []);
-        if (options.deleteTickets) DB.set('tickets', []);
-        if (options.deleteProducts) {
-          DB.set('products', []);
-          DB.set('vault', {});
-        }
-        if (data.users) {
-          DB.set('users', data.users);
-          var curSess = DB.get('session');
-          if (curSess) {
-            var myAcc = data.users.find(function(x) { return x.id === curSess.userId || (curSess.email && x.email && x.email.toLowerCase() === curSess.email.toLowerCase()); });
-            if (myAcc) {
-              curSess.balance = myAcc.balance || 0;
-              DB.set('session', curSess);
-            }
-          }
-        }
-
-        closeResetAllDataModal();
-        renderDashboard();
-        showToast('Données réinitialisées avec succès selon vos critères.', 'success');
+        if (cur) cur.value = '';
+        nw.value = '';
+        if (conf) conf.value = '';
+        showFb(true, '✓ Mot de passe administrateur modifié. Utilisez-le à votre prochaine connexion.');
+        showToast('Mot de passe administrateur modifié avec succès.', 'success');
       } catch (err) {
-        console.error('[executeResetAllData Error]', err);
-        showToast(err.message || 'Échec de la réinitialisation.', 'error');
+        showFb(false, '⚠️ ' + (err.message || 'Erreur.'));
       } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '<span>⚠️ Exécuter la Réinitialisation</span>';
-          checkResetConfirmKeyword();
-        }
+        if (btn) { btn.disabled = false; btn.textContent = 'Mettre à jour le mot de passe'; }
       }
     }
+    window.saveAdminAccountPassword = saveAdminAccountPassword;
+
+    // ========== 8. SYSTEM MANAGEMENT / RESET WEBSITE ==========
+    var STORE_RESET_PHRASE = 'RESET WEBSITE';
+    var _storeResetMode = null;
+    var _resetPreview = null;
+    var _isOwnerAdmin = false;
+
+    async function adminApi(url, options) {
+      options = options || {};
+      var headers = Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminAuthToken() }, options.headers || {});
+      var res = await fetch(url, Object.assign({}, options, { headers: headers, cache: 'no-store' }));
+      var data = await res.json().catch(function() { return {}; });
+      if (!res.ok) {
+        var err = new Error((data && data.error) || ('Erreur serveur (' + res.status + ')'));
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    }
+
+    // Charge une image privée (preuve de paiement) avec le jeton administrateur
+    async function loadPrivateMediaInto(ref, imgEl) {
+      if (!ref || !imgEl) return;
+      if (/^data:image\//.test(ref)) { imgEl.src = ref; return; } // ancien format
+      var id = String(ref).replace(/^\/media\//, '');
+      try {
+        var res = await fetch('/api/data?resource=media&id=' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + getAdminAuthToken() }, cache: 'no-store' });
+        if (!res.ok) throw new Error('Preuve introuvable.');
+        var blob = await res.blob();
+        imgEl.src = URL.createObjectURL(blob);
+      } catch (e) {
+        showToast(e.message || 'Impossible de charger la preuve de paiement.', 'error');
+      }
+    }
+
+    async function loadSystemStatus() {
+      var body = document.getElementById('system-status-body');
+      try {
+        var results = await Promise.all([
+          adminApi('/api/data/system?_t=' + Date.now()),
+          adminApi('/api/data/reset-preview?_t=' + Date.now())
+        ]);
+        var sys = results[0];
+        _resetPreview = results[1].preview;
+        _isOwnerAdmin = Boolean(results[1].isOwner);
+        renderSystemStatus(sys);
+        renderResetCounts();
+        var warn = document.getElementById('reset-owner-warning');
+        if (warn) warn.classList.toggle('hidden', _isOwnerAdmin);
+        document.querySelectorAll('.btn-reset-option').forEach(function(b) { b.disabled = !_isOwnerAdmin; });
+      } catch (err) {
+        if (body) body.innerHTML = '<div class="sys-status-item bad">⚠️ ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    function renderSystemStatus(sys) {
+      var body = document.getElementById('system-status-body');
+      if (!body || !sys) return;
+      var st = sys.storage || {};
+      var storageLabel = st.kind === 'postgres' ? 'Base Postgres (transactionnelle)' : (st.kind === 'edge-config' ? 'Vercel Edge Config (temporaire)' : (st.kind === 'file' ? 'Fichier local' : String(st.kind || '?')));
+      var stClass = st.warning ? (st.durable ? 'warn' : 'bad') : 'ok';
+      var integ = sys.integrations || {};
+      var item = function(title, value, cls) {
+        return '<div class="sys-status-item ' + cls + '"><strong>' + escapeHtml(title) + '</strong>' + value + '</div>';
+      };
+      var yes = function(b, okText, koText) { return b ? '✓ ' + escapeHtml(okText) : '✕ ' + escapeHtml(koText); };
+      var last = sys.lastReset ? (escapeHtml(sys.lastReset.mode === 'full' ? 'Complète' : 'Démo') + ' — ' + escapeHtml(new Date(sys.lastReset.at).toLocaleString('fr-FR'))) : 'Jamais';
+      body.innerHTML = [
+        item('Stockage des données', escapeHtml(storageLabel) + (st.warning ? '<br><span style="font-size:11.5px;">' + escapeHtml(st.warning) + '</span>' : ''), stClass),
+        item('Mobile Money (SasPay)', yes(integ.saspay, 'Configuré', 'Clé API absente'), integ.saspay ? 'ok' : 'warn'),
+        item('Crypto (Trybit)', yes(integ.trybit, 'Configuré', 'Identifiants absents'), integ.trybit ? 'ok' : 'warn'),
+        item('Connexion Google', yes(integ.google, 'Configurée', 'Non configurée'), integ.google ? 'ok' : 'warn'),
+        item('Mot de passe oublié (e-mail)', yes(integ.emailPasswordReset, 'Envoi d\'e-mails actif', 'Réinitialisation via le support'), integ.emailPasswordReset ? 'ok' : 'warn'),
+        item('Signature des sessions', yes(integ.sessionSecret, 'SESSION_SECRET défini', 'SESSION_SECRET manquant'), integ.sessionSecret ? 'ok' : 'bad'),
+        item('Dernière réinitialisation', last, ''),
+        item('Version déployée', escapeHtml((sys.version && sys.version.version) || '-'), '')
+      ].join('');
+    }
+
+    function renderResetCounts() {
+      var p = _resetPreview;
+      if (!p) return;
+      var txt = '<strong>Actuellement :</strong> ' + p.products + ' produit(s), ' + p.keys + ' clé(s), ' + p.customers + ' client(s) (soldes : ' + Number(p.customerBalances || 0).toFixed(2) + ' $), ' +
+        p.orders + ' commande(s), ' + p.transactions + ' transaction(s), ' + p.tickets + ' ticket(s).';
+      var demo = document.getElementById('reset-counts-demo');
+      var full = document.getElementById('reset-counts-full');
+      if (demo) demo.innerHTML = txt;
+      if (full) full.innerHTML = txt + '<br>' + p.paymentMethods + ' moyen(s) de paiement seront ramenés aux 2 passerelles par défaut.';
+    }
+
+    function openStoreResetModal(mode) {
+      if (!_isOwnerAdmin) { showToast("Seul l'administrateur principal peut réinitialiser la boutique.", 'error'); return; }
+      _storeResetMode = mode === 'full' ? 'full' : 'demo';
+      var p = _resetPreview || {};
+      document.getElementById('store-reset-title').textContent = _storeResetMode === 'full' ? 'Réinitialisation complète de la boutique' : 'Réinitialiser les données de démonstration';
+      document.getElementById('store-reset-subtitle').textContent = _storeResetMode === 'full' ? 'Option B — retour à l\'état initial' : 'Option A — configuration conservée';
+      var lines = [
+        (p.products || 0) + ' produit(s) et ' + (p.keys || 0) + ' clé(s) en stock',
+        (p.customers || 0) + ' compte(s) client(s) — soldes cumulés : ' + Number(p.customerBalances || 0).toFixed(2) + ' $',
+        (p.orders || 0) + ' commande(s) et ' + (p.transactions || 0) + ' transaction(s)',
+        (p.tickets || 0) + ' ticket(s) support, images produits et statistiques de visites'
+      ];
+      if (_storeResetMode === 'full') lines.push('Moyens de paiement et réglages ramenés aux valeurs par défaut');
+      document.getElementById('store-reset-warning').innerHTML = '<strong>Action irréversible.</strong> Seront supprimés définitivement :<ul>' +
+        lines.map(function(l) { return '<li>' + escapeHtml(l) + '</li>'; }).join('') + '</ul>' +
+        '<div style="margin-top:6px;color:#166534;">Conservés : votre compte administrateur et son mot de passe, ' + (_storeResetMode === 'full' ? '' : 'les moyens de paiement et réglages, ') + 'les clés API et la structure de la base.</div>';
+      document.getElementById('store-reset-phrase').value = '';
+      document.getElementById('store-reset-password').value = '';
+      document.getElementById('store-reset-ack').checked = false;
+      document.getElementById('store-reset-error').classList.add('hidden');
+      document.getElementById('store-reset-form-wrap').classList.remove('hidden');
+      document.getElementById('store-reset-result').classList.add('hidden');
+      document.getElementById('btn-store-reset-submit').textContent = _storeResetMode === 'full' ? 'Réinitialiser toute la boutique' : 'Supprimer les données de démo';
+      onStoreResetInput();
+      document.getElementById('admin-store-reset-modal').classList.add('active');
+      setTimeout(function() { var el = document.getElementById('store-reset-phrase'); if (el) el.focus(); }, 60);
+    }
+
+    function closeStoreResetModal() {
+      var pwd = document.getElementById('store-reset-password');
+      if (pwd) pwd.value = '';
+      document.getElementById('admin-store-reset-modal').classList.remove('active');
+    }
+
+    function onStoreResetInput() {
+      var phrase = document.getElementById('store-reset-phrase').value;
+      var pwd = document.getElementById('store-reset-password').value;
+      var ack = document.getElementById('store-reset-ack').checked;
+      document.getElementById('btn-store-reset-submit').disabled = !(phrase === STORE_RESET_PHRASE && pwd.length > 0 && ack);
+    }
+
+    function downloadJsonFile(obj, fileName) {
+      var blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+    }
+
+    var _storeResetInFlight = false;
+    async function submitStoreReset(e) {
+      if (e) e.preventDefault();
+      if (_storeResetInFlight) return;
+      var phrase = document.getElementById('store-reset-phrase').value;
+      var pwdEl = document.getElementById('store-reset-password');
+      var errBox = document.getElementById('store-reset-error');
+      var btn = document.getElementById('btn-store-reset-submit');
+      if (phrase !== STORE_RESET_PHRASE || !pwdEl.value || !document.getElementById('store-reset-ack').checked) return;
+      errBox.classList.add('hidden');
+      _storeResetInFlight = true;
+      btn.disabled = true;
+      btn.textContent = '⏳ Réinitialisation en cours…';
+      try {
+        var data = await adminApi('/api/data/reset', {
+          method: 'POST',
+          body: JSON.stringify({ mode: _storeResetMode, password: pwdEl.value, confirmation: phrase })
+        });
+        pwdEl.value = '';
+        if (data.backup) {
+          downloadJsonFile(data.backup, 'getvirtu-sauvegarde-avant-reset-' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.json');
+        }
+        // Caches locaux alignés sur le serveur
+        DB.set('users', data.users || []);
+        DB.set('products', data.products || []);
+        DB.set('vault', {});
+        DB.set('orders', data.orders || []);
+        DB.set('transactions', data.transactions || []);
+        DB.set('recharges', []);
+        DB.set('tickets', data.tickets || []);
+        if (Array.isArray(data.methods)) DB.set('payment_methods', data.methods);
+        if (data.settings && typeof data.settings.min_recharge === 'number') DB.set('min_recharge', data.settings.min_recharge);
+        renderDashboard();
+        if (data.stats && typeof updateStatsDisplay === 'function') updateStatsDisplay(data.stats);
+
+        // Vérifications post-réinitialisation
+        var checks = [];
+        try {
+          var pub = await fetch('/api/data/products?_t=' + Date.now(), { cache: 'no-store' }).then(function(r) { return r.json(); });
+          checks.push([Array.isArray(pub.products) && pub.products.length === 0, 'Boutique publique vide (' + (pub.products ? pub.products.length : '?') + ' produit)']);
+        } catch (x) { checks.push([false, 'Boutique publique : vérification impossible']); }
+        try {
+          var me = await adminApi('/api/auth/me?_t=' + Date.now());
+          checks.push([me.user && me.user.role === 'admin', 'Accès administrateur toujours actif']);
+        } catch (x) { checks.push([false, 'Accès administrateur : vérification impossible']); }
+        var pv = data.preview || {};
+        checks.push([pv.customers === 0 && pv.orders === 0 && pv.transactions === 0 && pv.products === 0, 'Clients, commandes, transactions et produits supprimés']);
+        checks.push([Boolean(data.backup), 'Sauvegarde de récupération téléchargée']);
+
+        document.getElementById('store-reset-form-wrap').classList.add('hidden');
+        var result = document.getElementById('store-reset-result');
+        result.innerHTML = '<div style="text-align:center;margin-bottom:12px;"><div style="width:52px;height:52px;border-radius:50%;background:#ecfdf5;border:1px solid #a7f3d0;color:#059669;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 8px;">✓</div>' +
+          '<h3 style="margin:0;font-size:17px;color:#065f46;">' + escapeHtml(data.message || 'Réinitialisation effectuée.') + '</h3></div>' +
+          checks.map(function(c) { return '<div class="sys-check"><span>' + (c[0] ? '✅' : '⚠️') + '</span><span>' + escapeHtml(c[1]) + '</span></div>'; }).join('') +
+          '<button type="button" class="btn-primary" onclick="closeStoreResetModal()" style="width:100%;justify-content:center;margin-top:14px;">Continuer vers le tableau de bord propre ⚡</button>';
+        result.classList.remove('hidden');
+        showToast(data.message || 'Réinitialisation effectuée.', 'success');
+        loadSystemStatus();
+      } catch (err) {
+        errBox.textContent = err.message || 'La réinitialisation a échoué : aucune donnée n\'a été modifiée.';
+        errBox.classList.remove('hidden');
+      } finally {
+        _storeResetInFlight = false;
+        btn.textContent = _storeResetMode === 'full' ? 'Réinitialiser toute la boutique' : 'Supprimer les données de démo';
+        onStoreResetInput();
+      }
+    }
+
+    async function resetCustomerPassword(userId) {
+      var users = DB.get('users', []) || [];
+      var u = users.find(function(x) { return String(x.id) === String(userId); });
+      var label = u ? (u.name + ' (' + u.email + ')') : userId;
+      if (!confirm('Générer un mot de passe temporaire pour ' + label + ' ?\n\nSon mot de passe actuel cessera de fonctionner et toutes ses sessions seront fermées.')) return;
+      try {
+        var data = await adminApi('/api/data/users', { method: 'POST', body: JSON.stringify({ userId: userId, action: 'reset_password' }) });
+        document.getElementById('temp-pwd-value').textContent = data.temporaryPassword;
+        document.getElementById('temp-pwd-user').textContent = 'Client : ' + label;
+        document.getElementById('admin-temp-pwd-modal').classList.add('active');
+      } catch (err) {
+        showToast(err.message || 'Réinitialisation du mot de passe impossible.', 'error');
+      }
+    }
+
+    function closeTempPwdModal() {
+      document.getElementById('temp-pwd-value').textContent = '';
+      document.getElementById('admin-temp-pwd-modal').classList.remove('active');
+    }
+
+    window.loadSystemStatus = loadSystemStatus;
+    window.openStoreResetModal = openStoreResetModal;
+    window.closeStoreResetModal = closeStoreResetModal;
+    window.onStoreResetInput = onStoreResetInput;
+    window.submitStoreReset = submitStoreReset;
+    window.resetCustomerPassword = resetCustomerPassword;
+    window.closeTempPwdModal = closeTempPwdModal;
 
     // ========== 6. GRAPHIQUES CHART.JS (DYNAMIQUES SELON LA PÉRIODE SÉLECTIONNÉE) ==========
     function renderCharts(orders, period) {
@@ -5604,15 +6807,21 @@
     function showToast(msg, type) {
       var t = document.getElementById('toast');
       if (!t) return;
+      if (window._adminToastTimer) clearTimeout(window._adminToastTimer);
       t.textContent = msg;
       t.style.borderColor = type === 'success' ? 'var(--emerald-500)' : (type === 'error' ? 'var(--rose-500)' : 'var(--primary-600)');
       t.style.display = 'block';
-      setTimeout(function() { t.style.display = 'none'; }, 2800);
+      window._adminToastTimer = setTimeout(function() { t.style.display = 'none'; }, 2800);
     }
 
     function escapeHtml(str) {
-      if (!str) return '';
-      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     window.addEventListener('storage', function(e) {
@@ -5621,7 +6830,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202610131029_87dbf3',
+      currentVersion: 'v202611141926_ca96c0',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 
@@ -5686,116 +6895,217 @@
       }
     };
 
-    // Synchronisation complète des données administrateur en direct depuis le serveur
+    // Synchronisation complète et ultra-rapide (parallèle) des données administrateur depuis le serveur
     async function syncAdminDataFromServer() {
       var s = DB.get('admin_session') || DB.get('session');
       var token = s ? (s.token || '') : '';
       var headers = token ? { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' } : { 'Cache-Control': 'no-cache' };
+      var ts = Date.now();
+      var fetchOpts = { headers: headers, cache: 'no-store' };
 
-      // 1. Vérification session admin & rôle frais
-      if (token) {
-        try {
-          var meRes = await fetch('/api/auth/me?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-          if (meRes.ok) {
-            var meData = await meRes.json();
-            if (meData && meData.user && meData.user.role === 'admin') {
-              s.role = 'admin';
-              if (typeof meData.user.balance === 'number') {
-                s.balance = meData.user.balance;
-              }
-              DB.set('admin_session', s);
-              DB.set('session', s);
-            }
-          }
-        } catch (e) {}
+      var fetchJsonSafe = function(url) {
+        return fetch(url, fetchOpts).then(function(r) {
+          return r.ok ? r.json() : null;
+        }).catch(function() { return null; });
+      };
+
+      // Les routes réservées à l'admin ne sont appelées qu'avec un jeton (évite des 401/403 inutiles sur l'écran de connexion)
+      var adminOnly = function(url) { return token ? fetchJsonSafe(url) : Promise.resolve(null); };
+
+      var results = await Promise.allSettled([
+        adminOnly('/api/auth/me?_t=' + ts),
+        adminOnly('/api/data/stats?period=' + encodeURIComponent(currentPeriod || 'week') + '&_t=' + ts),
+        fetchJsonSafe('/api/data/products?includeVault=1&_t=' + ts),
+        fetchJsonSafe('/api/data/methods?_t=' + ts),
+        adminOnly('/api/data/orders?_t=' + ts),
+        adminOnly('/api/data/users?_t=' + ts),
+        fetchJsonSafe('/api/data/settings?_t=' + ts),
+        adminOnly('/api/data/tickets?_t=' + ts)
+      ]);
+
+      var meData    = results[0].status === 'fulfilled' ? results[0].value : null;
+      var stats     = results[1].status === 'fulfilled' ? results[1].value : null;
+      var prodsData = results[2].status === 'fulfilled' ? results[2].value : null;
+      var mData     = results[3].status === 'fulfilled' ? results[3].value : null;
+      var oData     = results[4].status === 'fulfilled' ? results[4].value : null;
+      var uData     = results[5].status === 'fulfilled' ? results[5].value : null;
+      var setData   = results[6].status === 'fulfilled' ? results[6].value : null;
+      var tData     = results[7].status === 'fulfilled' ? results[7].value : null;
+
+      // 1. Session admin & rôle frais
+      if (meData && meData.user && meData.user.role === 'admin' && s) {
+        s.role = 'admin';
+        if (typeof meData.user.balance === 'number') {
+          s.balance = meData.user.balance;
+        }
+        DB.set('admin_session', s);
+        DB.set('session', s);
       }
 
-      // 2. Synchronisation des statistiques réelles
-      try {
-        var statsRes = await fetch('/api/data/stats?period=' + (currentPeriod || 'day') + '&_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-        if (statsRes.ok) {
-          var stats = await statsRes.json();
-          if (stats && typeof updateStatsDisplay === 'function') updateStatsDisplay(stats);
+      // 2. Produits & coffre-fort des clés
+      if (prodsData && Array.isArray(prodsData.products)) {
+        DB.set('products', prodsData.products);
+        if (prodsData.vault && typeof prodsData.vault === 'object') {
+          DB.set('vault', prodsData.vault);
         }
-      } catch (e) {}
+      }
 
-      // 3. Synchronisation des produits
-      try {
-        var prodsRes = await fetch('/api/data/products?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-        if (prodsRes.ok) {
-          var prodsData = await prodsRes.json();
-          if (prodsData && Array.isArray(prodsData.products)) {
-            DB.set('products', prodsData.products);
-          }
-        }
-      } catch (e) {}
+      // 3. Méthodes de paiement
+      if (mData && Array.isArray(mData.methods)) {
+        DB.set('payment_methods', mData.methods);
+      }
 
-      // 4. Synchronisation des méthodes de paiement
-      try {
-        var mRes = await fetch('/api/data/methods?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-        if (mRes.ok) {
-          var mData = await mRes.json();
-          if (mData && Array.isArray(mData.methods)) {
-            DB.set('payment_methods', mData.methods);
-          }
-        }
-      } catch (e) {}
+      // 4. Commandes
+      if (oData && Array.isArray(oData.orders)) {
+        DB.set('orders', oData.orders);
+      }
 
-      // 5. Synchronisation des commandes
-      try {
-        var oRes = await fetch('/api/data/orders?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-        if (oRes.ok) {
-          var oData = await oRes.json();
-          if (oData && Array.isArray(oData.orders)) {
-            DB.set('orders', oData.orders);
-          }
-        }
-      } catch (e) {}
-
-      // 6. Synchronisation des utilisateurs, soldes et transactions
-      try {
-        var uRes = await fetch('/api/data/users?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-        if (uRes.ok) {
-          var uData = await uRes.json();
-          if (uData && Array.isArray(uData.users)) {
-            DB.set('users', uData.users);
-            var curSess = DB.get('session');
-            if (curSess) {
-              var meInList = uData.users.find(function(x) {
-                return x.id === curSess.userId || (curSess.email && x.email && x.email.toLowerCase() === curSess.email.toLowerCase());
-              });
-              if (meInList && typeof meInList.balance === 'number') {
-                curSess.balance = meInList.balance;
-                DB.set('session', curSess);
-                var admSess = DB.get('admin_session');
-                if (admSess) {
-                  admSess.balance = meInList.balance;
-                  DB.set('admin_session', admSess);
-                }
+      // 5. Utilisateurs, soldes, transactions & demandes de recharge manuelles
+      if (uData) {
+        if (Array.isArray(uData.users)) {
+          DB.set('users', uData.users);
+          var curSess = DB.get('session');
+          if (curSess) {
+            var meInList = uData.users.find(function(x) {
+              return x.id === curSess.userId || (curSess.email && x.email && x.email.toLowerCase() === curSess.email.toLowerCase());
+            });
+            if (meInList && typeof meInList.balance === 'number') {
+              curSess.balance = meInList.balance;
+              DB.set('session', curSess);
+              var admSess = DB.get('admin_session');
+              if (admSess) {
+                admSess.balance = meInList.balance;
+                DB.set('admin_session', admSess);
               }
             }
           }
-          if (uData && Array.isArray(uData.transactions)) {
-            DB.set('transactions', uData.transactions);
+        }
+        if (Array.isArray(uData.transactions)) {
+          DB.set('transactions', uData.transactions);
+          if (uData.transactions.length === 0) {
+            DB.set('recharges', []);
+          } else {
+            var localRecharges = DB.get('recharges', []) || [];
+            var rechargeMap = {};
+            localRecharges.forEach(function(r) {
+              if (r && r.id) rechargeMap[r.id] = r;
+            });
+            var usersLookup = Array.isArray(uData.users) ? uData.users : (DB.get('users', []) || []);
+            uData.transactions.forEach(function(tx) {
+              if (!tx || !tx.id) return;
+              if (tx.type === 'deposit') {
+                var mappedStatus = tx.status === 'completed' ? 'Approuvé' : ((tx.status === 'failed' || tx.status === 'cancelled') ? 'Rejeté' : 'En attente');
+                var existingR = rechargeMap[tx.id];
+                var uMatch = usersLookup.find(function(u) { return u.id === tx.userId; });
+                if (existingR) {
+                  existingR.status = mappedStatus;
+                  if (tx.proofImage && !existingR.proofImage) existingR.proofImage = tx.proofImage;
+                } else {
+                  rechargeMap[tx.id] = {
+                    id: tx.id,
+                    userId: tx.userId,
+                    userName: tx.userName || (uMatch && uMatch.name) || 'Client',
+                    userEmail: tx.userEmail || (uMatch && uMatch.email) || '',
+                    amount: parseFloat(tx.amount) || 0,
+                    methodName: tx.paymentMethod || tx.method || 'Dépôt',
+                    methodType: tx.provider || 'manual',
+                    txHash: tx.externalReference || '',
+                    proofImage: tx.proofImage || null,
+                    status: mappedStatus,
+                    date: tx.createdAt || new Date().toISOString()
+                  };
+                }
+              }
+            });
+            var mergedRecharges = Object.keys(rechargeMap).map(function(k) { return rechargeMap[k]; });
+            mergedRecharges.sort(function(a, b) { return new Date(b.date || 0) - new Date(a.date || 0); });
+            DB.set('recharges', mergedRecharges);
           }
         }
-      } catch (e) {}
+      }
 
-      // 7. Synchronisation des messages et tickets de support client
-      try {
-        var tRes = await fetch('/api/data/tickets?_t=' + Date.now(), { headers: headers, cache: 'no-store' });
-        if (tRes.ok) {
-          var tData = await tRes.json();
-          if (tData && Array.isArray(tData.tickets)) {
-            DB.set('tickets', tData.tickets);
-          }
+      // 6. Réglages généraux
+      if (setData && setData.settings) {
+        if (typeof setData.settings.min_recharge === 'number') {
+          DB.set('min_recharge', setData.settings.min_recharge);
         }
-      } catch (e) {}
+        if (setData.settings.whatsapp_number) {
+          DB.set('whatsapp_number', String(setData.settings.whatsapp_number));
+          var waInput = document.getElementById('setting-whatsapp');
+          if (waInput && document.activeElement !== waInput) waInput.value = setData.settings.whatsapp_number;
+        }
+      }
+
+      // 7. Tickets de support
+      if (tData && Array.isArray(tData.tickets)) {
+        DB.set('tickets', tData.tickets);
+      }
 
       renderDashboard();
+
+      // 8. Statistiques serveur appliquées en dernier pour conserver les KPIs exacts de la période
+      if (stats && typeof updateStatsDisplay === 'function') {
+        updateStatsDisplay(stats);
+      }
+    }
+
+    function initAdminMobileViewportUX() {
+      var savedScrollY = 0;
+      var hasFocusedField = false;
+      var blurTimer = null;
+
+      function isFormField(el) {
+        if (!el || !el.tagName) return false;
+        var tag = el.tagName.toUpperCase();
+        if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+        if (tag === 'INPUT') {
+          var type = (el.type || 'text').toLowerCase();
+          return type !== 'checkbox' && type !== 'radio' && type !== 'button' && type !== 'submit' && type !== 'reset' && type !== 'file' && type !== 'range';
+        }
+        return false;
+      }
+
+      function isMobileViewport() {
+        return window.innerWidth <= 768 || (window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+      }
+
+      document.addEventListener('focusin', function(e) {
+        if (!isMobileViewport() || !isFormField(e.target)) return;
+        if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+        if (!hasFocusedField) {
+          savedScrollY = window.scrollY || window.pageYOffset || 0;
+          hasFocusedField = true;
+        }
+        document.documentElement.classList.add('gv-keyboard-open');
+      }, { passive: true });
+
+      document.addEventListener('focusout', function(e) {
+        if (!isMobileViewport() || !isFormField(e.target)) return;
+        if (blurTimer) clearTimeout(blurTimer);
+        blurTimer = setTimeout(function() {
+          if (isFormField(document.activeElement)) return;
+          hasFocusedField = false;
+          document.documentElement.classList.remove('gv-keyboard-open');
+          if (document.querySelector('.modal-backdrop.active')) {
+            window.scrollTo(0, savedScrollY);
+          } else if (window.scrollX !== 0) {
+            window.scrollTo(0, window.scrollY || window.pageYOffset || 0);
+          }
+        }, 120);
+      }, { passive: true });
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function() {
+          if (!isMobileViewport()) return;
+          if (!isFormField(document.activeElement) && window.scrollX !== 0) {
+            window.scrollTo(0, window.scrollY || window.pageYOffset || 0);
+          }
+        }, { passive: true });
+      }
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+      initAdminMobileViewportUX();
       VersionManager.init();
       checkAdminAuth();
       renderDashboard();
@@ -5817,6 +7127,21 @@
         var menu = document.getElementById('admin-dropdown-menu');
         if (menu && menu.classList.contains('active')) {
           if (!wrap || !wrap.contains(e.target)) {
+            menu.classList.remove('active');
+            var chip = document.getElementById('admin-user-chip');
+            if (chip) chip.setAttribute('aria-expanded', 'false');
+          }
+        }
+      });
+
+      // Fermeture rapide par touche Escape (modales et menu profil)
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.modal-backdrop.active').forEach(function(m) {
+            m.classList.remove('active');
+          });
+          var menu = document.getElementById('admin-dropdown-menu');
+          if (menu && menu.classList.contains('active')) {
             menu.classList.remove('active');
             var chip = document.getElementById('admin-user-chip');
             if (chip) chip.setAttribute('aria-expanded', 'false');

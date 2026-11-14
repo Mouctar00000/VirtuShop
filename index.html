@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>GetVirtu ⚡ Comptes & Services Numériques Instantanés</title>
   <meta name="description" content="GetVirtu (getvirtu.shop) : La référence pour vos comptes vérifiés 2FA, clés et services digitaux. Système de solde, paiements Crypto & Mobile Money.">
   <link rel="canonical" href="https://getvirtu.shop/">
@@ -30,7 +30,7 @@
   <meta name="twitter:title" content="GetVirtu ⚡ Comptes & Services Numériques">
   <meta name="twitter:description" content="Comptes vérifiés, clés d'activation et services numériques instantanés sur getvirtu.shop.">
 
-  <link rel="stylesheet" href="style.css?v=v202610131029_87dbf3">
+  <link rel="stylesheet" href="style.css?v=v202611141926_ca96c0">
 
   <!-- Données Structurées Schema.org -->
   <script type="application/ld+json">
@@ -65,18 +65,18 @@
 
       <!-- Liens Mode Visiteur -->
       <ul class="nav-links" id="nav-public-links">
-        <li><a href="#hero" class="nav-link active">Accueil</a></li>
-        <li><a href="#catalog" class="nav-link">Catalogue</a></li>
-        <li><a href="#features" class="nav-link">Avantages</a></li>
-        <li><a href="#how-it-works" class="nav-link">Fonctionnement</a></li>
-        <li><a href="#reviews" class="nav-link">Avis</a></li>
-        <li><a href="#faq" class="nav-link">FAQ</a></li>
+        <li><a href="#hero" onclick="return navigateShopSection('hero', event)" class="nav-link active">Accueil</a></li>
+        <li><a href="#catalog" onclick="return navigateShopSection('catalog', event)" class="nav-link">Catalogue</a></li>
+        <li><a href="#features" onclick="return navigateShopSection('features', event)" class="nav-link">Avantages</a></li>
+        <li><a href="#how-it-works" onclick="return navigateShopSection('how-it-works', event)" class="nav-link">Fonctionnement</a></li>
+        <li><a href="#reviews" onclick="return navigateShopSection('reviews', event)" class="nav-link">Avis</a></li>
+        <li><a href="#faq" onclick="return navigateShopSection('faq', event)" class="nav-link">FAQ</a></li>
       </ul>
 
       <!-- Liens Mode Connecté : Simple, Propre & Élégant -->
       <ul class="nav-links nav-links-connected hidden" id="nav-connected-links">
         <li>
-          <a href="#catalog" onclick="showConnectedCatalog()" class="nav-tab-connected active" id="nav-tab-boutique">
+          <a href="#catalog" onclick="showConnectedCatalog(); return false;" class="nav-tab-connected active" id="nav-tab-boutique">
             <span class="nav-tab-icon">⚡</span>
             <span class="nav-tab-label">Boutique</span>
           </a>
@@ -120,7 +120,7 @@
           </p>
 
           <div class="hero-actions">
-            <a href="#catalog" class="btn-primary hero-btn btn-cta-shimmer" id="hero-cta-catalog">
+            <a href="#catalog" onclick="return navigateShopSection('catalog', event)" class="btn-primary hero-btn btn-cta-shimmer" id="hero-cta-catalog">
               <span>Explorer le Catalogue</span>
               <span>⚡</span>
             </a>
@@ -154,7 +154,7 @@
 
             <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; font-size: 12px;">
               <span style="color: var(--emerald-600); font-weight: 600;">● Serveur actif</span>
-              <a href="#catalog" style="color: var(--primary-600); font-weight: 700; text-decoration: none;">Voir tout le catalogue &rarr;</a>
+              <a href="#catalog" onclick="return navigateShopSection('catalog', event)" style="color: var(--primary-600); font-weight: 700; text-decoration: none;">Voir tout le catalogue &rarr;</a>
             </div>
           </div>
         </div>
@@ -522,10 +522,10 @@
         <div class="footer-col">
           <h5>Navigation</h5>
           <ul>
-            <li><a href="#catalog">Catalogue des Produits</a></li>
+            <li><a href="#catalog" onclick="return navigateShopSection('catalog', event)">Catalogue des Produits</a></li>
             <li><a href="javascript:void(0)" onclick="openOrdersModal()">Mes Commandes</a></li>
-            <li><a href="#how-it-works">Comment ça marche</a></li>
-            <li><a href="#faq">Questions Fréquentes</a></li>
+            <li><a href="#how-it-works" onclick="return navigateShopSection('how-it-works', event)">Comment ça marche</a></li>
+            <li><a href="#faq" onclick="return navigateShopSection('faq', event)">Questions Fréquentes</a></li>
           </ul>
         </div>
         <div class="footer-col">
@@ -605,6 +605,9 @@
         <div class="field">
           <label for="login-password">Mot de passe</label>
           <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div style="text-align: right; margin: -4px 0 6px 0;">
+          <a href="javascript:void(0)" onclick="openForgotPasswordModal()" style="font-size: 12.5px; color: var(--primary-600); font-weight: 600; text-decoration: none;">Mot de passe oublié ?</a>
         </div>
         <button type="submit" class="btn-primary" id="btn-login-submit" style="width: 100%; margin-top: 8px;">Se connecter</button>
         <p id="login-error-msg" class="error-text hidden"></p>
@@ -736,7 +739,7 @@
           <textarea id="support-message-input" rows="4" required placeholder="Détaillez votre question ou les produits/volumes recherchés..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 13px; font-family: inherit; resize: vertical;"></textarea>
         </div>
 
-        <button type="submit" class="btn-primary" style="width: 100%; padding: 11px;">
+        <button type="submit" class="btn-primary" id="btn-support-submit" style="width: 100%; padding: 11px;">
           <span>Envoyer mon Message ⚡</span>
         </button>
       </form>
@@ -758,11 +761,85 @@
     </div>
   </div>
 
+  <!-- ==================== MODAL MON COMPTE (PROFIL & MOT DE PASSE) ==================== -->
+  <div id="modal-account" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="account-title">
+    <div class="modal-window" style="max-width: 460px;">
+      <button type="button" class="modal-close-btn" id="account-close-btn" onclick="closeAccountModal()" aria-label="Fermer">✕</button>
+      <h2 class="modal-title" id="account-title" style="margin-bottom: 4px; font-size: 19px;">👤 Mon compte</h2>
+      <p id="account-subtitle" style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;"></p>
+      <div id="account-force-banner" class="hidden" style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 12px; line-height: 1.45;">
+        🔐 Vous vous êtes connecté avec un mot de passe temporaire : choisissez maintenant votre nouveau mot de passe personnel.
+      </div>
+      <form id="account-profile-form" onsubmit="saveAccountProfile(event)" style="margin-bottom: 16px;">
+        <div class="field" style="margin-bottom: 8px;">
+          <label for="account-name">Nom affiché</label>
+          <input type="text" id="account-name" maxlength="80" required autocomplete="name">
+        </div>
+        <button type="submit" class="btn-secondary btn-sm" id="btn-account-profile">Enregistrer le nom</button>
+      </form>
+      <form id="account-password-form" onsubmit="saveAccountPassword(event)">
+        <h3 style="font-size: 14.5px; font-weight: 800; margin: 0 0 8px 0;">Changer de mot de passe</h3>
+        <div class="field" id="account-current-pwd-field" style="margin-bottom: 8px;">
+          <label for="account-current-pwd">Mot de passe actuel</label>
+          <input type="password" id="account-current-pwd" autocomplete="current-password">
+        </div>
+        <div class="field" style="margin-bottom: 8px;">
+          <label for="account-new-pwd">Nouveau mot de passe (8 car. min., lettres et chiffres)</label>
+          <input type="password" id="account-new-pwd" minlength="8" required autocomplete="new-password">
+        </div>
+        <div class="field" style="margin-bottom: 10px;">
+          <label for="account-confirm-pwd">Confirmer le nouveau mot de passe</label>
+          <input type="password" id="account-confirm-pwd" minlength="8" required autocomplete="new-password">
+        </div>
+        <p id="account-pwd-msg" class="error-text hidden" role="alert"></p>
+        <button type="submit" class="btn-primary" id="btn-account-password" style="width: 100%;">Mettre à jour le mot de passe</button>
+        <p style="font-size: 11.5px; color: var(--text-muted); margin-top: 8px;">Par sécurité, vos autres appareils seront déconnectés.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL MOT DE PASSE OUBLIÉ ==================== -->
+  <div id="modal-forgot" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
+    <div class="modal-window" style="max-width: 440px;">
+      <button type="button" class="modal-close-btn" onclick="closeForgotPasswordModal()" aria-label="Fermer">✕</button>
+      <h2 class="modal-title" id="forgot-title" style="margin-bottom: 4px; font-size: 19px;">🔑 Mot de passe oublié</h2>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px;">Indiquez l'adresse e-mail de votre compte.</p>
+      <form id="forgot-form" onsubmit="submitForgotPassword(event)">
+        <div class="field" style="margin-bottom: 10px;">
+          <label for="forgot-email">Adresse e-mail</label>
+          <input type="email" id="forgot-email" required autocomplete="email" placeholder="nom@exemple.com">
+        </div>
+        <button type="submit" class="btn-primary" id="btn-forgot-submit" style="width: 100%;">Continuer</button>
+      </form>
+      <div id="forgot-result" class="hidden" style="font-size: 13px; line-height: 1.5; background: #f0f9ff; border: 1px solid #bae6fd; color: #075985; border-radius: 10px; padding: 12px; margin-top: 12px;"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL NOUVEAU MOT DE PASSE (LIEN REÇU PAR E-MAIL) ==================== -->
+  <div id="modal-reset-password" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reset-pwd-title">
+    <div class="modal-window" style="max-width: 440px;">
+      <button type="button" class="modal-close-btn" onclick="closeResetPasswordModal()" aria-label="Fermer">✕</button>
+      <h2 class="modal-title" id="reset-pwd-title" style="margin-bottom: 4px; font-size: 19px;">🔐 Nouveau mot de passe</h2>
+      <form id="reset-password-form" onsubmit="submitResetPassword(event)">
+        <div class="field" style="margin-bottom: 8px;">
+          <label for="reset-new-pwd">Nouveau mot de passe (8 car. min., lettres et chiffres)</label>
+          <input type="password" id="reset-new-pwd" minlength="8" required autocomplete="new-password">
+        </div>
+        <div class="field" style="margin-bottom: 10px;">
+          <label for="reset-confirm-pwd">Confirmer</label>
+          <input type="password" id="reset-confirm-pwd" minlength="8" required autocomplete="new-password">
+        </div>
+        <p id="reset-pwd-msg" class="error-text hidden" role="alert"></p>
+        <button type="submit" class="btn-primary" id="btn-reset-pwd-submit" style="width: 100%;">Enregistrer le nouveau mot de passe</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notif -->
   <div id="toast"></div>
 
   <!-- Scripts Applicatifs & Sécurité -->
-  <script src="security.js?v=v202610131029_87dbf3"></script>
-  <script src="app.js?v=v202610131029_87dbf3"></script>
+  <script src="security.js?v=v202611141926_ca96c0"></script>
+  <script src="app.js?v=v202611141926_ca96c0"></script>
 </body>
 </html>

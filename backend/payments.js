@@ -1,1692 +1,542 @@
 /**
- * GetVirtu Production Payment & Transaction Service (backend/payments.js)
- * Intégration officielle de l'API SasPay (Mobile Money en direct en Afrique de l'Ouest & Centrale)
- * Documentation officielle : https://docs.saspay.me/
- * Base URL : https://api.saspay.me/api/v1
+ * GetVirtu — Payments (backend/payments.js)
+ * SasPay (Mobile Money) and Trybit (crypto) deposits, manual deposits with proof, direct crypto purchases.
+ *
+ * Security rules applied everywhere:
+ *  - A deposit always belongs to the authenticated user (never to a userId sent by the browser).
+ *  - A balance is credited ONLY after a server-to-server check with the provider, using the provider id stored
+ *    when the payment was created (webhooks are just triggers; client-supplied provider ids are ignored).
+ *  - Crediting happens inside a database transaction and exactly once (idempotent).
+ *  - The price of a direct purchase is computed by the server from the catalogue, never by the browser.
+ *  - Network calls to providers are never made while the database is locked.
  */
+
+'use strict';
 
 const crypto = require('crypto');
 const https = require('https');
-const path = require('path');
-const fs = require('fs');
 const db = require('./db');
 const trybitService = require('./trybit');
+const { OFFICIAL_SASPAY_COUNTRIES, normalizePhoneNumber } = require('./saspay-countries');
 
-// Chargement sécurisé des variables d'environnement locales si présentes
-try {
-  const envPath = path.join(__dirname, '..', '.env');
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    envContent.split('\n').forEach(line => {
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        const key = match[1];
-        let val = (match[2] || '').trim();
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-          val = val.slice(1, -1);
-        }
-        if (!process.env[key]) process.env[key] = val;
-      }
-    });
-  }
-} catch (e) {}
-
-// Configuration officielle SasPay (Credentials serveur uniquement via variables d'environnement)
-const SASPAY_API_KEY = process.env.SASPAY_API_KEY || '';
 const SASPAY_BASE_URL = process.env.SASPAY_BASE_URL || 'https://api.saspay.me/api/v1';
-const SASPAY_WEBHOOK_SECRET = process.env.SASPAY_WEBHOOK_SECRET || '';
+const MAX_DEPOSIT_USD = 5000;
+const { roundMoney, cleanText } = db.helpers;
 
-// ==================== CONFIGURATION OFFICIELLE MULTI-PAYS SASPAY ====================
-// Basé sur le catalogue réel et les méthodes activées pour le compte marchand
-const OFFICIAL_SASPAY_COUNTRIES = [
-  {
-    code: 'CM',
-    name: 'Cameroun 🇨🇲',
-    currency: 'XAF',
-    rate: 620,
-    prefix: '+237',
-    networks: [
-      {
-        id: 'orange_cm',
-        name: 'Orange Money',
-        icon: '🍊',
-        otp_required: false,
-        instruction: 'Tapez #150*50#'
-      },
-      {
-        id: 'mtn_cm',
-        name: 'MTN MoMo',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Validez la notification USSD sur votre écran ou composez *126#.'
-      }
-    ]
-  },
-  {
-    code: 'CI',
-    name: "Côte d'Ivoire 🇨🇮",
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+225',
-    networks: [
-      {
-        id: 'wave_ci',
-        name: 'Wave',
-        icon: '🌊',
-        otp_required: false,
-        instruction: 'Ouvrez votre application Wave pour autoriser le paiement instantané.'
-      },
-      {
-        id: 'orange_ci',
-        name: 'Orange Money',
-        icon: '🍊',
-        otp_required: true,
-        otp_prompt: '#144*82# option 2',
-        instruction: 'Composez #144*82# puis l\'option 2 sur votre téléphone pour générer votre code d\'autorisation temporaire.'
-      },
-      {
-        id: 'mtn_ci',
-        name: 'MTN MoMo',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Validez l\'invite USSD sur votre écran ou composez *133#.'
-      },
-      {
-        id: 'moov_ci',
-        name: 'Moov Money',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez la demande de débit avec votre code PIN Moov.'
-      },
-      {
-        id: 'djamo_ci',
-        name: 'Djamo',
-        icon: '💳',
-        otp_required: false,
-        instruction: 'Confirmez la transaction directement dans l\'application Djamo.'
-      }
-    ]
-  },
-  {
-    code: 'SN',
-    name: 'Sénégal 🇸🇳',
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+221',
-    networks: [
-      {
-        id: 'wave_sn',
-        name: 'Wave',
-        icon: '🌊',
-        otp_required: false,
-        instruction: 'Ouvrez votre application Wave pour valider le paiement.'
-      },
-      {
-        id: 'orange_sn',
-        name: 'Orange Money',
-        icon: '🍊',
-        otp_required: false,
-        instruction: 'Validez la notification ou composez #144# sur votre mobile.'
-      },
-      {
-        id: 'freemoney_sn',
-        name: 'Free Money',
-        icon: '🟢',
-        otp_required: false,
-        instruction: 'Approuvez la demande sur votre compte Free Money.'
-      },
-      {
-        id: 'expresso_sn',
-        name: 'Expresso Sénégal',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez le paiement sur votre mobile Expresso.'
-      }
-    ]
-  },
-  {
-    code: 'BJ',
-    name: 'Bénin 🇧🇯',
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+229',
-    networks: [
-      {
-        id: 'mtn_bj',
-        name: 'MTN MoMo',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Validez l\'invite USSD sur votre écran MTN MoMo ou composez *880#.'
-      },
-      {
-        id: 'moov_bj',
-        name: 'Moov Money',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez la demande avec votre code secret Moov.'
-      },
-      {
-        id: 'celtiis_bj',
-        name: 'Celtiis Cash',
-        icon: '🟣',
-        otp_required: false,
-        instruction: 'Validez la transaction sur votre compte Celtiis Cash.'
-      }
-    ]
-  },
-  {
-    code: 'BF',
-    name: 'Burkina Faso 🇧🇫',
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+226',
-    networks: [
-      {
-        id: 'orange_bf',
-        name: 'Orange Money',
-        icon: '🍊',
-        otp_required: true,
-        otp_prompt: '*144*4*6*{montant}#',
-        instruction: 'Composez *144*4*6*{amount}# sur votre téléphone pour générer votre code OTP de paiement.'
-      },
-      {
-        id: 'moov_bf',
-        name: 'Moov Money',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez la notification USSD sur votre mobile Moov.'
-      }
-    ]
-  },
-  {
-    code: 'TG',
-    name: 'Togo 🇹🇬',
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+228',
-    networks: [
-      {
-        id: 'moov_tg',
-        name: 'Moov Money',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez l\'invite USSD sur votre mobile Moov.'
-      },
-      {
-        id: 'togocel',
-        name: 'TMoney / Togocel',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Validez la notification TMoney avec votre code secret.'
-      }
-    ]
-  },
-  {
-    code: 'GA',
-    name: 'Gabon 🇬🇦',
-    currency: 'XAF',
-    rate: 620,
-    prefix: '+241',
-    networks: [
-      {
-        id: 'airtel_ga',
-        name: 'Airtel Gabon',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Validez la demande de débit sur votre téléphone Airtel Money.'
-      },
-      {
-        id: 'moov_ga',
-        name: 'Moov Money',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez l\'invite sur votre mobile Moov.'
-      }
-    ]
-  },
-  {
-    code: 'CG',
-    name: 'Congo-Brazzaville 🇨🇬',
-    currency: 'XAF',
-    rate: 620,
-    prefix: '+242',
-    networks: [
-      {
-        id: 'airtel_cg',
-        name: 'Airtel Congo',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Validez le paiement sur votre mobile Airtel Money.'
-      },
-      {
-        id: 'mtn_cg',
-        name: 'MTN MoMo',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Validez l\'invite USSD sur votre écran MTN MoMo.'
-      }
-    ]
-  },
-  {
-    code: 'ML',
-    name: 'Mali 🇲🇱',
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+223',
-    networks: [
-      {
-        id: 'orange_ml',
-        name: 'Orange Money',
-        icon: '🍊',
-        otp_required: false,
-        instruction: 'Validez la demande avec votre code secret Orange Money.'
-      },
-      {
-        id: 'moov_ml',
-        name: 'Moov Money',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Validez l\'invite sur votre téléphone Moov.'
-      },
-      {
-        id: 'wave_ml',
-        name: 'Wave Mali',
-        icon: '🌊',
-        otp_required: false,
-        instruction: 'Ouvrez votre application Wave pour valider.'
-      },
-      {
-        id: 'mobi_cash_ml',
-        name: 'Mobi Cash',
-        icon: '🟣',
-        otp_required: false,
-        instruction: 'Validez la transaction sur votre compte Mobi Cash.'
-      }
-    ]
-  },
-  {
-    code: 'NE',
-    name: 'Niger 🇳🇪',
-    currency: 'XOF',
-    rate: 620,
-    prefix: '+227',
-    networks: [
-      {
-        id: 'airtel_ne',
-        name: 'Airtel Niger',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Validez l\'invite de prélèvement sur votre téléphone Airtel.'
-      }
-    ]
-  },
-  {
-    code: 'GN',
-    name: 'Guinée 🇬🇳',
-    currency: 'GNF',
-    rate: 8600,
-    prefix: '+224',
-    networks: [
-      {
-        id: 'mtn_gn',
-        name: 'MTN MoMo Guinea',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Validez l\'invite USSD reçue sur votre téléphone MTN MoMo.'
-      }
-    ]
-  },
-  {
-    code: 'GH',
-    name: 'Ghana 🇬🇭',
-    currency: 'GHS',
-    rate: 15.5,
-    prefix: '+233',
-    networks: [
-      {
-        id: 'mtn_gh',
-        name: 'MTN MoMo Ghana',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Approve the prompt on your phone or dial *170#.'
-      },
-      {
-        id: 'vodafone_gh',
-        name: 'Telecel / Vodafone',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Approve the payment request on your mobile.'
-      },
-      {
-        id: 'tigo_gh',
-        name: 'AirtelTigo Ghana',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Approve the prompt on your phone.'
-      }
-    ]
-  },
-  {
-    code: 'KE',
-    name: 'Kenya 🇰🇪',
-    currency: 'KES',
-    rate: 130,
-    prefix: '+254',
-    networks: [
-      {
-        id: 'mpesa_ke',
-        name: 'M-Pesa Kenya',
-        icon: '🟢',
-        otp_required: false,
-        instruction: 'Enter your secret M-Pesa PIN on the prompt.'
-      },
-      {
-        id: 'airtel_ke',
-        name: 'Airtel Money Kenya',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Approve the Airtel Money prompt.'
-      }
-    ]
-  },
-  {
-    code: 'CD',
-    name: 'Rép. Dém. du Congo 🇨🇩',
-    currency: 'CDF',
-    rate: 2850,
-    prefix: '+243',
-    networks: [
-      {
-        id: 'orange_cd',
-        name: 'Orange RDC',
-        icon: '🍊',
-        otp_required: false,
-        instruction: 'Validez la demande sur votre mobile Orange Money.'
-      },
-      {
-        id: 'vodacom_cd',
-        name: 'Vodacom M-Pesa',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Validez l\'invite M-Pesa avec votre code secret.'
-      },
-      {
-        id: 'airtel_cd',
-        name: 'Airtel RDC',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Validez le prélèvement Airtel Money.'
-      },
-      {
-        id: 'afrimoney_cd',
-        name: 'Afrimoney',
-        icon: '🟣',
-        otp_required: false,
-        instruction: 'Validez la transaction sur votre compte Afrimoney.'
-      }
-    ]
-  },
-  {
-    code: 'RW',
-    name: 'Rwanda 🇷🇼',
-    currency: 'RWF',
-    rate: 1350,
-    prefix: '+250',
-    networks: [
-      {
-        id: 'mtn_rw',
-        name: 'MTN MoMo Rwanda',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Enter your MoMo PIN to complete payment.'
-      },
-      {
-        id: 'airtel_rw',
-        name: 'Airtel Rwanda',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Approve the Airtel Money prompt.'
-      }
-    ]
-  },
-  {
-    code: 'UG',
-    name: 'Ouganda 🇺🇬',
-    currency: 'UGX',
-    rate: 3700,
-    prefix: '+256',
-    networks: [
-      {
-        id: 'mtn_ug',
-        name: 'MTN MoMo Uganda',
-        icon: '🟡',
-        otp_required: false,
-        instruction: 'Approve the USSD prompt on your phone.'
-      },
-      {
-        id: 'airtel_ug',
-        name: 'Airtel Uganda',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Approve the Airtel Money prompt.'
-      }
-    ]
-  },
-  {
-    code: 'TZ',
-    name: 'Tanzanie 🇹🇿',
-    currency: 'TZS',
-    rate: 2600,
-    prefix: '+255',
-    networks: [
-      {
-        id: 'mpesa_tz',
-        name: 'Vodacom M-Pesa',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Enter your M-Pesa PIN on your phone.'
-      },
-      {
-        id: 'tigo_tz',
-        name: 'Tigo Pesa',
-        icon: '🔵',
-        otp_required: false,
-        instruction: 'Approve the Tigo Pesa prompt.'
-      },
-      {
-        id: 'airtel_tz',
-        name: 'Airtel Money',
-        icon: '🔴',
-        otp_required: false,
-        instruction: 'Approve the Airtel Money prompt.'
-      },
-      {
-        id: 'halopesa_tz',
-        name: 'Halopesa',
-        icon: '🟠',
-        otp_required: false,
-        instruction: 'Approve the Halopesa prompt.'
-      }
-    ]
-  },
-  {
-    code: 'SL',
-    name: 'Sierra Leone 🇸🇱',
-    currency: 'SLE',
-    rate: 23,
-    prefix: '+232',
-    networks: [
-      {
-        id: 'orange_sl',
-        name: 'Orange Sierra Leone',
-        icon: '🍊',
-        otp_required: false,
-        instruction: 'Approve the Orange Money prompt on your phone.'
-      }
-    ]
-  },
-  {
-    code: 'NG',
-    name: 'Nigeria 🇳🇬',
-    currency: 'NGN',
-    rate: 1600,
-    prefix: '+234',
-    networks: [
-      {
-        id: 'allbanks_ng',
-        name: 'Virement bancaire (Swychr)',
-        icon: '🏦',
-        otp_required: false,
-        instruction: 'Suivez les instructions pour finaliser le virement sécurisé.'
-      }
-    ]
-  },
-  {
-    code: 'ALL',
-    name: 'Tous Pays & Cartes Bancaires 🌍',
-    currency: 'USD',
-    rate: 1,
-    prefix: '',
-    networks: [
-      {
-        id: 'checkout_hosted',
-        name: 'Guichet SasPay (Cartes, Visa/Mastercard & Mobile Money)',
-        icon: '⚡',
-        otp_required: false,
-        instruction: 'Accédez au guichet sécurisé officiel SasPay pour choisir librement votre mode de règlement.'
-      }
-    ]
-  }
-];
+function httpError(status, message, code) {
+  const e = new Error(message);
+  e.status = status;
+  if (code) e.code = code;
+  return e;
+}
 
-function normalizePhoneNumber(phone, countryCode) {
-  if (!phone) return '';
-  let clean = String(phone).replace(/[^\d+]/g, '');
-  const country = OFFICIAL_SASPAY_COUNTRIES.find(c => c.code === countryCode);
-  const prefix = country ? country.prefix : '+225';
-  const prefixDigits = prefix ? prefix.replace('+', '') : '';
-
-  if (clean.startsWith('+')) {
-    return clean;
-  }
-  if (clean.startsWith('00')) {
-    return '+' + clean.slice(2);
-  }
-  if (prefixDigits && clean.startsWith(prefixDigits)) {
-    return '+' + clean;
-  }
-  if (clean.startsWith('0') && prefixDigits) {
-    clean = clean.slice(1);
-  }
-  return prefix ? (prefix + clean) : clean;
+function publicTx(t) {
+  if (!t) return null;
+  const { proofImage, idempotencyKey, ...rest } = t;
+  return { ...rest, hasProof: Boolean(proofImage) };
 }
 
 class PaymentService {
-  /**
-   * Retourne la liste officielle des pays et opérateurs supportés
-   */
   getCountries() {
     return OFFICIAL_SASPAY_COUNTRIES;
   }
 
-  /**
-   * Envoi d'une requête HTTP sécurisée vers l'API SasPay
-   */
+  get sasPayKey() { return process.env.SASPAY_API_KEY || ''; }
+
   requestSasPay(endpoint, method = 'GET', body = null, headers = {}) {
     return new Promise((resolve, reject) => {
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-      const cleanBase = SASPAY_BASE_URL.endsWith('/') ? SASPAY_BASE_URL : SASPAY_BASE_URL + '/';
-      const url = new URL(cleanEndpoint, cleanBase);
+      const base = SASPAY_BASE_URL.endsWith('/') ? SASPAY_BASE_URL : SASPAY_BASE_URL + '/';
+      const url = new URL(cleanEndpoint, base);
       const postData = body ? JSON.stringify(body) : null;
-
-      const reqHeaders = {
-        'Authorization': `Bearer ${SASPAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        ...headers
-      };
-
-      if (postData) {
-        reqHeaders['Content-Length'] = Buffer.byteLength(postData);
-      }
-
-      const req = https.request(url, {
-        method,
-        headers: reqHeaders,
-        timeout: 15000 // Timeout optimisé 15s pour éviter tout blocage
-      }, (res) => {
+      const reqHeaders = { Authorization: `Bearer ${this.sasPayKey}`, 'Content-Type': 'application/json', ...headers };
+      if (postData) reqHeaders['Content-Length'] = Buffer.byteLength(postData);
+      const req = https.request(url, { method, headers: reqHeaders, timeout: 15000 }, (res) => {
         let raw = '';
-        res.on('data', chunk => raw += chunk);
+        res.on('data', c => raw += c);
         res.on('end', () => {
-          try {
-            const parsed = JSON.parse(raw);
-            resolve({
-              status: res.statusCode,
-              ok: res.statusCode >= 200 && res.statusCode < 300,
-              data: parsed
-            });
-          } catch (e) {
-            resolve({
-              status: res.statusCode,
-              ok: res.statusCode >= 200 && res.statusCode < 300,
-              raw
-            });
-          }
+          let data = null;
+          try { data = JSON.parse(raw); } catch (e) {}
+          resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data, raw: data ? undefined : raw });
         });
       });
-
-      req.on('error', (err) => {
-        reject(new Error('Erreur de communication avec SasPay: ' + err.message));
-      });
-
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Délai d\'attente dépassé avec SasPay (Timeout).'));
-      });
-
-      if (postData) {
-        req.write(postData);
-      }
+      req.on('error', (err) => reject(httpError(502, 'Erreur de communication avec SasPay: ' + err.message)));
+      req.on('timeout', () => { req.destroy(); reject(httpError(504, "Délai d'attente dépassé avec SasPay (Timeout).")); });
+      if (postData) req.write(postData);
       req.end();
     });
   }
 
-  /**
-   * 1. INITIATION D'UN PAIEMENT MOBILE MONEY RÉEL VIA SASPAY
-   * Gère de façon fiable tous les pays, devises (XAF, XOF, GNF, USD, etc.) et opérateurs.
-   * Ne crédite le compte que lors de la validation officielle.
-   */
-  async createSasPayDeposit({
-    userId,
-    amountUsd,
-    country,
-    network,
-    phone,
-    otp,
-    customerName,
-    customerEmail,
-    returnUrl,
-    isPurchase,
-    productId,
-    quantity,
-    preferredMode
-  }) {
-    if (!userId) throw new Error('Utilisateur non authentifié.');
+  _validateAmount(amount, min) {
+    const v = roundMoney(parseFloat(amount));
+    if (!isFinite(v) || v < min) throw httpError(400, `Le montant minimum est de $${min.toFixed(2)} USD.`);
+    if (v > MAX_DEPOSIT_USD) throw httpError(400, `Le montant maximum par paiement est de $${MAX_DEPOSIT_USD} USD.`);
+    return v;
+  }
 
-    let user = db.getUserById(userId);
-    if (!user && customerEmail) {
-      user = db.getUserByEmail(customerEmail);
-    }
-    if (!user) {
-      user = db.createUser({
-        id: userId,
-        email: customerEmail || `client_${userId}@getvirtu.shop`,
-        name: customerName || 'Client GetVirtu',
-        role: 'client',
-        balance: 0.00
-      });
-    }
+  _customerEmail(user, provided) {
+    const ok = em => typeof em === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em.trim()) && !em.trim().toLowerCase().startsWith('admin@');
+    if (ok(provided)) return provided.trim();
+    if (user.role !== 'admin' && ok(user.email)) return user.email.trim();
+    return `client_${user.id}@getvirtu.shop`;
+  }
 
-    const parsedUsd = parseFloat(amountUsd);
-    const isDirectPurchase = Boolean(isPurchase || productId);
-    const minRequired = isDirectPurchase ? 0.50 : (db.data.settings?.min_recharge || 5.0);
+  // ================================================================== SASPAY
+  async createSasPayDeposit({ user, amountUsd, country, network, phone, otp, customerName, customerEmail, returnUrl, isPurchase, productId, preferredMode }) {
+    if (!user) throw httpError(401, 'Veuillez vous connecter pour initier une recharge.');
+    if (!this.sasPayKey) throw httpError(503, 'Clé API SasPay non configurée sur le serveur.');
 
-    if (isNaN(parsedUsd) || parsedUsd < minRequired) {
-      throw new Error(isDirectPurchase 
-        ? `Le montant minimum pour un paiement est de $${minRequired.toFixed(2)} USD.` 
-        : `Le montant minimum de recharge est de $${minRequired.toFixed(2)} USD.`);
-    }
+    const isDirect = Boolean(isPurchase || productId);
+    const settings = await db.read(() => db.getPublicSettings());
+    const parsedUsd = this._validateAmount(amountUsd, isDirect ? 0.5 : settings.min_recharge);
 
-    if (!SASPAY_API_KEY) {
-      throw new Error('Clé API SasPay non configurée sur le serveur.');
-    }
-
-    // Résolution précise du pays et de la devise officielle
-    const countryCode = (country || 'CI').toUpperCase();
-    const countryConfig = OFFICIAL_SASPAY_COUNTRIES.find(c => c.code === countryCode) || OFFICIAL_SASPAY_COUNTRIES[0];
-    const currency = countryConfig.currency;
-    const localRate = countryConfig.rate;
-
-    // Calcul du montant décimal formatté (règle SasPay : chaîne décimale stricte "2500.00")
-    const calculatedLocalAmount = Math.round(parsedUsd * localRate);
-    const formattedAmount = calculatedLocalAmount.toFixed(2);
-
-    // Formatage et normalisation du téléphone selon le pays
-    const cleanPhone = normalizePhoneNumber(phone, countryCode);
-
-    const txId = 'TXN-SP-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+    const countryCode = String(country || 'CI').toUpperCase();
+    const cfg = OFFICIAL_SASPAY_COUNTRIES.find(c => c.code === countryCode) || OFFICIAL_SASPAY_COUNTRIES[0];
+    const formattedAmount = Math.round(parsedUsd * cfg.rate).toFixed(2);
+    const cleanPhone = normalizePhoneNumber(cleanText(phone, 30), cfg.code);
+    const txId = 'TXN-SP-' + crypto.randomBytes(6).toString('hex').toUpperCase();
     const idempotencyKey = crypto.randomUUID();
+    const name = cleanText(customerName, 80) || user.name;
+    const email = this._customerEmail(user, customerEmail);
+    const safeReturn = this._safeReturnUrl(returnUrl, 'https://getvirtu.shop/#deposit_success');
 
-    // Enregistrement initial dans la base locale en statut 'pending'
-    const transaction = db.createTransaction({
-      id: txId,
-      userId: user.id,
-      amount: Math.round(parsedUsd * 100) / 100, // Montant USD à créditer après succès réel
-      currency: 'USD',
-      paymentMethod: `Mobile Money (${network || countryCode})`,
-      provider: 'saspay',
-      providerTxId: null,
-      status: 'pending', // Strictement pending
-      idempotencyKey: idempotencyKey,
-      metadata: {
-        localAmount: formattedAmount,
-        localCurrency: currency,
-        country: countryCode,
-        network: network || 'direct',
-        phone: cleanPhone,
-        customerName: customerName || user.name,
-        customerEmail: customerEmail || user.email
-      }
+    // Phase 1 — record the pending payment
+    await db.tx(() => {
+      const u = db.getUserById(user.id);
+      if (!u) throw httpError(401, 'Session invalide.', 'SESSION_INVALID');
+      db.createTransaction({
+        id: txId, userId: u.id, userEmail: u.email, userName: u.name,
+        amount: parsedUsd, currency: 'USD', paymentMethod: `Mobile Money (${cleanText(network, 40) || cfg.code})`,
+        provider: 'saspay', status: 'pending', idempotencyKey,
+        metadata: { localAmount: formattedAmount, localCurrency: cfg.currency, country: cfg.code, network: cleanText(network, 40) || 'direct', phone: cleanPhone, customerName: name, customerEmail: email }
+      });
     });
 
-    console.log(`[SasPay] Nouvelle transaction initiée : ${txId} (${parsedUsd} USD -> ${formattedAmount} ${currency}) par ${user.email} [${countryCode}]`);
+    const fail = async (msg, status = 400) => {
+      await db.tx(() => { db.updateTransaction(txId, { status: 'failed', failureReason: msg }); }).catch(() => {});
+      throw httpError(status, msg);
+    };
 
+    // Phase 2 — provider call (no database lock held)
+    const metadata = { internalTxId: txId, userId: user.id, amountUsd: parsedUsd.toFixed(2) };
+    const checkoutPayload = {
+      amount: formattedAmount,
+      currency: cfg.currency,
+      description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD`,
+      country: cfg.code === 'ALL' ? undefined : cfg.code,
+      customer_email: email,
+      customer_name: name,
+      customer_phone: cleanPhone || '',
+      return_url: safeReturn,
+      metadata
+    };
+    const finish = async (providerId, result) => {
+      await db.tx(() => { db.updateTransaction(txId, { providerTxId: providerId || null }); });
+      return result;
+    };
+
+    let res;
+    const checkoutMode = (!network || network === 'checkout_hosted' || preferredMode === 'checkout');
     try {
-      const isCheckoutSessionMode = (!network || network === 'checkout_hosted' || preferredMode === 'checkout');
-
-      if (isCheckoutSessionMode) {
-        // Option A : Création d'une session de checkout hébergée SasPay officielle
-        const sessionPayload = {
-          amount: formattedAmount,
-          currency: currency,
-          description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD - ${user.email}`,
-          country: countryCode === 'ALL' ? undefined : countryCode,
-          customer_email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : (user.role !== 'admin' && !user.email.includes('admin@') ? user.email.trim() : `client_${user.id}@getvirtu.shop`),
-          customer_name: customerName || user.name,
-          customer_phone: cleanPhone || '',
-          return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
-          metadata: {
-            internalTxId: txId,
-            userId: user.id,
-            amountUsd: parsedUsd.toFixed(2)
-          }
-        };
-
-        const res = await this.requestSasPay('checkout-sessions/', 'POST', sessionPayload);
-        if (!res.ok || !res.data?.success) {
-          const errMsg = res.data?.error?.message || res.data?.message || 'Échec de création de la session de paiement SasPay.';
-          db.updateTransaction(txId, { status: 'failed', failureReason: errMsg });
-          throw new Error(errMsg);
+      if (checkoutMode) {
+        res = await this.requestSasPay('checkout-sessions/', 'POST', checkoutPayload);
+        if (!res.ok || !res.data || !res.data.success) {
+          return fail((res.data && (res.data.error && res.data.error.message || res.data.message)) || 'Échec de création de la session de paiement SasPay.');
         }
-
-        const saspayResult = res.data.data;
-        db.updateTransaction(txId, { providerTxId: saspayResult.id });
-
-        return {
-          success: true,
-          transactionId: txId,
-          providerTxId: saspayResult.id,
-          status: 'pending',
-          checkoutUrl: saspayResult.checkout_url,
-          mode: 'checkout',
-          amountUsd: parsedUsd,
-          localAmount: formattedAmount,
-          currency: currency,
-          instructions: 'Paiement sécurisé via le guichet officiel SasPay.'
-        };
-      } else {
-        // Option B : Softpay direct (push sur mobile / USSD / lien opérateur)
-        let cleanNetwork = (network || '').trim().toLowerCase();
-        if (cleanNetwork && !cleanNetwork.includes('_') && countryCode && cleanNetwork !== 'card' && cleanNetwork !== 'crypto' && cleanNetwork !== 'direct' && cleanNetwork !== 'togocel') {
-          cleanNetwork = `${cleanNetwork}_${countryCode.toLowerCase()}`;
-        }
-
-        const nameParts = (customerName || user.name || 'Client GetVirtu').trim().split(' ');
-        const firstName = nameParts[0] || 'Client';
-        const lastName = nameParts.slice(1).join(' ') || 'GetVirtu';
-
-        const softpayPayload = {
-          amount: formattedAmount,
-          currency: currency,
-          country: countryCode,
-          network: cleanNetwork,
-          customer: {
-            email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : (user.role !== 'admin' && !user.email.includes('admin@') ? user.email.trim() : `client_${user.id}@getvirtu.shop`),
-            first_name: firstName,
-            last_name: lastName,
-            phone: cleanPhone || '+237690000000'
-          },
-          description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD`,
-          return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
-          metadata: {
-            internalTxId: txId,
-            userId: user.id,
-            amountUsd: parsedUsd.toFixed(2)
-          }
-        };
-
-        // Si OTP pré-paiement fourni (ex: Orange CI #144*82# ou Orange BF *144*4*6*montant#)
-        if (otp) {
-          softpayPayload.otp = String(otp).trim();
-        }
-
-        const res = await this.requestSasPay('payments/softpay/', 'POST', softpayPayload, {
-          'Idempotency-Key': idempotencyKey
-        });
-
-        if (!res.ok || !res.data?.success) {
-          const directErrCode = res.data?.error?.code || res.data?.code;
-          const directErrMsg = res.data?.error?.message || res.data?.message || '';
-
-          // Si l'opérateur n'a aucun fournisseur/route disponible chez SasPay,
-          // NE PAS créer de session de checkout hébergée qui afficherait exactement la même erreur bloquante.
-          const isRouteUnavailable = directErrCode === 'no_route_available' || 
-            directErrMsg.toLowerCase().includes('aucun fournisseur') ||
-            directErrMsg.toLowerCase().includes('no route') ||
-            directErrMsg.toLowerCase().includes('inactif');
-
-          if (isRouteUnavailable) {
-            const operatorFriendlyName = (cleanNetwork.includes('orange_cm')) ? 'Orange Money Cameroun' :
-              (cleanNetwork.includes('mtn_cm')) ? 'MTN MoMo Cameroun' :
-              (cleanNetwork.includes('orange')) ? 'Orange Money' :
-              (cleanNetwork.includes('mtn')) ? 'MTN MoMo' : cleanNetwork;
-            const userMsg = `L'opérateur ${operatorFriendlyName} est temporairement indisponible auprès de la passerelle SasPay (${directErrMsg || 'maintenance technique'}). Veuillez sélectionner MTN MoMo ou Crypto Instantané.`;
-            db.updateTransaction(txId, { status: 'failed', failureReason: userMsg });
-            throw new Error(userMsg);
-          }
-
-          console.warn(`[SasPay Softpay] Échec direct (${cleanNetwork}): ${directErrMsg || res.status}. Bascule de secours vers session hébergée...`);
-          // En cas d'indisponibilité temporaire du push direct, repli transparent vers session de checkout
-          const fallbackPayload = {
-            amount: formattedAmount,
-            currency: currency,
-            description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD - ${user.email}`,
-            country: countryCode === 'ALL' ? undefined : countryCode,
-            customer_email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail.trim() : `client_${user.id}@getvirtu.shop`,
-            customer_name: customerName || user.name,
-            customer_phone: cleanPhone || '',
-            return_url: returnUrl || 'https://getvirtu.shop/#deposit_success',
-            metadata: { internalTxId: txId, userId: user.id, amountUsd: parsedUsd.toFixed(2) }
-          };
-
-          const fallbackRes = await this.requestSasPay('checkout-sessions/', 'POST', fallbackPayload);
-          if (fallbackRes.ok && fallbackRes.data?.success) {
-            const fallbackResult = fallbackRes.data.data;
-            db.updateTransaction(txId, { providerTxId: fallbackResult.id });
-            return {
-              success: true,
-              transactionId: txId,
-              providerTxId: fallbackResult.id,
-              status: 'pending',
-              checkoutUrl: fallbackResult.checkout_url,
-              mode: 'checkout',
-              amountUsd: parsedUsd,
-              localAmount: formattedAmount,
-              currency: currency,
-              instructions: 'Paiement sécurisé via le guichet officiel SasPay.'
-            };
-          }
-
-          const errMsg = directErrMsg || 'Erreur lors de l\'initiation Mobile Money auprès de l\'opérateur.';
-          db.updateTransaction(txId, { status: 'failed', failureReason: errMsg });
-          throw new Error(errMsg);
-        }
-
-        const saspayResult = res.data?.data || res.data || {};
-        if (saspayResult.id) {
-          db.updateTransaction(txId, { providerTxId: saspayResult.id });
-        }
-
-        // Instructions claires et adaptées à chaque opérateur
-        let instructionsList = (Array.isArray(saspayResult.instructions) && saspayResult.instructions.length > 0)
-          ? saspayResult.instructions
-          : null;
-
-        if (!instructionsList) {
-          if (saspayResult.checkout_url) {
-            instructionsList = ['Cliquez sur "Ouvrir le paiement" ci-dessous pour finaliser la transaction sur votre application ou navigateur.'];
-          } else if (cleanNetwork.startsWith('orange_cm')) {
-            instructionsList = ['Tapez #150*50#'];
-          } else if (cleanNetwork.startsWith('mtn_cm')) {
-            instructionsList = ['Validez l\'invite USSD envoyée sur votre mobile ou composez le *126# pour approuver le prélèvement MTN MoMo.'];
-          } else if (cleanNetwork.startsWith('orange_ci')) {
-            instructionsList = ['Transaction initiée avec votre code d\'autorisation Orange Money. Validez si une invite s\'affiche.'];
-          } else if (cleanNetwork.startsWith('mtn_ci')) {
-            instructionsList = ['Validez la demande en composant le *133# sur votre mobile MTN MoMo.'];
-          } else if (cleanNetwork.startsWith('moov_')) {
-            instructionsList = ['Validez l\'invite avec votre code PIN Moov Money sur votre mobile.'];
-          } else if (cleanNetwork.startsWith('wave_')) {
-            instructionsList = ['Ouvrez l\'application Wave pour confirmer le paiement.'];
-          } else {
-            instructionsList = ['Validez la demande de débit avec votre code PIN secret sur votre téléphone portable.'];
-          }
-        }
-
-        // Retour immédiat sans deuxième appel bloquant
-        return {
-          success: true,
-          transactionId: txId,
-          providerTxId: saspayResult.id,
-          status: 'pending',
-          checkoutUrl: saspayResult.checkout_url || null,
-          instructions: instructionsList,
-          mode: saspayResult.checkout_url ? 'redirect' : 'push',
-          amountUsd: parsedUsd,
-          localAmount: formattedAmount,
-          currency: currency
-        };
+        const r = res.data.data;
+        return finish(r.id, { success: true, transactionId: txId, providerTxId: r.id, status: 'pending', checkoutUrl: r.checkout_url, mode: 'checkout', amountUsd: parsedUsd, localAmount: formattedAmount, currency: cfg.currency, instructions: 'Paiement sécurisé via le guichet officiel SasPay.' });
       }
+
+      let cleanNetwork = cleanText(network, 40).toLowerCase();
+      if (cleanNetwork && !cleanNetwork.includes('_') && !['card', 'crypto', 'direct', 'togocel'].includes(cleanNetwork)) cleanNetwork = `${cleanNetwork}_${cfg.code.toLowerCase()}`;
+      const parts = (name || 'Client GetVirtu').trim().split(/\s+/);
+      const softpayPayload = {
+        amount: formattedAmount,
+        currency: cfg.currency,
+        country: cfg.code,
+        network: cleanNetwork,
+        customer: { email, first_name: parts[0] || 'Client', last_name: parts.slice(1).join(' ') || 'GetVirtu', phone: cleanPhone || '' },
+        description: `Recharge GetVirtu ${parsedUsd.toFixed(2)} USD`,
+        return_url: safeReturn,
+        metadata
+      };
+      if (otp) softpayPayload.otp = cleanText(otp, 20);
+      res = await this.requestSasPay('payments/softpay/', 'POST', softpayPayload, { 'Idempotency-Key': idempotencyKey });
+
+      if (!res.ok || !res.data || !res.data.success) {
+        const code = res.data && ((res.data.error && res.data.error.code) || res.data.code);
+        const msg = (res.data && ((res.data.error && res.data.error.message) || res.data.message)) || '';
+        const low = msg.toLowerCase();
+        if (code === 'no_route_available' || low.includes('aucun fournisseur') || low.includes('no route') || low.includes('inactif')) {
+          const op = cleanNetwork.includes('orange_cm') ? 'Orange Money Cameroun' : cleanNetwork.includes('mtn_cm') ? 'MTN MoMo Cameroun' : cleanNetwork.includes('orange') ? 'Orange Money' : cleanNetwork.includes('mtn') ? 'MTN MoMo' : cleanNetwork;
+          return fail(`L'opérateur ${op} est temporairement indisponible auprès de la passerelle SasPay (${msg || 'maintenance technique'}). Veuillez sélectionner un autre opérateur ou le paiement Crypto.`);
+        }
+        // Fallback: hosted checkout session
+        const fb = await this.requestSasPay('checkout-sessions/', 'POST', checkoutPayload);
+        if (fb.ok && fb.data && fb.data.success) {
+          const r = fb.data.data;
+          return finish(r.id, { success: true, transactionId: txId, providerTxId: r.id, status: 'pending', checkoutUrl: r.checkout_url, mode: 'checkout', amountUsd: parsedUsd, localAmount: formattedAmount, currency: cfg.currency, instructions: 'Paiement sécurisé via le guichet officiel SasPay.' });
+        }
+        return fail(msg || "Erreur lors de l'initiation Mobile Money auprès de l'opérateur.");
+      }
+
+      const r = res.data.data || res.data || {};
+      let instructions = Array.isArray(r.instructions) && r.instructions.length ? r.instructions : null;
+      if (!instructions) {
+        if (r.checkout_url) instructions = ['Cliquez sur "Ouvrir le paiement" ci-dessous pour finaliser la transaction.'];
+        else if (cleanNetwork.startsWith('orange_cm')) instructions = ['Tapez #150*50#'];
+        else if (cleanNetwork.startsWith('mtn_cm')) instructions = ["Validez l'invite USSD envoyée sur votre mobile ou composez le *126# pour approuver le prélèvement MTN MoMo."];
+        else if (cleanNetwork.startsWith('orange_ci')) instructions = ["Transaction initiée avec votre code d'autorisation Orange Money. Validez si une invite s'affiche."];
+        else if (cleanNetwork.startsWith('mtn_ci')) instructions = ['Validez la demande en composant le *133# sur votre mobile MTN MoMo.'];
+        else if (cleanNetwork.startsWith('moov_')) instructions = ["Validez l'invite avec votre code PIN Moov Money sur votre mobile."];
+        else if (cleanNetwork.startsWith('wave_')) instructions = ["Ouvrez l'application Wave pour confirmer le paiement."];
+        else instructions = ['Validez la demande de débit avec votre code PIN secret sur votre téléphone portable.'];
+      }
+      return finish(r.id, { success: true, transactionId: txId, providerTxId: r.id, status: 'pending', checkoutUrl: r.checkout_url || null, instructions, mode: r.checkout_url ? 'redirect' : 'push', amountUsd: parsedUsd, localAmount: formattedAmount, currency: cfg.currency });
     } catch (err) {
-      console.error('[SasPay Error]', err.message);
-      db.updateTransaction(txId, { status: 'failed', failureReason: err.message });
-      throw err;
+      if (err.status && err.status < 500 && err.message) throw err; // already handled by fail()
+      return fail(err.message || 'Erreur SasPay.', err.status || 502);
     }
   }
 
+  /** Looks up a transaction for the caller (owner or administrator). */
+  async _loadTxForCaller(transactionId, caller) {
+    return db.read(() => {
+      const t = db.getTransactionById(transactionId);
+      if (!t) throw httpError(404, 'Transaction introuvable.');
+      if (caller && caller.role !== 'admin' && String(t.userId) !== String(caller.id)) throw httpError(404, 'Transaction introuvable.');
+      return JSON.parse(JSON.stringify(t));
+    });
+  }
+
+  async _statusFor(txId) {
+    return db.read(() => {
+      const t = db.getTransactionById(txId);
+      const u = t ? db.getUserById(t.userId) : null;
+      return { transaction: publicTx(t), newBalance: u ? u.balance : null };
+    });
+  }
+
   /**
-   * 2. VÉRIFICATION OFFICIELLE EN TEMPS RÉEL DU STATUT DU PAIEMENT (GET /payments/{id}/verify/)
-   * Conforme aux règles d'or SasPay :
-   * - Ne crédite le compte que si le statut officiel est 'SUCCESS'.
-   * - Idempotent : protège contre tout double crédit.
+   * Server-to-server SasPay verification. `caller` is the authenticated user (null for webhook triggers).
+   * Uses ONLY the provider id stored on the transaction (or ids returned by SasPay itself for that session).
    */
-  async verifySasPayPayment({ transactionId, providerTxId }) {
-    let tx = null;
-    if (transactionId) tx = db.getTransactionById(transactionId);
-    if (!tx && providerTxId) tx = db.getTransactionByProviderTxId(providerTxId);
+  async verifySasPayPayment({ transactionId, caller = null }) {
+    const tx = await this._loadTxForCaller(transactionId, caller);
+    if (tx.provider !== 'saspay') return { success: false, status: tx.status, message: 'Transaction non SasPay.' };
+    if (tx.status === 'completed') { const s = await this._statusFor(tx.id); return { success: true, status: 'completed', alreadyCompleted: true, ...s }; }
+    if (tx.status === 'failed' || tx.status === 'cancelled') return { success: true, status: tx.status, message: tx.failureReason || 'Cette transaction a été annulée ou a échoué.' };
+    if (!tx.providerTxId) return { success: true, status: 'pending', message: 'Paiement en cours de création...' };
+    if (!this.sasPayKey) return { success: true, status: 'pending', message: 'Vérification indisponible (SasPay non configuré).' };
 
-    if (!tx) {
-      if (providerTxId) {
-        tx = db.createTransaction({
-          id: transactionId || `TXN-${providerTxId.substring(0, 8).toUpperCase()}`,
-          providerTxId: providerTxId,
-          amount: 0,
-          status: 'pending'
-        });
-      } else {
-        throw new Error('Transaction introuvable dans la base de données.');
-      }
-    }
-
-    const effectiveProviderTxId = providerTxId || tx.providerTxId;
-    if (!effectiveProviderTxId) {
-      return { success: false, status: tx.status, message: 'Identifiant SasPay manquant.' };
-    }
-
-    // Protection Idempotence : si la transaction a déjà été validée avec succès
-    let user = tx.userId ? db.getUserById(tx.userId) : null;
-    if (!user && tx.userEmail) {
-      user = db.getUserByEmail(tx.userEmail);
-    }
-    if (tx.status === 'completed') {
-      return {
-        success: true,
-        status: 'completed',
-        alreadyCompleted: true,
-        transaction: tx,
-        newBalance: user ? user.balance : 0
-      };
-    }
-
-    if (tx.status === 'failed' || tx.status === 'cancelled') {
-      return {
-        success: true,
-        status: tx.status,
-        message: tx.failureReason || 'Cette transaction a été annulée ou a échoué.'
-      };
-    }
-
-    // Appel de vérification officielle auprès de l'API SasPay
+    let paymentId = tx.providerTxId;
+    let official = '';
+    let pData = null;
     try {
-      const verifyRes = await this.requestSasPay(`/payments/${effectiveProviderTxId}/verify/`, 'GET');
-
-      if (!verifyRes.ok) {
-        // Tentative de vérification par statut de session de checkout si c'était une session
-        let sessionRes = await this.requestSasPay(`checkout-sessions/${effectiveProviderTxId}/status/`, 'GET');
-        if (!sessionRes.ok || !sessionRes.data?.id) {
-          sessionRes = await this.requestSasPay(`checkout-sessions/${effectiveProviderTxId}/`, 'GET');
+      let vr = await this.requestSasPay(`payments/${encodeURIComponent(paymentId)}/verify/`, 'GET');
+      if (!vr.ok) {
+        // The stored id may be a checkout session: resolve the underlying payment through SasPay
+        let sr = await this.requestSasPay(`checkout-sessions/${encodeURIComponent(paymentId)}/status/`, 'GET');
+        if (!sr.ok || !sr.data) sr = await this.requestSasPay(`checkout-sessions/${encodeURIComponent(paymentId)}/`, 'GET');
+        if (!(sr.ok && sr.data && sr.data.success)) return { success: true, status: 'pending', message: "Vérification en cours auprès de l'opérateur..." };
+        const sData = sr.data.data || sr.data;
+        const sStatus = String(sData.status || '').toUpperCase();
+        const tStatus = String(sData.transaction_status || '').toUpperCase();
+        if (sStatus === 'EXPIRED' || sStatus === 'FAILED' || sStatus === 'CANCELLED' || tStatus === 'FAILED') {
+          await db.tx(() => { const t = db.getTransactionById(tx.id); if (t && t.status === 'pending') db.updateTransaction(tx.id, { status: 'failed', failureReason: `Session de paiement ${sStatus.toLowerCase() || 'échouée'}.` }); });
+          return { success: false, status: 'failed', message: `Session de paiement ${sStatus.toLowerCase() || 'échouée'}.` };
         }
-
-        if (sessionRes.ok && sessionRes.data?.success) {
-          const sData = sessionRes.data.data || sessionRes.data;
-          const sStatus = (sData.status || '').toUpperCase();
-          const tStatus = (sData.transaction_status || '').toUpperCase();
-          if (sStatus === 'PAID' || sStatus === 'SUCCESS' || tStatus === 'SUCCESS') {
-            const txIdToVerify = (sData.transaction && typeof sData.transaction === 'object' ? sData.transaction.id : sData.transaction) || sData.transaction_id || effectiveProviderTxId;
-            return await this.verifySasPayPayment({ transactionId: tx.id, providerTxId: txIdToVerify });
-          } else if (sStatus === 'EXPIRED' || sStatus === 'FAILED' || sStatus === 'CANCELLED' || tStatus === 'FAILED') {
-            const failedTx = db.updateTransaction(tx.id, {
-              status: 'failed',
-              failureReason: `Session de paiement ${sStatus.toLowerCase()}.`,
-              updatedAt: new Date().toISOString()
-            });
-            return { success: false, status: 'failed', message: failedTx.failureReason, transaction: failedTx };
-          }
-          return { success: true, status: 'pending', message: 'Session en attente de validation sur votre téléphone portable...' };
-        }
-        return { success: true, status: 'pending', message: 'Vérification en cours auprès de l\'opérateur...' };
+        if (!(sStatus === 'PAID' || sStatus === 'SUCCESS' || tStatus === 'SUCCESS')) return { success: true, status: 'pending', message: 'Session en attente de validation sur votre téléphone portable...' };
+        paymentId = (sData.transaction && typeof sData.transaction === 'object' ? sData.transaction.id : sData.transaction) || sData.transaction_id;
+        if (!paymentId) return { success: true, status: 'pending', message: 'Paiement en cours de confirmation...' };
+        vr = await this.requestSasPay(`payments/${encodeURIComponent(paymentId)}/verify/`, 'GET');
+        if (!vr.ok) return { success: true, status: 'pending', message: 'Paiement en cours de confirmation...' };
       }
-
-      const pData = verifyRes.data?.data || verifyRes.data;
-      const officialStatus = (pData?.status || '').toUpperCase();
-
-      console.log(`[SasPay Verify] Statut officiel pour ${tx.id} (${effectiveProviderTxId}) : ${officialStatus}`);
-
-      if (officialStatus === 'SUCCESS') {
-        // CRÉDIT ATOMIQUE SÉCURISÉ DU SOLDE UTILISATEUR
-        // Revérification anti-race condition
-        const freshTx = db.getTransactionById(tx.id);
-        if (freshTx && freshTx.status === 'completed') {
-          return { success: true, status: 'completed', newBalance: user.balance, transaction: freshTx };
-        }
-
-        if (!user) {
-          user = db.createUser({
-            id: tx.userId || `user-${Date.now()}`,
-            email: tx.userEmail || `client_${tx.id}@getvirtu.shop`,
-            name: tx.userName || 'Client GetVirtu',
-            role: 'client',
-            balance: 0.00
-          });
-        }
-
-        const creditAmount = tx.amount || 0; // Montant en USD
-        const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
-
-        db.updateUser(user.id, { balance: newBalance });
-
-        const completedTx = db.updateTransaction(tx.id, {
-          status: 'completed',
-          providerTxId: effectiveProviderTxId,
-          completedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-
-        // Mise à jour de l'historique de recharge du client
-        var recharges = db.data.recharges || [];
-        var rIdx = recharges.findIndex(r => r.id === tx.id);
-        if (rIdx !== -1) {
-          recharges[rIdx].status = 'Validé';
-          db.persist();
-        }
-        await db.persistToRemote();
-
-        console.log(`[SasPay Confirmation] Transaction ${tx.id} confirmée avec succès. Solde de ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
-
-        return {
-          success: true,
-          status: 'completed',
-          newBalance: newBalance,
-          creditedAmount: creditAmount,
-          transaction: completedTx,
-          message: 'Paiement confirmé avec succès ! Votre solde a été crédité.'
-        };
-      } else if (officialStatus === 'FAILED' || officialStatus === 'CANCELLED' || officialStatus === 'EXPIRED') {
-        // Marquage de la transaction comme échouée avec explication claire et détaillée
-        let failureDesc = `Paiement ${officialStatus === 'EXPIRED' ? 'expiré' : 'rejeté'} par l'opérateur.`;
-
-        try {
-          // Requête vers le endpoint transaction détaillé pour extraire le motif de l'opérateur (status_logs)
-          const txDetailRes = await this.requestSasPay(`/transactions/${effectiveProviderTxId}/`, 'GET');
-          if (txDetailRes.ok && txDetailRes.data?.data) {
-            const txData = txDetailRes.data.data;
-            const logs = txData.status_logs || [];
-            const lastLog = logs.slice(-1)[0];
-            const rawReason = (lastLog?.reason || '').trim();
-
-            if (rawReason.includes('INSUFFICIENT_BALANCE')) {
-              const debitAmt = txData.debited_amount ? `${Math.round(parseFloat(txData.debited_amount))} ${txData.currency || 'XAF'}` : 'le montant avec frais';
-              failureDesc = `Solde insuffisant sur votre compte Mobile Money. Prévoyez au moins ${debitAmt} (frais réseau inclus) sur votre SIM pour valider ce paiement.`;
-            } else if (rawReason.includes('TIMED_OUT') || rawReason.includes('EXPIRED')) {
-              failureDesc = `Délai de validation dépassé. Vous n'avez pas validé la transaction à temps sur votre téléphone portable.`;
-            } else if (rawReason.includes('USER_REJECTED') || rawReason.includes('CANCELLED')) {
-              failureDesc = `La transaction a été annulée ou refusée depuis votre téléphone portable.`;
-            } else if (rawReason.includes('INVALID_PIN')) {
-              failureDesc = `Code secret PIN erroné lors de la validation sur votre téléphone.`;
-            } else if (rawReason) {
-              failureDesc = rawReason;
-            }
-          }
-        } catch (e) {
-          console.warn('[SasPay Detail Extraction]', e.message);
-        }
-
-        if (!failureDesc || failureDesc.includes('fetched successfully')) {
-          if (pData?.error?.message && !pData.error.message.includes('fetched successfully')) {
-            failureDesc = pData.error.message;
-          } else if (pData?.failure_reason) {
-            failureDesc = pData.failure_reason;
-          } else if (pData?.reason) {
-            failureDesc = pData.reason;
-          }
-        }
-
-        const failedTx = db.updateTransaction(tx.id, {
-          status: 'failed',
-          failureReason: failureDesc,
-          updatedAt: new Date().toISOString()
-        }) || { ...tx, status: 'failed', failureReason: failureDesc };
-        return {
-          success: true,
-          status: 'failed',
-          message: failureDesc,
-          transaction: failedTx
-        };
-      } else {
-        // Toujours en attente (PENDING / PROCESSING)
-        return {
-          success: true,
-          status: 'pending',
-          message: 'En attente de validation sur votre téléphone portable.'
-        };
-      }
+      pData = (vr.data && (vr.data.data || vr.data)) || {};
+      official = String(pData.status || '').toUpperCase();
     } catch (err) {
-      console.warn('[SasPay Verify Warning]', err.message);
       return { success: true, status: 'pending', message: 'Vérification en cours...' };
     }
+
+    if (official === 'SUCCESS') {
+      // Defense in depth: the provider record must belong to this transaction when SasPay echoes our metadata
+      const echoed = pData && pData.metadata && pData.metadata.internalTxId;
+      if (echoed && echoed !== tx.id) {
+        console.error('[SasPay] Provider payment metadata does not match transaction', tx.id);
+        return { success: false, status: 'pending', message: 'Paiement non concordant : contactez le support.' };
+      }
+      const res = await db.tx(() => db.creditDeposit(tx.id, { providerTxId: paymentId }));
+      const s = await this._statusFor(tx.id);
+      return { success: true, status: 'completed', newBalance: s.newBalance, creditedAmount: res.creditedAmount, transaction: s.transaction, message: 'Paiement confirmé avec succès ! Votre solde a été crédité.' };
+    }
+    if (official === 'FAILED' || official === 'CANCELLED' || official === 'EXPIRED') {
+      let reason = `Paiement ${official === 'EXPIRED' ? 'expiré' : 'rejeté'} par l'opérateur.`;
+      try {
+        const d = await this.requestSasPay(`transactions/${encodeURIComponent(paymentId)}/`, 'GET');
+        const logs = (d.ok && d.data && d.data.data && d.data.data.status_logs) || [];
+        const raw = String((logs.slice(-1)[0] || {}).reason || '').trim();
+        if (raw.includes('INSUFFICIENT_BALANCE')) {
+          const txData = d.data.data;
+          const amt = txData.debited_amount ? `${Math.round(parseFloat(txData.debited_amount))} ${txData.currency || 'XAF'}` : 'le montant avec frais';
+          reason = `Solde insuffisant sur votre compte Mobile Money. Prévoyez au moins ${amt} (frais réseau inclus) sur votre SIM pour valider ce paiement.`;
+        } else if (raw.includes('TIMED_OUT') || raw.includes('EXPIRED')) reason = "Délai de validation dépassé. Vous n'avez pas validé la transaction à temps sur votre téléphone portable.";
+        else if (raw.includes('USER_REJECTED') || raw.includes('CANCELLED')) reason = 'La transaction a été annulée ou refusée depuis votre téléphone portable.';
+        else if (raw.includes('INVALID_PIN')) reason = 'Code secret PIN erroné lors de la validation sur votre téléphone.';
+        else if (raw) reason = cleanText(raw, 300);
+      } catch (e) {}
+      await db.tx(() => { const t = db.getTransactionById(tx.id); if (t && t.status === 'pending') db.updateTransaction(tx.id, { status: 'failed', failureReason: reason }); });
+      return { success: true, status: 'failed', message: reason };
+    }
+    return { success: true, status: 'pending', message: 'En attente de validation sur votre téléphone portable.' };
   }
 
-  /**
-   * 3. GESTION DU WEBHOOK OFFICIEL SASPAY
-   * Format documenté : https://docs.saspay.me/api-reference/webhooks
-   * Headers : X-Webhook-Signature, X-Webhook-Timestamp, X-Webhook-Event
-   * Vérification de signature HMAC SHA-256 avec tolérance d'horloge de 300 secondes.
-   */
+  /** SasPay webhook: optional signature check, then server-to-server verification. Payload is never trusted. */
   async handleWebhook({ headers = {}, rawBody, payload }) {
-    console.log('[SasPay Webhook] Réception notification webhook...');
-
-    const signature = headers['x-webhook-signature'] || headers['X-Webhook-Signature'];
-    const timestamp = headers['x-webhook-timestamp'] || headers['X-Webhook-Timestamp'];
-    const eventType = headers['x-webhook-event'] || headers['X-Webhook-Event'] || payload?.event;
-
-    // 1. Contrôle de signature cryptographique (si secret configuré)
-    if (SASPAY_WEBHOOK_SECRET) {
-      if (!signature || !timestamp) {
-        throw new Error('Headers de signature webhook manquants.');
-      }
-
-      // Contrôle de l'âge du webhook (tolérance de 300 secondes)
-      const now = Math.floor(Date.now() / 1000);
-      if (Math.abs(now - Number(timestamp)) > 300) {
-        throw new Error('Horodatage du webhook hors tolérance (> 300s).');
-      }
-
-      // Calcul de la signature HMAC SHA-256 sur timestamp.rawBody
-      const bodyToSign = typeof rawBody === 'string' ? rawBody : JSON.stringify(payload);
-      const expectedSignature = crypto
-        .createHmac('sha256', SASPAY_WEBHOOK_SECRET)
-        .update(`${timestamp}.${bodyToSign}`)
-        .digest('hex');
-
-      const sigBuffer = Buffer.from(signature);
-      const expBuffer = Buffer.from(expectedSignature);
-
-      if (sigBuffer.length !== expBuffer.length || !crypto.timingSafeEqual(sigBuffer, expBuffer)) {
-        throw new Error('Signature du webhook SasPay invalide.');
-      }
+    const secret = process.env.SASPAY_WEBHOOK_SECRET || '';
+    if (secret) {
+      const signature = String(headers['x-webhook-signature'] || '');
+      const timestamp = String(headers['x-webhook-timestamp'] || '');
+      if (!signature || !timestamp) throw httpError(401, 'Headers de signature webhook manquants.');
+      if (Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) > 300) throw httpError(401, 'Horodatage du webhook hors tolérance.');
+      const expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${typeof rawBody === 'string' ? rawBody : JSON.stringify(payload)}`).digest('hex');
+      const a = Buffer.from(signature), b = Buffer.from(expected);
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw httpError(401, 'Signature du webhook SasPay invalide.');
     }
-
-    // 2. Traitement de l'événement
-    const eventData = payload?.data || {};
-    const saspayId = eventData.id;
-    const ref = eventData.reference;
-    const internalTxId = eventData.metadata?.internalTxId;
-
-    if (!saspayId && !internalTxId && !ref) {
-      return { success: false, message: 'Identifiant de transaction introuvable dans le webhook.' };
-    }
-
-    // Recherche de la transaction locale
-    let tx = null;
-    if (internalTxId) tx = db.getTransactionById(internalTxId);
-    if (!tx && saspayId) tx = db.getTransactionByProviderTxId(saspayId);
-    if (!tx && ref) {
-      tx = db.data.transactions.find(t => t.id === ref || t.providerTxId === ref);
-    }
-
-    if (!tx) {
-      console.warn(`[SasPay Webhook] Transaction non répertoriée pour saspayId: ${saspayId}`);
-      return { success: true, message: 'Transaction non locale reçue.' };
-    }
-
-    if (eventType === 'transaction.success' || eventData.status === 'SUCCESS') {
-      // Protection d'idempotence : ne créditer qu'une seule fois
-      if (tx.status === 'completed') {
-        console.log(`[SasPay Webhook] Transaction ${tx.id} déjà complétée (Idempotence).`);
-        return { success: true, message: 'Déjà traitée.' };
-      }
-
-      let user = db.getUserById(tx.userId);
-      if (!user && tx.userEmail) {
-        user = db.getUserByEmail(tx.userEmail);
-      }
-      if (!user) {
-        user = db.createUser({
-          id: tx.userId || `user-${Date.now()}`,
-          email: tx.userEmail || tx.metadata?.customerEmail || `client_${tx.id}@getvirtu.shop`,
-          name: tx.metadata?.customerName || 'Client GetVirtu',
-          role: 'client',
-          balance: 0.00
-        });
-      }
-
-      const newBalance = Math.round(((user.balance || 0) + tx.amount) * 100) / 100;
-      db.updateUser(user.id, { balance: newBalance });
-
-      db.updateTransaction(tx.id, {
-        status: 'completed',
-        providerTxId: saspayId || tx.providerTxId,
-        completedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-
-      console.log(`[SasPay Webhook] Transaction ${tx.id} validée. Utilisateur ${user.email} crédité de +${tx.amount} USD. Nouveau solde : ${newBalance} USD.`);
-      return { success: true, message: 'Transaction complétée avec succès.' };
-    } else if (eventType === 'transaction.failed' || eventData.status === 'FAILED') {
-      db.updateTransaction(tx.id, {
-        status: 'failed',
-        failureReason: eventData.message || 'Paiement échoué via webhook.'
-      });
-      return { success: true, message: 'Transaction marquée comme échouée.' };
-    }
-
-    return { success: true, message: 'Événement traité.' };
-  }
-
-  /**
-   * 4. MÉTHODES DE PAIEMENT & CRYPTO (CONSERVATION DU SYSTÈME EXISTANT)
-   */
-  async createDepositRequest({ userId, amount, currency = 'USD', paymentMethodId, proofImage }) {
-    if (!userId) throw new Error('Utilisateur non authentifié.');
-    let user = db.getUserById(userId);
-    if (!user) {
-      user = db.createUser({
-        id: userId,
-        email: `client_${userId}@getvirtu.shop`,
-        name: 'Client GetVirtu',
-        role: 'client',
-        balance: 0.00
-      });
-    }
-
-    const parsedAmount = parseFloat(amount);
-    const minRecharge = db.data.settings?.min_recharge || 5.0;
-
-    if (isNaN(parsedAmount) || parsedAmount < minRecharge) {
-      throw new Error(`Le montant minimum de recharge est de ${minRecharge.toFixed(2)} USD.`);
-    }
-
-    const methods = db.getPaymentMethods();
-    const method = methods.find(m => m.id === parseInt(paymentMethodId, 10)) || {
-      name: 'Paiement Manuel',
-      type: 'crypto',
-      address: ''
-    };
-
-    const idempotencyKey = crypto.randomBytes(16).toString('hex');
-    const transactionId = 'TXN-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
-
-    const transaction = db.createTransaction({
-      id: transactionId,
-      userId: user.id,
-      amount: Math.round(parsedAmount * 100) / 100,
-      currency: currency.toUpperCase(),
-      paymentMethod: method.name,
-      provider: method.type || 'crypto',
-      providerTxId: null,
-      status: 'pending', // Début strict en pending
-      idempotencyKey: idempotencyKey,
-      proofImage: proofImage || null
+    const ev = (payload && payload.data) || {};
+    const internalTxId = ev.metadata && ev.metadata.internalTxId;
+    const txId = await db.read(() => {
+      let t = internalTxId ? db.getTransactionById(internalTxId) : null;
+      if (!t && ev.id) t = db.getTransactionByProviderTxId(ev.id);
+      if (!t && ev.reference) t = db.getTransactionById(ev.reference) || db.getTransactionByProviderTxId(ev.reference);
+      return t && t.provider === 'saspay' ? t.id : null;
     });
-
-    return {
-      success: true,
-      transaction,
-      paymentInstructions: {
-        methodName: method.name,
-        address: method.address,
-        network: method.network || '',
-        instructions: method.instructions
-      }
-    };
+    if (!txId) return { success: true, message: 'Notification reçue.' };
+    const r = await this.verifySasPayPayment({ transactionId: txId });
+    return { success: true, message: 'Statut vérifié auprès de SasPay.', status: r.status };
   }
 
-  async verifyAndCompleteTransaction({ transactionId, providerTxId, failureReason = null, isApproval = true }) {
-    const transaction = db.getTransactionById(transactionId);
-    if (!transaction) throw new Error('Transaction introuvable.');
-
-    if (transaction.status === 'completed') {
-      return { success: true, alreadyProcessed: true, transaction };
-    }
-
-    let user = db.getUserById(transaction.userId);
-    if (!user && transaction.metadata?.customerEmail) {
-      user = db.getUserByEmail(transaction.metadata.customerEmail);
-    }
-    if (!user) {
-      user = db.createUser({
-        id: transaction.userId || `user-${Date.now()}`,
-        email: transaction.metadata?.customerEmail || `client_${transaction.id}@getvirtu.shop`,
-        name: transaction.metadata?.customerName || 'Client GetVirtu',
-        role: 'client',
-        balance: 0.00
+  // ================================================================== MANUAL DEPOSITS (proof of payment)
+  async createDepositRequest({ user, amount, currency = 'USD', paymentMethodId, proofImage }) {
+    if (!user) throw httpError(401, 'Veuillez vous connecter pour initier une recharge.');
+    const settings = await db.read(() => db.getPublicSettings());
+    const parsed = this._validateAmount(amount, settings.min_recharge);
+    if (!proofImage) throw httpError(400, 'Veuillez joindre la preuve de paiement (capture d\'écran).');
+    const proofId = await db.saveImageDataUrl(proofImage, { isPrivate: true, maxBytes: 2 * 1024 * 1024 });
+    return db.tx(() => {
+      const u = db.getUserById(user.id);
+      if (!u) throw httpError(401, 'Session invalide.', 'SESSION_INVALID');
+      const method = db.getPaymentMethods().find(m => m.id === parseInt(paymentMethodId, 10) && m.enabled !== false);
+      if (!method) throw httpError(400, 'Moyen de paiement inconnu ou désactivé.');
+      const t = db.createTransaction({
+        userId: u.id, userEmail: u.email, userName: u.name,
+        amount: parsed, currency: String(currency || 'USD').toUpperCase().slice(0, 5),
+        paymentMethod: method.name, provider: method.type || 'manual', status: 'pending',
+        idempotencyKey: crypto.randomBytes(16).toString('hex'), proofImage: proofId
       });
-    }
-
-    if (!isApproval) {
-      const updated = db.updateTransaction(transactionId, {
-        status: 'failed',
-        failureReason: failureReason || 'Paiement rejeté lors de la vérification.',
-        completedAt: new Date().toISOString()
-      });
-      return { success: true, transaction: updated };
-    }
-
-    const newBalance = Math.round(((user.balance || 0) + transaction.amount) * 100) / 100;
-    db.updateUser(user.id, { balance: newBalance });
-
-    const completedTx = db.updateTransaction(transactionId, {
-      status: 'completed',
-      providerTxId: providerTxId || transaction.providerTxId,
-      completedAt: new Date().toISOString()
-    });
-
-    await db.persistToRemote();
-    return { success: true, transaction: completedTx, newBalance };
-  }
-
-  getUserTransactions(userId) {
-    return db.getTransactions({ userId });
-  }
-
-  // ========== INTÉGRATION OFFICIELLE CRYPTO TRYBIT ==========
-
-  /**
-   * Création d'une recharge de solde ou d'un achat direct par Crypto Instantané via Trybit
-   */
-  async createTrybitDeposit({ userId, amountUsd, customerEmail, customerName, cryptocurrency, returnUrl, productId, quantity, contactInfo }) {
-    if (!userId) throw new Error('Utilisateur non authentifié.');
-    let user = db.getUserById(userId);
-    if (!user && customerEmail) {
-      user = db.getUserByEmail(customerEmail);
-    }
-    if (!user) {
-      // Auto-provision user in db if missing in serverless instance
-      user = db.createUser({
-        id: userId,
-        email: (customerEmail && !customerEmail.includes('admin@')) ? customerEmail : `client_${userId}@getvirtu.shop`,
-        name: customerName || 'Client GetVirtu',
-        role: 'client',
-        balance: 0.00
-      });
-    }
-
-    const parsedUsd = parseFloat(amountUsd);
-    const minRecharge = productId ? 0.01 : (db.data.settings?.min_recharge || 5.0);
-
-    if (isNaN(parsedUsd) || parsedUsd < minRecharge) {
-      throw new Error(`Le montant minimum est de ${minRecharge.toFixed(2)} USD.`);
-    }
-
-    const idempotencyKey = crypto.randomBytes(16).toString('hex');
-    const txId = 'TXN-TB-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
-
-    // Création de la transaction en statut strict 'pending'
-    const tx = db.createTransaction({
-      id: txId,
-      userId: user.id,
-      amount: Math.round(parsedUsd * 100) / 100,
-      currency: 'USD',
-      paymentMethod: 'Crypto Instantané (Trybit)',
-      provider: 'trybit',
-      providerTxId: null,
-      status: 'pending',
-      idempotencyKey: idempotencyKey,
-      metadata: {
-        customerEmail: customerEmail || user.email,
-        customerName: customerName || user.name,
-        cryptocurrency: cryptocurrency || null,
-        returnUrl: returnUrl || 'https://getvirtu.shop/?payment_status=success',
-        productId: productId || null,
-        quantity: quantity || 1,
-        contactInfo: contactInfo || null
-      }
-    });
-
-    console.log(`[Trybit] Initiation de paiement : ${txId} (${parsedUsd} USD) pour ${user.email}`);
-
-    try {
-      const isClientEmail = (em) => {
-        if (!em || typeof em !== 'string' || !em.includes('@')) return false;
-        const low = em.toLowerCase().trim();
-        return !low.includes('admin@virtushop.com') && !low.includes('admin@getvirtu.shop') && !low.startsWith('admin@');
-      };
-      const safeEmail = isClientEmail(customerEmail) ? customerEmail.trim() : (isClientEmail(user.email) && user.role !== 'admin' ? user.email.trim() : null);
-
-      const invoice = await trybitService.createInvoice({
-        amount: parsedUsd,
-        currency: 'USD',
-        orderId: txId,
-        email: safeEmail,
-        cryptocurrency: cryptocurrency || null
-      });
-
-      // Mettre à jour la transaction avec l'identifiant Trybit (INV-XXXX) et le lien de paiement
-      db.updateTransaction(txId, {
-        providerTxId: invoice.uuid,
-        metadata: {
-          ...tx.metadata,
-          invoiceUuid: invoice.uuid,
-          paymentUrl: invoice.link,
-          amountCrypto: invoice.amountCrypto,
-          cryptoCurrency: invoice.currency,
-          address: invoice.address,
-          expiryDate: invoice.expiryDate
-        }
-      });
-
       return {
         success: true,
-        transactionId: txId,
-        invoiceUuid: invoice.uuid,
-        paymentUrl: invoice.link,
-        amountUsd: parsedUsd,
-        amountCrypto: invoice.amountCrypto,
-        currency: invoice.currency,
-        address: invoice.address,
-        status: 'pending',
-        instructions: 'Redirection vers la page de paiement sécurisée Trybit...'
+        transaction: publicTx(t),
+        paymentInstructions: { methodName: method.name, address: method.address, network: method.network || '', instructions: method.instructions }
       };
-    } catch (err) {
-      db.updateTransaction(txId, {
-        status: 'failed',
-        failureReason: err.message
-      });
-      throw err;
-    }
+    });
   }
 
-  /**
-   * Vérification du statut d'une transaction Trybit (requête active auprès de l'API Trybit)
-   */
-  async verifyTrybitPayment({ transactionId, invoiceUuid }) {
-    let tx = null;
-    if (transactionId) tx = db.getTransactionById(transactionId);
-    if (!tx && invoiceUuid) tx = db.getTransactionByProviderTxId(invoiceUuid);
-    if (!tx && invoiceUuid) {
-      tx = db.data.transactions.find(t => t.metadata?.invoiceUuid === invoiceUuid || t.providerTxId === invoiceUuid);
-    }
-
-    if (!tx) {
-      throw new Error('Transaction Trybit introuvable.');
-    }
-
-    if (tx.status === 'completed') {
-      const user = db.getUserById(tx.userId);
-      return { success: true, status: 'completed', newBalance: user ? user.balance : null, transaction: tx };
-    }
-
-    const effectiveUuid = invoiceUuid || tx.providerTxId || tx.metadata?.invoiceUuid;
-    if (!effectiveUuid) {
-      return { success: true, status: 'pending', message: 'En attente de paiement sur Trybit...' };
-    }
-
-    const infos = await trybitService.getInvoiceInfo(effectiveUuid);
-    const invoiceData = Array.isArray(infos) && infos.length > 0 ? infos[0] : null;
-
-    if (!invoiceData) {
-      return { success: true, status: 'pending', message: 'Vérification Trybit en cours...' };
-    }
-
-    const invStatus = (invoiceData.status || '').toLowerCase();
-    const invInvoiceStatus = (invoiceData.invoice_status || '').toLowerCase();
-
-    console.log(`[Trybit Verify] Statut pour ${tx.id} (${effectiveUuid}) : status=${invStatus}, invoice_status=${invInvoiceStatus}`);
-
-    if (invStatus === 'paid' || invStatus === 'overpaid' || invInvoiceStatus === 'success' || invStatus === 'success') {
-      return await this._creditUserForTransaction(tx, effectiveUuid, invoiceData);
-    } else if (invStatus === 'canceled' || invStatus === 'cancelled' || invStatus === 'expired') {
-      const failedTx = db.updateTransaction(tx.id, {
-        status: 'failed',
-        failureReason: 'Paiement annulé ou expiré sur Trybit.'
-      });
-      return { success: false, status: 'failed', transaction: failedTx };
-    }
-
-    return {
-      success: true,
-      status: 'pending',
-      message: 'Facture en attente de paiement ou de confirmation blockchain...'
-    };
+  /** Administrator approval/rejection of a pending deposit (manual or stuck automatic one). */
+  async verifyAndCompleteTransaction({ transactionId, failureReason = null, isApproval = true, adminName }) {
+    return db.tx(() => {
+      const t = db.getTransactionById(transactionId);
+      if (!t) throw httpError(404, 'Transaction introuvable.');
+      if (t.status === 'completed') return { success: true, alreadyProcessed: true, transaction: publicTx(t) };
+      if (!['deposit'].includes(t.type)) throw httpError(400, 'Seules les recharges en attente peuvent être validées.');
+      if (!isApproval) {
+        const updated = db.updateTransaction(t.id, { status: 'failed', failureReason: cleanText(failureReason, 300) || 'Paiement rejeté lors de la vérification.', completedAt: new Date().toISOString(), adminResponsible: adminName });
+        return { success: true, transaction: publicTx(updated) };
+      }
+      const r = db.creditDeposit(t.id, {});
+      db.updateTransaction(t.id, { adminResponsible: adminName, notes: t.notes || `Validée manuellement par ${adminName}` });
+      return { success: true, transaction: publicTx(r.transaction), newBalance: r.newBalance };
+    });
   }
 
-  /**
-   * Traitement officiel du POSTBACK webhook Trybit avec vérification JWT HS256
-   */
-  async handleTrybitWebhook(payload = {}, headers = {}) {
-    console.log('[Trybit POSTBACK] Traitement notification webhook...');
-    if (!payload || typeof payload !== 'object') {
-      throw new Error('Payload webhook Trybit invalide.');
-    }
-
-    // Extraction du jeton JWT dans le corps ou dans les en-têtes HTTP
-    let token = payload.token || payload.jwt;
-    if (!token && headers) {
-      const authHeader = headers['authorization'] || headers['Authorization'] || '';
-      if (authHeader) {
-        token = authHeader.replace(/^(Bearer|Token)\s+/i, '').trim();
-      }
-      if (!token) {
-        token = headers['x-token'] || headers['x-webhook-token'] || headers['token'] || '';
-      }
-    }
-
-    let tokenPayload = null;
-    if (token) {
-      const verifyResult = trybitService.verifyWebhookToken(token);
-      if (!verifyResult.valid) {
-        console.warn('[Trybit POSTBACK] Jeton JWT invalide ou expiré :', verifyResult.error);
-        throw new Error('Jeton JWT du webhook Trybit invalide: ' + verifyResult.error);
-      }
-      tokenPayload = verifyResult.payload;
-    } else {
-      console.log('[Trybit POSTBACK] Information: notification reçue sans jeton JWT de signature.');
-    }
-
-    const orderId = payload.order_id || tokenPayload?.order_id || payload.orderId;
-    const invoiceId = payload.invoice_id || tokenPayload?.invoice_id || payload.invoiceId;
-    const invoiceInfo = payload.invoice_info || tokenPayload?.invoice_info || {};
-    const uuid = invoiceInfo.uuid || (invoiceId ? (invoiceId.startsWith('INV-') ? invoiceId : `INV-${invoiceId}`) : null);
-
-    let tx = null;
-    if (orderId) tx = db.getTransactionById(orderId);
-    if (!tx && uuid) tx = db.getTransactionByProviderTxId(uuid);
-    if (!tx && invoiceId) tx = db.getTransactionByProviderTxId(invoiceId);
-    if (!tx && uuid) {
-      tx = db.data.transactions.find(t => t.metadata?.invoiceUuid === uuid || t.providerTxId === uuid);
-    }
-
-    if (!tx) {
-      console.warn(`[Trybit POSTBACK] Transaction introuvable pour order_id: ${orderId}, uuid: ${uuid}`);
-      return { success: true, message: 'Notification reçue (transaction non locale).' };
-    }
-
-    // Protection anti-double traitement (Idempotence)
-    if (tx.status === 'completed') {
-      console.log(`[Trybit POSTBACK] Transaction ${tx.id} déjà traitée (Idempotence).`);
-      return { success: true, message: 'Déjà traitée.' };
-    }
-
-    const status = (payload.status || tokenPayload?.status || invoiceInfo.status || '').toLowerCase();
-    const invoiceStatus = (invoiceInfo.invoice_status || '').toLowerCase();
-
-    if (status === 'success' || status === 'paid' || status === 'overpaid' || invoiceStatus === 'success' || invoiceStatus === 'paid') {
-      return await this._creditUserForTransaction(tx, uuid || tx.providerTxId, { ...invoiceInfo, payload });
-    } else if (status === 'canceled' || status === 'cancelled' || status === 'expired') {
-      db.updateTransaction(tx.id, {
-        status: 'failed',
-        failureReason: 'Annulé ou expiré sur Trybit.'
-      });
-      return { success: true, message: 'Transaction marquée annulée.' };
-    }
-
-    return { success: true, message: 'Statut Trybit enregistré.' };
+  async getUserTransactions(userId) {
+    return db.read(() => db.getTransactions({ userId }).map(publicTx));
   }
 
-  /**
-   * Crédit atomique et sécurisé du solde utilisateur ou livraison directe de commande
-   */
-  async _creditUserForTransaction(tx, providerTxId, extraData = {}) {
-    const freshTx = db.getTransactionById(tx.id);
-    if (freshTx && freshTx.status === 'completed') {
-      const u = db.getUserById(freshTx.userId);
-      return { success: true, status: 'completed', newBalance: u ? u.balance : null, transaction: freshTx };
-    }
+  // ================================================================== TRYBIT
+  async createTrybitDeposit({ user, amountUsd, customerEmail, cryptocurrency, returnUrl, productId, quantity, contactInfo }) {
+    if (!user) throw httpError(401, 'Veuillez vous connecter pour initier une recharge.');
+    const txId = 'TXN-TB-' + crypto.randomBytes(6).toString('hex').toUpperCase();
+    const crypt = cleanText(cryptocurrency, 20) || null;
 
-    let user = db.getUserById(tx.userId);
-    if (!user) {
-      user = db.createUser({
-        id: tx.userId || `user-${Date.now()}`,
-        email: tx.metadata?.customerEmail || `client_${tx.id}@getvirtu.shop`,
-        name: tx.metadata?.customerName || 'Client GetVirtu',
-        role: 'client',
-        balance: 0.00
+    // Phase 1 — compute the amount on the server and record the pending payment
+    const prepared = await db.tx(() => {
+      const u = db.getUserById(user.id);
+      if (!u) throw httpError(401, 'Session invalide.', 'SESSION_INVALID');
+      let amount;
+      let meta = { customerEmail: this._customerEmail(u, customerEmail), customerName: u.name, cryptocurrency: crypt, returnUrl: this._safeReturnUrl(returnUrl, 'https://getvirtu.shop/?payment_status=success') };
+      if (productId) {
+        if (u.role === 'admin') throw httpError(403, 'Un compte administrateur ne peut pas passer de commande.');
+        const p = db.getProductById(productId);
+        if (!p || p.published !== true) throw httpError(404, "Ce produit n'est plus disponible dans la boutique.", 'PRODUCT_UNAVAILABLE');
+        const qty = parseInt(quantity, 10) || 1;
+        if (qty < 1 || qty > 100) throw httpError(400, 'Quantité invalide (1 à 100).');
+        if ((parseInt(p.stock, 10) || 0) < qty) throw httpError(409, `Stock insuffisant : ${p.stock} disponible(s).`, 'INSUFFICIENT_STOCK');
+        amount = roundMoney(p.price * qty); // never the amount sent by the browser
+        if (amount < 0.5) throw httpError(400, 'Montant trop faible pour un paiement crypto (minimum $0.50).');
+        meta = { ...meta, productId: p.id, productName: p.name, quantity: qty, unitPrice: p.price, contactInfo: cleanText(contactInfo, 120) || null };
+      } else {
+        amount = this._validateAmount(amountUsd, db.getPublicSettings().min_recharge);
+      }
+      db.createTransaction({
+        id: txId, userId: u.id, userEmail: u.email, userName: u.name,
+        amount, currency: 'USD', paymentMethod: 'Crypto Instantané (Trybit)', provider: 'trybit', status: 'pending',
+        idempotencyKey: crypto.randomBytes(16).toString('hex'), metadata: meta
       });
-    }
-
-    // 1. Si c'était un achat direct de produit par crypto
-    if (tx.metadata?.productId) {
-      const prod = db.getProductById(tx.metadata.productId);
-      if (prod) {
-        const qty = parseInt(tx.metadata.quantity, 10) || 1;
-        const orderId = 'ORD-' + (tx.id.replace('TXN-TB-', '').substring(0, 8) || Date.now().toString().slice(-6));
-        let deliveredContent = null;
-
-        try {
-          const allocRes = await db.allocateKeysForProduct(prod.id, qty, {
-            orderId: orderId,
-            userId: user.id,
-            userEmail: user.email
-          });
-          const keysList = allocRes.allocatedKeys || [];
-          deliveredContent = {
-            type: 'text',
-            content: keysList.map(k => k.content).join('\n'),
-            keys: keysList,
-            fileName: 'licences.txt'
-          };
-        } catch (allocErr) {
-          console.warn('[Trybit Achat] Allocation de clés:', allocErr.message);
-          // Fallback déterministe sécurisé si les clés étaient manquantes
-          deliveredContent = {
-            type: 'text',
-            content: 'GV-' + prod.id + '-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Date.now().toString(36).toUpperCase() + ' (Licence Active)'
-          };
-        }
-
-        db.createOrder({
-          id: orderId,
-          userId: user.id,
-          userEmail: user.email,
-          userName: user.name,
-          productId: prod.id,
-          productName: prod.name,
-          unitPrice: prod.price,
-          quantity: qty,
-          amount: tx.amount,
-          remainingBalance: user.balance,
-          userBalanceAfter: user.balance,
-          contactInfo: tx.metadata.contactInfo || '',
-          method: 'Crypto Instantané (Trybit)',
-          status: 'Complété',
-          vaultContent: deliveredContent
-        });
-        console.log(`[Trybit Achat] Commande débloquée et livrée avec succès pour ${prod.name} (x${qty}) !`);
-      }
-    } else {
-      // 2. Si c'était une recharge de solde
-      const creditAmount = tx.amount || 0;
-      const newBalance = Math.round(((user.balance || 0) + creditAmount) * 100) / 100;
-      db.updateUser(user.id, { balance: newBalance });
-      console.log(`[Paiement Validé] Transaction ${tx.id} complétée. Solde ${user.email} crédité de +${creditAmount} USD. Nouveau solde : ${newBalance} USD.`);
-    }
-
-    const completedTx = db.updateTransaction(tx.id, {
-      status: 'completed',
-      providerTxId: providerTxId || tx.providerTxId,
-      completedAt: new Date().toISOString(),
-      metadata: {
-        ...tx.metadata,
-        completedDetails: extraData
-      }
+      return { amount, email: meta.customerEmail };
     });
 
-    var recharges = db.data.recharges || [];
-    var rIdx = recharges.findIndex(r => r.id === tx.id);
-    if (rIdx !== -1) {
-      recharges[rIdx].status = 'Validé';
-      db.persist();
+    // Phase 2 — create the invoice (no lock held)
+    let invoice;
+    try {
+      invoice = await trybitService.createInvoice({ amount: prepared.amount, currency: 'USD', orderId: txId, email: prepared.email, cryptocurrency: crypt });
+    } catch (err) {
+      await db.tx(() => { db.updateTransaction(txId, { status: 'failed', failureReason: cleanText(err.message, 300) }); }).catch(() => {});
+      throw httpError(502, err.message || 'Échec de création de la facture Trybit.');
     }
-
-    await db.persistToRemote();
-
+    // Phase 3 — store the provider invoice id
+    await db.tx(() => {
+      const t = db.getTransactionById(txId);
+      db.updateTransaction(txId, {
+        providerTxId: invoice.uuid,
+        metadata: { ...(t.metadata || {}), invoiceUuid: invoice.uuid, paymentUrl: invoice.link, amountCrypto: invoice.amountCrypto, cryptoCurrency: invoice.currency, address: invoice.address, expiryDate: invoice.expiryDate }
+      });
+    });
     return {
-      success: true,
-      status: 'completed',
-      newBalance: user.balance,
-      creditedAmount: tx.amount,
-      transaction: completedTx,
-      message: 'Paiement Trybit confirmé avec succès !'
+      success: true, transactionId: txId, invoiceUuid: invoice.uuid, paymentUrl: invoice.link, amountUsd: prepared.amount,
+      amountCrypto: invoice.amountCrypto, currency: invoice.currency, address: invoice.address, status: 'pending',
+      instructions: 'Redirection vers la page de paiement sécurisée Trybit...'
     };
+  }
+
+  async verifyTrybitPayment({ transactionId, caller = null }) {
+    const tx = await this._loadTxForCaller(transactionId, caller);
+    if (tx.provider !== 'trybit') return { success: false, status: tx.status, message: 'Transaction non Trybit.' };
+    if (tx.status === 'completed') { const s = await this._statusFor(tx.id); return { success: true, status: 'completed', ...s }; }
+    if (tx.status === 'failed') return { success: false, status: 'failed', message: tx.failureReason || 'Paiement annulé ou expiré.' };
+    const uuid = tx.providerTxId || (tx.metadata && tx.metadata.invoiceUuid);
+    if (!uuid) return { success: true, status: 'pending', message: 'En attente de paiement sur Trybit...' };
+
+    let info;
+    try {
+      const infos = await trybitService.getInvoiceInfo(uuid);
+      info = Array.isArray(infos) ? infos.find(i => i && (i.uuid === uuid || !i.uuid)) || infos[0] : null;
+    } catch (e) {
+      return { success: true, status: 'pending', message: 'Vérification Trybit en cours...' };
+    }
+    if (!info) return { success: true, status: 'pending', message: 'Vérification Trybit en cours...' };
+    const st = String(info.status || '').toLowerCase();
+    const ist = String(info.invoice_status || '').toLowerCase();
+    if (info.order_id && info.order_id !== tx.id) {
+      console.error('[Trybit] Invoice order_id does not match transaction', tx.id);
+      return { success: false, status: 'pending', message: 'Paiement non concordant : contactez le support.' };
+    }
+    if (st === 'paid' || st === 'overpaid' || st === 'success' || ist === 'success') {
+      const result = await db.tx(() => this._settleTrybit(tx.id, uuid, { status: st, invoice_status: ist, amount_usd: info.amount_usd }));
+      const s = await this._statusFor(tx.id);
+      return { success: true, status: 'completed', newBalance: s.newBalance, creditedAmount: tx.amount, transaction: s.transaction, order: result.order || null, message: 'Paiement Trybit confirmé avec succès !' };
+    }
+    if (st === 'canceled' || st === 'cancelled' || st === 'expired') {
+      await db.tx(() => { const t = db.getTransactionById(tx.id); if (t && t.status === 'pending') db.updateTransaction(tx.id, { status: 'failed', failureReason: 'Paiement annulé ou expiré sur Trybit.' }); });
+      return { success: false, status: 'failed', message: 'Paiement annulé ou expiré sur Trybit.' };
+    }
+    return { success: true, status: 'pending', message: 'Facture en attente de paiement ou de confirmation blockchain...' };
+  }
+
+  /** Inside db.tx: credits the balance or delivers the directly purchased product — exactly once. */
+  _settleTrybit(txId, providerTxId, extra) {
+    const t = db.getTransactionById(txId);
+    if (!t) throw httpError(404, 'Transaction introuvable.');
+    if (t.status === 'completed') return { alreadyCompleted: true };
+    const user = db.getUserById(t.userId);
+    if (!user) throw httpError(404, 'Client de la transaction introuvable.');
+    const meta = t.metadata || {};
+    if (meta.productId) {
+      const p = db.getProductById(meta.productId);
+      if (!p) {
+        // Product deleted meanwhile: the payment is kept as balance
+        const r = db.creditDeposit(t.id, { providerTxId, extra });
+        db.updateTransaction(t.id, { notes: `Produit ${meta.productName || meta.productId} supprimé : montant crédité sur le solde.` });
+        return { credited: r.creditedAmount };
+      }
+      const qty = parseInt(meta.quantity, 10) || 1;
+      const orderId = 'ORD-' + crypto.randomBytes(5).toString('hex').toUpperCase();
+      let status = db.ORDER_STATUS.DONE;
+      let deliveryMode = p.deliveryMode === 'manual' ? 'manual' : 'auto';
+      let vaultContent = null;
+      let note;
+      try {
+        const alloc = db.allocateKeysForProduct(p.id, qty, { orderId, userId: user.id, userEmail: user.email });
+        if (alloc.manualDelivery) status = db.ORDER_STATUS.PENDING;
+        else if (alloc.fileDelivery) vaultContent = alloc.fileDelivery;
+        else {
+          const keys = alloc.allocatedKeys.map(k => ({ id: k.id, content: k.content }));
+          vaultContent = { type: alloc.vaultType === 'link' ? 'link' : 'text', content: keys.map(k => k.content).join('\n'), keys, fileName: 'licences.txt' };
+        }
+      } catch (e) {
+        status = db.ORDER_STATUS.PENDING;
+        deliveryMode = 'manual';
+        note = 'Paiement reçu, stock épuisé au moment de la livraison automatique : livraison manuelle requise.';
+      }
+      const order = db.createOrder({
+        id: orderId, userId: user.id, userEmail: user.email, userName: user.name,
+        productId: p.id, productName: p.name, unitPrice: meta.unitPrice || p.price, quantity: qty, amount: t.amount,
+        remainingBalance: user.balance, userBalanceAfter: user.balance, contactInfo: meta.contactInfo || '',
+        method: 'Crypto Instantané (Trybit)', transactionId: t.id, deliveryMode, deliveryNote: note, status, vaultContent, refunded: false
+      });
+      db.updateTransaction(t.id, {
+        status: 'completed', type: 'purchase_crypto', providerTxId: providerTxId || t.providerTxId,
+        completedAt: new Date().toISOString(), metadata: { ...meta, orderId, completedDetails: extra }
+      });
+      return { order };
+    }
+    const r = db.creditDeposit(t.id, { providerTxId, extra });
+    return { credited: r.creditedAmount };
+  }
+
+  /** Trybit postback: only a trigger, the invoice status is re-checked with the Trybit API. */
+  async handleTrybitWebhook(payload = {}, headers = {}) {
+    if (!payload || typeof payload !== 'object') throw httpError(400, 'Payload webhook Trybit invalide.');
+    let token = payload.token || payload.jwt || String(headers['authorization'] || '').replace(/^(Bearer|Token)\s+/i, '').trim() || headers['x-token'] || '';
+    let tokenPayload = null;
+    if (token) {
+      const v = trybitService.verifyWebhookToken(token);
+      if (v.valid) tokenPayload = v.payload;
+    }
+    const orderId = payload.order_id || (tokenPayload && tokenPayload.order_id) || payload.orderId;
+    const invoiceId = payload.invoice_id || (tokenPayload && tokenPayload.invoice_id);
+    const info = payload.invoice_info || (tokenPayload && tokenPayload.invoice_info) || {};
+    const uuid = info.uuid || (invoiceId ? (String(invoiceId).startsWith('INV-') ? invoiceId : `INV-${invoiceId}`) : null);
+    const txId = await db.read(() => {
+      let t = orderId ? db.getTransactionById(orderId) : null;
+      if (!t && uuid) t = db.getTransactionByProviderTxId(uuid);
+      if (!t && invoiceId) t = db.getTransactionByProviderTxId(invoiceId);
+      return t && t.provider === 'trybit' ? t.id : null;
+    });
+    if (!txId) return { success: true, message: 'Notification reçue.' };
+    const r = await this.verifyTrybitPayment({ transactionId: txId });
+    return { success: true, message: 'Statut vérifié auprès de Trybit.', status: r.status };
+  }
+
+  _safeReturnUrl(url, fallback) {
+    try {
+      const u = new URL(String(url || ''));
+      const allowed = ['getvirtu.shop', 'www.getvirtu.shop', 'localhost', '127.0.0.1'];
+      if ((u.protocol === 'https:' || (u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1'))) &&
+          (allowed.includes(u.hostname) || /\.vercel\.app$/.test(u.hostname))) return u.toString();
+    } catch (e) {}
+    return fallback;
   }
 }
 
 module.exports = new PaymentService();
+module.exports.publicTx = publicTx;

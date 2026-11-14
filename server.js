@@ -1,197 +1,168 @@
+/**
+ * GetVirtu — local development server (production runs on Vercel, see vercel.json).
+ * Serves ONLY the public front-end files and routes /api/* to the same handlers as the serverless functions.
+ */
+
+'use strict';
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-// Chargement automatique des variables d'environnement locales (.env)
-try {
-  const envPath = path.join(__dirname, '.env');
-  if (fs.existsSync(envPath)) {
-    const envLines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
-    for (const line of envLines) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#')) {
-        const eqIdx = trimmed.indexOf('=');
-        if (eqIdx !== -1) {
-          const key = trimmed.substring(0, eqIdx).trim();
-          const val = trimmed.substring(eqIdx + 1).trim();
-          if (!process.env[key]) {
-            process.env[key] = val;
-          }
-        }
-      }
-    }
-  }
-} catch (e) {
-  console.warn('[Env] Erreur chargement .env:', e.message);
-}
-
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const ROOT_DIR = __dirname;
+const MAX_BODY_BYTES = 4.5 * 1024 * 1024;
+
+// Public files only (everything else — backend/, data/, .env, tests/, scripts — is never served)
+const PUBLIC_FILES = new Set([
+  '/index.html', '/admin.html', '/app.js', '/security.js', '/style.css',
+  '/favicon.ico', '/favicon.svg', '/robots.txt', '/sitemap.xml'
+]);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=UTF-8',
   '.css': 'text/css; charset=UTF-8',
   '.js': 'application/javascript; charset=UTF-8',
   '.json': 'application/json; charset=UTF-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
-  '.webp': 'image/webp',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2'
+  '.txt': 'text/plain; charset=UTF-8',
+  '.xml': 'application/xml; charset=UTF-8'
 };
 
-// Protection anti-brute-force et limitation de débit en mémoire
-const ipRequestCounts = new Map();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_MINUTE = 150;
-
-setInterval(() => {
-  ipRequestCounts.clear();
-}, RATE_LIMIT_WINDOW);
-
-// En-têtes de sécurité HTTP stricts
+// Kept identical to the "headers" section of vercel.json
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
-  'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; frame-src https://accounts.google.com https://checkout.saspay.me https://pay.wave.com https://pay.trybit.com; connect-src 'self' https://accounts.google.com https://api.saspay.me https://checkout.saspay.me https://api.trybit.com https://pay.trybit.com; base-uri 'self'; object-src 'none';"
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://accounts.google.com https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com",
+    "frame-src https://accounts.google.com",
+    "form-action 'self' https://accounts.google.com",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'self'"
+  ].join('; ')
 };
 
+// Simple per-IP limiter for the API
+const ipCounts = new Map();
+setInterval(() => ipCounts.clear(), 60 * 1000).unref();
+
+function routeApi(urlPath) {
+  if (urlPath.startsWith('/api/auth')) return require('./api/auth');
+  if (urlPath.startsWith('/api/payments') || urlPath.startsWith('/api/trybit')) return require('./api/payments');
+  if (urlPath === '/api/version' || urlPath.startsWith('/api/data')) return require('./api/data');
+  return null;
+}
+
 const server = http.createServer((req, res) => {
-  const clientIp = req.socket.remoteAddress || '127.0.0.1';
-  const currentCount = (ipRequestCounts.get(clientIp) || 0) + 1;
-  ipRequestCounts.set(clientIp, currentCount);
+  let urlPath = '/';
+  try { urlPath = decodeURIComponent((req.url || '/').split('?')[0]); } catch (e) { urlPath = (req.url || '/').split('?')[0]; }
 
-  if (currentCount > MAX_REQUESTS_PER_MINUTE) {
-    res.writeHead(429, {
-      'Content-Type': 'text/plain; charset=UTF-8',
-      'Retry-After': '60',
-      ...SECURITY_HEADERS
+  // /media/<id>  ->  /api/data?resource=media&id=<id>   (same rewrite as vercel.json)
+  const mediaMatch = /^\/media\/((?:pub|prv)_[a-f0-9]{24})$/.exec(urlPath);
+  if (mediaMatch) {
+    req.url = '/api/data?resource=media&id=' + mediaMatch[1];
+    urlPath = '/api/data';
+  }
+
+  if (urlPath.startsWith('/api/')) {
+    const ip = req.socket.remoteAddress || 'local';
+    const n = (ipCounts.get(ip) || 0) + 1;
+    ipCounts.set(ip, n);
+    if (n > 600) {
+      res.writeHead(429, { 'Content-Type': 'application/json; charset=UTF-8', 'Retry-After': '60', ...SECURITY_HEADERS });
+      return res.end(JSON.stringify({ error: 'Trop de requêtes. Veuillez patienter quelques secondes.' }));
+    }
+    const handler = routeApi(urlPath);
+    if (!handler) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=UTF-8', ...SECURITY_HEADERS });
+      return res.end(JSON.stringify({ error: 'Endpoint API non trouvé.' }));
+    }
+    req.query = {};
+    try { for (const [k, v] of new URL(req.url || '/', 'http://localhost').searchParams) req.query[k] = v; } catch (e) {}
+
+    const chunks = [];
+    let size = 0;
+    let tooLarge = false;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) { tooLarge = true; chunks.length = 0; return; } // drain without buffering
+      chunks.push(chunk);
     });
-    res.end('429 Trop de requêtes. Veuillez patienter.');
-    return;
-  }
-
-  let safePath = decodeURIComponent(req.url.split('?')[0]);
-  if (safePath === '/' || safePath === '') {
-    safePath = '/index.html';
-  } else if (safePath === '/admin') {
-    safePath = '/admin.html';
-  }
-
-  // Protection contre l'accès aux fichiers sensibles (.git, .env, package.json, etc.)
-  const blockedPatterns = ['/\\.env', '/\\.git', '/package\\.json', '/package-lock\\.json', '/node_modules'];
-  if (blockedPatterns.some(p => new RegExp(p, 'i').test(safePath))) {
-    res.writeHead(403, { 'Content-Type': 'text/plain; charset=UTF-8', ...SECURITY_HEADERS });
-    res.end('403 Accès interdit aux fichiers système.');
-    return;
-  }
-
-  // Gestionnaire d'API REST unifié (compatible Node.js & Vercel Serverless)
-  if (safePath.startsWith('/api/')) {
-    let bodyData = '';
-    req.on('data', chunk => { bodyData += chunk; });
     req.on('end', async () => {
-      req.rawBody = bodyData;
-      try {
-        req.body = bodyData ? JSON.parse(bodyData) : {};
-      } catch (e) {
-        req.body = bodyData;
+      if (tooLarge) {
+        res.writeHead(413, { 'Content-Type': 'application/json; charset=UTF-8', Connection: 'close', ...SECURITY_HEADERS });
+        return res.end(JSON.stringify({ error: 'Requête trop volumineuse.' }));
       }
-
-      res.status = function(code) {
-        res.statusCode = code;
+      const raw = Buffer.concat(chunks).toString('utf8');
+      req.rawBody = raw;
+      req.body = raw; // parsed (with validation) by backend/http.js
+      res.status = function (code) { res.statusCode = code; return res; };
+      res.json = function (data) {
+        if (!res.headersSent) {
+          for (const [k, v] of Object.entries(SECURITY_HEADERS)) if (!res.getHeader(k)) res.setHeader(k, v);
+          res.setHeader('Content-Type', 'application/json; charset=UTF-8');
+        }
+        res.end(JSON.stringify(data));
         return res;
       };
-      res.json = function(data) {
-        res.writeHead(res.statusCode || 200, {
-          'Content-Type': 'application/json; charset=UTF-8',
-          ...SECURITY_HEADERS
-        });
-        res.end(JSON.stringify(data));
-      };
-
       try {
-        if (safePath.startsWith('/api/auth')) {
-          return await require('./api/auth')(req, res);
-        }
-        if (safePath.startsWith('/api/payments') || safePath.startsWith('/api/trybit')) {
-          return await require('./api/payments')(req, res);
-        }
-        if (safePath === '/api/version') {
-          req.url = '/api/data/version';
-          return await require('./api/data')(req, res);
-        }
-        if (safePath.startsWith('/api/data')) {
-          return await require('./api/data')(req, res);
-        }
-        res.status(404).json({ error: 'Endpoint API non trouvé.' });
+        await handler(req, res);
       } catch (err) {
         console.error('[Server API Error]', err);
-        res.status(500).json({ error: 'Erreur interne du serveur.' });
+        if (!res.headersSent) res.status(500).json({ error: 'Erreur interne du serveur.' });
       }
     });
     return;
   }
 
-  // Normalize path and resolve
-  const resolvedPath = path.normalize(path.join(ROOT_DIR, safePath));
-
-  // Security check: ensure path stays within ROOT_DIR (Directory Traversal Protection)
-  if (!resolvedPath.startsWith(ROOT_DIR)) {
-    res.writeHead(403, { 'Content-Type': 'text/plain; charset=UTF-8', ...SECURITY_HEADERS });
-    res.end('403 Interdit');
-    return;
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'text/plain; charset=UTF-8', Allow: 'GET, HEAD', ...SECURITY_HEADERS });
+    return res.end('405 Méthode non autorisée');
   }
 
-  fs.stat(resolvedPath, (err, stats) => {
+  if (urlPath === '/' || urlPath === '') urlPath = '/index.html';
+  else if (urlPath === '/admin') urlPath = '/admin.html';
+
+  if (!PUBLIC_FILES.has(urlPath)) {
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=UTF-8', ...SECURITY_HEADERS });
+    return res.end('<h2>404 - Page non trouvée</h2><p><a href="/">Retour à l\'accueil</a></p>');
+  }
+
+  const filePath = path.join(ROOT_DIR, urlPath);
+  fs.readFile(filePath, (err, content) => {
     if (err) {
-      if (err.code === 'ENOENT') {
-        res.writeHead(404, { 'Content-Type': 'text/html; charset=UTF-8', ...SECURITY_HEADERS });
-        res.end(`<h2>404 - Page non trouvée</h2><p><a href="/">Retour à l'accueil</a></p>`);
-      } else {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=UTF-8', ...SECURITY_HEADERS });
-        res.end('500 Erreur Serveur');
-      }
-      return;
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=UTF-8', ...SECURITY_HEADERS });
+      return res.end('404');
     }
-
-    if (stats.isDirectory()) {
-      const indexPath = path.join(resolvedPath, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        res.writeHead(200, {
-          'Content-Type': 'text/html; charset=UTF-8',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          ...SECURITY_HEADERS
-        });
-        fs.createReadStream(indexPath).pipe(res);
-      } else {
-        res.writeHead(403, { 'Content-Type': 'text/plain; charset=UTF-8', ...SECURITY_HEADERS });
-        res.end('403 Dossier protégé');
-      }
-      return;
-    }
-
-    const ext = path.extname(resolvedPath).toLowerCase();
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-
     res.writeHead(200, {
-      'Content-Type': contentType,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Content-Type': MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Cache-Control': 'no-cache, must-revalidate',
       ...SECURITY_HEADERS
     });
-    fs.createReadStream(resolvedPath).pipe(res);
+    res.end(req.method === 'HEAD' ? undefined : content);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`\n========================================`);
-  console.log(`⚡ GetVirtu (getvirtu.shop) est en ligne !`);
-  console.log(`➡️  Boutique : http://localhost:${PORT}`);
-  console.log(`➡️  Admin    : http://localhost:${PORT}/admin.html`);
-  console.log(`========================================\n`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    const db = require('./backend/db');
+    console.log('\n========================================');
+    console.log('⚡ GetVirtu — serveur local');
+    console.log(`➡️  Boutique : http://localhost:${PORT}`);
+    console.log(`➡️  Admin    : http://localhost:${PORT}/admin`);
+    console.log(`➡️  Stockage : ${db.storageInfo().kind} (${db.storageInfo().location})`);
+    console.log('========================================\n');
+  });
+}
+
+module.exports = server;
+module.exports.SECURITY_HEADERS = SECURITY_HEADERS;

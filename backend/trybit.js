@@ -6,27 +6,8 @@
 
 const https = require('https');
 const crypto = require('crypto');
-const path = require('path');
-const fs = require('fs');
 
-// Chargement sécurisé des variables d'environnement locales si présentes
-try {
-  const envPath = path.join(__dirname, '..', '.env');
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    envContent.split(/\r?\n/).forEach(line => {
-      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-      if (match) {
-        const key = match[1];
-        let val = (match[2] || '').trim();
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-          val = val.slice(1, -1);
-        }
-        if (!process.env[key]) process.env[key] = val;
-      }
-    });
-  }
-} catch (e) {}
+// (Local .env variables are loaded once by backend/db.js.)
 
 const TRYBIT_API_BASE = 'https://api.trybit.com/v2';
 
@@ -231,7 +212,11 @@ class TrybitService {
         .replace(/\+/g, '-')
         .replace(/\//g, '_');
 
-      const matches = (signatureB64 === expectedSigUrl) || (signatureB64 === expectedSigStd);
+      const safeEq = (a, b) => {
+        const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+        return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+      };
+      const matches = safeEq(signatureB64, expectedSigUrl) || safeEq(signatureB64, expectedSigStd);
       if (!matches) {
         console.warn('[Trybit JWT] Signature mismatch');
         return { valid: false, error: 'Signature JWT non conforme.' };

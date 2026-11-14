@@ -9,21 +9,9 @@
 
   var Security = {};
 
-  // 1. HACHAGE CRYPTOGRAPHIQUE SÉCURISÉ (SHA-256 via Web Crypto API)
-  Security.hashPassword = async function(password, salt) {
-    if (!salt) salt = 'getvirtu_sec_salt_2026';
-    var text = salt + ':' + password;
-    var encoder = new TextEncoder();
-    var data = encoder.encode(text);
-    var hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    var hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-  };
-
-  Security.verifyPassword = async function(password, storedHash, salt) {
-    var computed = await Security.hashPassword(password, salt);
-    return computed === storedHash;
-  };
+  // 1. Aucun hachage ni vérification de mot de passe dans le navigateur : l'authentification est
+  //    exclusivement réalisée par le serveur (/api/auth). (Les anciennes fonctions servaient aux connexions
+  //    « locales » de secours, supprimées car elles contournaient le serveur.)
 
   // 2. GESTION SÉCURISÉE DES JETONS ET SESSIONS
   Security.generateSecureToken = function(length) {
@@ -34,21 +22,6 @@
   };
 
   Security.SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours de validité persistante (fermeture d'onglet/navigateur préservée)
-
-  Security.createSession = function(user, role) {
-    var token = Security.generateSecureToken(32);
-    var now = Date.now();
-    return {
-      userId: user.id || user.userId,
-      role: role || user.role || 'client',
-      name: user.name || 'Utilisateur',
-      email: user.email || '',
-      token: token,
-      createdAt: now,
-      expiresAt: now + Security.SESSION_DURATION_MS,
-      avatarColor: user.avatarColor || '#2563eb'
-    };
-  };
 
   Security.isSessionValid = function(session) {
     if (!session || typeof session !== 'object') return false;

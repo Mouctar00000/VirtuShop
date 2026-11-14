@@ -1,140 +1,166 @@
 /**
  * Vercel Serverless Function: /api/auth
+ * Actions: config, me, register, login, google, callback, logout, change-password, profile,
+ *          forgot-password, reset-password
  */
+
+'use strict';
 
 const authService = require('../backend/auth');
 const db = require('../backend/db');
+const { httpError, apiHeaders, parseBody, getToken, clientIp, queryParam, pathParts, requireUser, sendError } = require('../backend/http');
+
+function resolveAction(req) {
+  const a = queryParam(req, 'action');
+  if (a) return String(a);
+  // Vercel rewrites /api/auth/:path* -> /api/auth?path=...; the local server keeps the full URL
+  const p = queryParam(req, 'path');
+  const parts = p ? String(p).split('/').filter(Boolean) : pathParts(req).filter(x => x !== 'api' && x !== 'auth');
+  if (parts.includes('callback')) return 'callback';
+  return parts[parts.length - 1] || '';
+}
+
+// JSON safely embedded in an inline <script> (no </script> breakout, no U+2028 issues)
+function jsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+function publicOrigin(req) {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'getvirtu.shop').split(',')[0].trim();
+  const allowed = /^(getvirtu\.shop|www\.getvirtu\.shop|[a-z0-9-]+\.vercel\.app|localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i.test(host);
+  const safeHost = allowed ? host : 'getvirtu.shop';
+  const proto = /^(localhost|127\.0\.0\.1)/.test(safeHost) ? 'http' : 'https';
+  return `${proto}://${safeHost}`;
+}
 
 module.exports = async function handler(req, res) {
-  // CORS & Security Headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Synchronisation avec Vercel Edge Config
-  try {
-    await db.syncFromRemote();
-  } catch (e) {}
-
-  // Déterminer l'action demandée de manière robuste (support Vercel rewrites, query, et URL path)
-  let action = '';
-  if (req.query && req.query.action) {
-    action = req.query.action;
-  } else if (req.query && req.query.path) {
-    action = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path;
-  }
-
-  if (!action) {
-    const urlParts = (req.url || '').split('?')[0].split('/').filter(Boolean);
-    action = urlParts[urlParts.length - 1]; // ex: 'register', 'login', 'google', 'me', 'logout', 'config'
-    if (action === 'auth') {
-      action = '';
-    }
-  }
+  apiHeaders(res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  const action = resolveAction(req);
 
   try {
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch (e) {}
-    }
-    body = body || {};
+    const body = req.method === 'GET' ? {} : parseBody(req);
 
     if (req.method === 'GET' && action === 'config') {
+      return res.status(200).json({ googleClientId: process.env.GOOGLE_CLIENT_ID || '' });
+    }
+
+    // Google OAuth redirect flow (fallback when the popup is blocked)
+    if (req.method === 'GET' && action === 'callback') {
+      const sendPage = (script) => {
+        res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'");
+        return res.status(200).end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>GetVirtu</title></head><body><script>${script}</script></body></html>`);
+      };
+      const errorParam = queryParam(req, 'error');
+      const code = queryParam(req, 'code');
+      if (errorParam || !code) {
+        return sendPage(`window.location.replace('/#catalog?auth_error=' + encodeURIComponent(${jsonForScript(String(errorParam || 'missing_code').slice(0, 60))}));`);
+      }
+      try {
+        const profile = await authService.verifyGoogleIdentity({ code, redirect_uri: `${publicOrigin(req)}/api/auth/google/callback` });
+        const result = await db.tx(() => authService.signInWithGoogleProfile(profile));
+        return sendPage(`try{localStorage.setItem('vs_session', JSON.stringify(${jsonForScript(result.session)}));}catch(e){}window.location.replace('/?auth_success=google#catalog');`);
+      } catch (e) {
+        return sendPage(`alert(${jsonForScript('Connexion Google impossible : ' + (e.status && e.status < 500 ? e.message : 'erreur temporaire'))});window.location.replace('/#catalog');`);
+      }
+    }
+
+    if (req.method === 'GET' && (action === 'me' || action === '')) {
+      const out = await db.read(() => {
+        const auth = requireUser(req);
+        return { success: true, user: authService.sanitizeUser(auth.user), session: auth.session };
+      });
+      return res.status(200).json(out);
+    }
+
+    if (req.method !== 'POST' && req.method !== 'PUT') {
+      throw httpError(404, `Action '${action || 'inconnue'}' non reconnue.`);
+    }
+
+    if (action === 'register') {
+      if (!authService.hit('register:' + clientIp(req), 10, 60 * 60 * 1000)) throw httpError(429, 'Trop de créations de compte depuis cette connexion. Réessayez plus tard.');
+      const result = await db.tx(() => authService.register(body));
+      return res.status(201).json({ success: true, ...result });
+    }
+
+    if (action === 'login') {
+      const ip = clientIp(req);
+      const user = await db.read(() => {
+        const u = authService.checkCredentials({ identifier: body.identifier, email: body.email, password: body.password, ip });
+        return JSON.parse(JSON.stringify(u));
+      });
+      let fresh = user;
+      if (authService.needsRehash(user)) {
+        fresh = await db.tx(() => db.updateUser(user.id, { password_hash: authService.hashPassword(body.password) })) || user;
+      }
+      return res.status(200).json({ success: true, user: authService.sanitizeUser(fresh), session: authService.createSession(fresh) });
+    }
+
+    if (action === 'google') {
+      const profile = await authService.verifyGoogleIdentity(body);
+      const result = await db.tx(() => authService.signInWithGoogleProfile(profile));
+      return res.status(200).json({ success: true, ...result });
+    }
+
+    if (action === 'logout') {
+      const token = getToken(req);
+      if (token) await db.tx(() => authService.destroySession(token));
+      return res.status(200).json({ success: true, message: 'Déconnexion effectuée.' });
+    }
+
+    if (action === 'change-password') {
+      const session = await db.tx(() => {
+        const auth = requireUser(req);
+        return authService.changePassword(auth.user, body);
+      });
+      return res.status(200).json({ success: true, message: 'Mot de passe modifié avec succès.', session });
+    }
+
+    if (action === 'profile') {
+      const user = await db.tx(() => {
+        const auth = requireUser(req);
+        const name = db.helpers.cleanText(body.name, 80);
+        if (!name || name.length < 2) throw httpError(400, 'Le nom doit contenir au moins 2 caractères.');
+        return authService.sanitizeUser(db.updateUser(auth.user.id, { name }));
+      });
+      return res.status(200).json({ success: true, user });
+    }
+
+    if (action === 'forgot-password') {
+      const email = String(body.email || '').trim().toLowerCase();
+      const ip = clientIp(req);
+      if (!authService.hit('forgot-ip:' + ip, 5, 60 * 60 * 1000) || !authService.hit('forgot-mail:' + email, 3, 60 * 60 * 1000)) {
+        throw httpError(429, 'Trop de demandes. Réessayez dans une heure.');
+      }
+      const emailConfigured = Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
+      let token = null;
+      if (emailConfigured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        token = await db.tx(() => {
+          const u = db.getUserByEmail(email);
+          if (!u || u.role === 'admin') return null; // admins recover through the server (ADMIN_PASSWORD_HASH)
+          return db.createPasswordResetToken(u.id);
+        });
+        if (token) await authService.sendPasswordResetEmail(email, `${publicOrigin(req)}/#reset-password=${encodeURIComponent(token)}`);
+      }
+      // Same answer whether the account exists or not (no account enumeration)
       return res.status(200).json({
-        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+        success: true,
+        emailDelivery: emailConfigured,
+        message: emailConfigured
+          ? "Si un compte correspond à cette adresse, un e-mail contenant un lien de réinitialisation (valable 30 minutes) vient d'être envoyé."
+          : "La réinitialisation par e-mail n'est pas activée : contactez le support (WhatsApp ou formulaire) pour recevoir un mot de passe temporaire."
       });
     }
 
-    // Callback OAuth 2.0 officiel (en cas de flux par redirection complète)
-    if (req.method === 'GET' && (action === 'callback' || (req.url && (req.url.includes('/callback') || req.url.includes('code=') || req.url.includes('error='))))) {
-      const urlObj = new URL(req.url, 'http://localhost');
-      const errorParam = req.query?.error || urlObj.searchParams.get('error');
-      if (errorParam) {
-        console.warn('[Google Auth Callback] Annulé ou refusé:', errorParam);
-        res.writeHead(302, { Location: '/#catalog?auth_error=' + encodeURIComponent(errorParam) });
-        return res.end();
-      }
-
-      const code = req.query?.code || urlObj.searchParams.get('code');
-      if (code) {
-        const proto = req.headers['x-forwarded-proto'] || (req.socket?.encrypted ? 'https' : 'http');
-        const host = req.headers['x-forwarded-host'] || req.headers['host'] || 'getvirtu.shop';
-        const redirectUri = `${proto}://${host}/api/auth/google/callback`;
-
-        try {
-          const result = await authService.continueWithGoogle({ code, redirect_uri: redirectUri });
-          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Connexion GetVirtu...</title></head><body>
-            <script>
-              try {
-                localStorage.setItem('vs_session', JSON.stringify(${JSON.stringify(result.session)}));
-                var users = JSON.parse(localStorage.getItem('vs_users') || '[]');
-                var user = ${JSON.stringify(result.user)};
-                var idx = users.findIndex(function(u){ return u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()); });
-                if (idx !== -1) { users[idx] = Object.assign({}, users[idx], user); } else { users.push(user); }
-                localStorage.setItem('vs_users', JSON.stringify(users));
-              } catch(e){}
-              window.location.href = '/?auth_success=google#catalog';
-            </script>
-          </body></html>`;
-          res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-          return res.end(html);
-        } catch (authErr) {
-          console.error('[Google Auth Callback Error]', authErr.message);
-          const errHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Erreur de connexion</title></head><body>
-            <script>
-              alert("Erreur de connexion Google: " + ${JSON.stringify(authErr.message)});
-              window.location.href = '/#catalog';
-            </script>
-          </body></html>`;
-          res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-          return res.end(errHtml);
-        }
-      }
+    if (action === 'reset-password') {
+      if (!authService.hit('reset-ip:' + clientIp(req), 10, 60 * 60 * 1000)) throw httpError(429, 'Trop de tentatives. Réessayez plus tard.');
+      await db.tx(() => authService.resetPasswordWithToken(body.token, body.newPassword, body.confirmPassword));
+      return res.status(200).json({ success: true, message: 'Mot de passe réinitialisé. Vous pouvez maintenant vous connecter.' });
     }
 
-    if (req.method === 'GET' && (action === 'me' || action === 'auth' || !action)) {
-      const authHeader = req.headers.authorization || '';
-      const token = authHeader.replace(/^Bearer\s+/i, '') || req.cookies?.gv_session;
-      const verified = authService.verifySession(token);
-      if (!verified) {
-        return res.status(401).json({ error: 'Session non authentifiée ou expirée.' });
-      }
-      const freshUser = db.getUserById(verified.user.id) || db.getUserByEmail(verified.user.email);
-      return res.status(200).json({ success: true, user: authService.sanitizeUser(freshUser || verified.user), session: verified.session });
-    }
-
-    if (req.method === 'POST') {
-      if (action === 'register') {
-        const result = await authService.register(body);
-        return res.status(201).json({ success: true, ...result });
-      }
-
-      if (action === 'login') {
-        const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
-        const result = await authService.login({ ...body, ip });
-        return res.status(200).json({ success: true, ...result });
-      }
-
-      if (action === 'google') {
-        const result = await authService.continueWithGoogle(body);
-        return res.status(200).json({ success: true, ...result });
-      }
-
-      if (action === 'logout') {
-        const authHeader = req.headers.authorization || '';
-        const token = authHeader.replace(/^Bearer\s+/i, '');
-        authService.destroySession(token);
-        return res.status(200).json({ success: true, message: 'Déconnexion effectuée.' });
-      }
-    }
-
-    return res.status(404).json({ error: `Action '${action || 'inconnue'}' non reconnue.` });
-  } catch (error) {
-    console.error('[API Auth Error]', error.message);
-    return res.status(400).json({ error: error.message });
+    throw httpError(404, `Action '${action || 'inconnue'}' non reconnue.`);
+  } catch (err) {
+    return sendError(res, err, 'API Auth');
   }
 };
