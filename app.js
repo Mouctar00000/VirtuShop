@@ -872,7 +872,7 @@ function renderProductCardsInto(container, prods) {
     html += `
       <div class="product-card${oos ? ' oos' : ''}">
         <div class="product-image-box product-open-details" role="button" tabindex="0" aria-label="Voir la fiche : ${escapeHtml(prod.name)}" onclick="openProductDetails(${idArg})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductDetails(${idArg});}">
-          <img src="${safeImg}" class="product-img" alt="${escapeHtml(prod.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
+          <img src="${safeImg}" class="product-img" alt="${escapeHtml(prod.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
           <div class="product-badge-overlay">⚡ Vérifié</div>
           ${promo ? `<div class="product-promo-badge">-${promo.percent}%</div>` : ''}
         </div>
@@ -4859,7 +4859,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202611161329_cef428',
+  currentVersion: 'v202611161430_a1a620',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

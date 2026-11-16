@@ -363,9 +363,6 @@ class Database {
           // normalizeState already ran (and marked dirty) inside _runTx
           await this._migrateInlineMedia();
         });
-        // One-time catalogue update, in its own transaction: on failure nothing is written and the site keeps working
-        await this._runTx(() => this._catalogUpdate20261116b())
-          .catch(err => console.error('[catalog-update] failed, nothing written:', err && err.message));
         this._migrationsDone = true;
       })().catch(err => {
         this._readyPromise = null;
@@ -427,34 +424,6 @@ class Database {
         this._dirty = false;
       }
     }));
-  }
-
-  // One-time catalogue update requested by the owner (2026-11-16, second batch): new sheet content for the existing
-  // products (matched by id AND current name, so a product the owner renamed meanwhile is left alone) and 3 new
-  // products. Runs once (meta flag), then this code is removed; everything stays editable from the dashboard.
-  async _catalogUpdate20261116b() {
-    if (process.env.VERCEL_ENV !== 'production' || this.store.kind !== 'postgres') return;
-    const m = this.data.meta;
-    if (m.catalog_update_20261116b) return;
-    const { updates, creations } = require('./catalog-update-20261116b');
-    const log = [];
-    for (const u of updates) {
-      const { id, expectName, ...fields } = u;
-      const p = this.getProductById(id);
-      if (!p || normalizeProductName(p.name) !== normalizeProductName(expectName)) { log.push(`#${id} skipped`); continue; }
-      this.saveProduct({ id, ...fields });
-      log.push(`#${id} updated`);
-    }
-    for (const c of creations) {
-      const { png, ...fields } = c;
-      if (this.findProductByNormalizedName(fields.name)) { log.push(`"${fields.name}" already exists`); continue; }
-      const image = await this.saveImageDataUrl('data:image/png;base64,' + png);
-      const p = this.saveProduct({ ...fields, image });
-      log.push(`#${p.id} created`);
-    }
-    m.catalog_update_20261116b = nowIso();
-    this.persist();
-    console.log('[catalog-update] ' + log.join(', '));
   }
 
   // One-time migration: inline data: URL images (several MB in the JSON document) -> blob storage
