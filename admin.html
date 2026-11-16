@@ -12,8 +12,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
-  <link rel="stylesheet" href="style.css?v=v202611161430_a1a620">
-  <script src="security.js?v=v202611161430_a1a620"></script>
+  <link rel="stylesheet" href="style.css?v=v202611161444_261e1f">
+  <script src="security.js?v=v202611161444_261e1f"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 
   <style>
@@ -597,6 +597,49 @@
       color: var(--text-muted);
       font-size: 11px;
     }
+
+    /* Mode d'achat : achat sur le site ou redirection vers un lien externe */
+    #admin-prod-modal .admin-prod-purchase {
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 7px 10px 8px;
+      margin-bottom: 7px;
+      background: #f8fbff;
+    }
+    #admin-prod-modal .admin-prod-redirect { margin-top: 6px; }
+    #admin-prod-modal .admin-prod-redirect.hidden { display: none; }
+    #admin-prod-modal .admin-prod-redirect-row { display: flex; gap: 6px; align-items: stretch; }
+    #admin-prod-modal .admin-prod-redirect-row input { flex: 1; min-width: 0; }
+    #admin-prod-modal .admin-prod-redirect-test {
+      flex-shrink: 0;
+      border: 1px solid var(--border-subtle);
+      background: #ffffff;
+      color: var(--primary-600);
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 0 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #admin-prod-modal .admin-prod-redirect-test:hover { background: var(--primary-50); }
+    #admin-prod-modal .admin-prod-help {
+      font-size: 11px;
+      line-height: 1.4;
+      color: #1e40af;
+      margin-top: 5px;
+    }
+    #admin-prod-modal .admin-prod-check {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 7px 0 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+    #admin-prod-modal .admin-prod-check input { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex-shrink: 0; accent-color: var(--primary-600); }
 
     /* Boutons d'action compacts */
     #admin-prod-modal .modal-actions-compact,
@@ -2327,8 +2370,32 @@
           </div>
         </div>
 
+        <!-- Mode d'achat : achat sur le site (stock réel) ou bouton « Acheter » vers un lien externe -->
+        <div class="field admin-prod-purchase" style="margin-bottom: 7px;">
+          <label for="admin-prod-purchase-mode">Mode d'achat</label>
+          <select id="admin-prod-purchase-mode" class="admin-prod-select" onchange="onPurchaseModeChange()">
+            <option value="site">🛒 Achat direct sur le site</option>
+            <option value="redirect">🔗 Redirection vers un lien externe</option>
+          </select>
+          <div id="admin-prod-redirect-box" class="admin-prod-redirect hidden">
+            <label for="admin-prod-redirect-url">Lien de redirection</label>
+            <div class="admin-prod-redirect-row">
+              <input type="text" inputmode="url" id="admin-prod-redirect-url" maxlength="2000" autocomplete="off" spellcheck="false" placeholder="https://wa.me/2250700000000">
+              <button type="button" class="admin-prod-redirect-test" onclick="testProductRedirectUrl()" title="Ouvrir le lien dans un nouvel onglet">Tester ↗</button>
+            </div>
+            <div class="admin-prod-help">
+              Le bouton « Acheter » ouvre ce lien au lieu du paiement sur le site : WhatsApp direct, un autre site ou toute URL valide (un simple numéro comme +225 07 00 00 00 00 devient un lien WhatsApp).
+              Le bouton reste toujours actif et le produit n'est jamais affiché « Rupture de stock » : le stock est seulement indicatif.
+            </div>
+          </div>
+          <label class="admin-prod-check" for="admin-prod-show-stock">
+            <input type="checkbox" id="admin-prod-show-stock" checked>
+            Afficher la quantité en stock sur la boutique
+          </label>
+        </div>
+
         <!-- Mode de livraison du produit -->
-        <div class="field" style="margin-bottom: 6px;">
+        <div class="field" id="admin-prod-delivery-field" style="margin-bottom: 6px;">
           <label for="admin-prod-delivery">Mode de livraison</label>
           <select id="admin-prod-delivery" onchange="onDeliveryModeChange()">
             <option value="auto">⚡ Automatique — clé, lien ou fichier livré instantanément</option>
@@ -3433,9 +3500,17 @@
 
       prods.forEach(function(p) {
         var v = vault[p.id];
-        var avail = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (p.stock || 0);
+        var isExternal = p.purchaseMode === 'redirect' && Boolean(p.redirectUrl);
+        // Stock déclaré (livraison manuelle, lien externe, fichier sans clés) : valeur saisie, pas le nombre de clés
+        var declaredStock = isExternal || p.deliveryMode === 'manual' || (v && v.type === 'file' && !(Array.isArray(v.keys) && v.keys.length));
+        var avail = (!declaredStock && v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (parseInt(p.stock, 10) || 0);
         var sold = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return k.used; }).length : 0;
         var totalKeys = (v && Array.isArray(v.keys)) ? v.keys.length : (avail + sold);
+        var externalHost = '';
+        if (isExternal) {
+          try { externalHost = /^https?:/i.test(p.redirectUrl) ? new URL(p.redirectUrl).hostname.replace(/^www\./, '') : p.redirectUrl.split(':')[0]; } catch (e) { externalHost = 'lien'; }
+          if (/(^|\.)wa\.me$|whatsapp\.(com|net)$/i.test(externalHost)) externalHost = 'WhatsApp';
+        }
 
         html += `
           <tr>
@@ -3443,7 +3518,7 @@
             <td>
               <div style="font-weight: 700; color: var(--text-primary);">${escapeHtml(p.name)}</div>
               <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.description || '')}</div>
-              ${p.deliveryMode === 'manual' ? '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 7px;">📲 Livraison WhatsApp</span>' : ''}
+              ${isExternal ? `<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 1px 7px;" title="${escapeHtml(p.redirectUrl)}">🔗 Achat via lien externe · ${escapeHtml(externalHost)}</span>` : (p.deliveryMode === 'manual' ? '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 7px;">📲 Livraison WhatsApp</span>' : '')}
             </td>
             <td><span class="status-indicator-pill offline">${escapeHtml(p.category)}</span></td>
             <td>
@@ -3451,12 +3526,19 @@
               ${typeof p.compareAtPrice === 'number' && p.compareAtPrice > p.price ? `<div style="font-size: 11px; color: var(--text-muted); text-decoration: line-through;" title="Prix barré (promotion)">${p.compareAtPrice.toFixed(2)} $</div>` : ''}
             </td>
             <td>
+              ${isExternal ? `
+              <div style="font-weight: 700; color: var(--primary-600); font-size: 12.5px;" title="Produit à lien externe : toujours disponible, stock indicatif">
+                ● Toujours dispo
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                ${avail} (indicatif)${p.showStock === false ? ' · masqué' : ''}
+              </div>` : `
               <div style="font-weight: 700; color: ${avail > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-size: 12.5px;">
                 ${avail > 0 ? '● ' + avail + ' dispo' : '○ Rupture (0)'}
               </div>
               <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                ${sold} vendue(s)
-              </div>
+                ${sold} vendue(s)${p.showStock === false ? ' · quantité masquée' : ''}
+              </div>`}
             </td>
             <td>
               <div style="display: flex; gap: 5px; align-items: center;">
@@ -4169,9 +4251,84 @@
       return (document.getElementById('admin-prod-delivery') || {}).value === 'manual';
     }
 
+    function isRedirectPurchaseSelected() {
+      return (document.getElementById('admin-prod-purchase-mode') || {}).value === 'redirect';
+    }
+
+    // Stock saisi par l'administrateur (livraison manuelle, ou quantité indicative d'un produit à lien externe)
+    function isDeclaredStockSelected() {
+      return isManualDeliverySelected() || isRedirectPurchaseSelected();
+    }
+
+    // Lien externe : un simple numéro de téléphone devient un lien WhatsApp direct ; le serveur valide le reste
+    function normalizeAdminRedirectInput(raw) {
+      var s = String(raw || '').trim();
+      if (!s) return '';
+      if (/^\+?[\d\s().-]{8,22}$/.test(s)) return 'https://wa.me/' + s.replace(/\D/g, '');
+      if (/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?(?:[\/?#]|$)/i.test(s)) return 'https://' + s;
+      return s;
+    }
+
+    function testProductRedirectUrl() {
+      var url = normalizeAdminRedirectInput(document.getElementById('admin-prod-redirect-url').value);
+      if (!/^(https?:\/\/[^\s]+|mailto:[^\s]+|tel:\+?\d{4,20})$/i.test(url)) {
+        showToast('Lien invalide. Exemple : https://wa.me/2250700000000', 'error');
+        return;
+      }
+      document.getElementById('admin-prod-redirect-url').value = url;
+      var w = window.open(url, '_blank');
+      if (w) { try { w.opener = null; } catch (e) {} }
+    }
+
+    // Affichage du mode d'achat par-dessus l'état « livraison / coffre-fort » (sans récursion)
+    function applyPurchaseModeUI() {
+      var redirect = isRedirectPurchaseSelected();
+      var box = document.getElementById('admin-prod-redirect-box');
+      if (box) box.classList.toggle('hidden', !redirect);
+      var deliveryField = document.getElementById('admin-prod-delivery-field');
+      if (deliveryField) {
+        deliveryField.style.opacity = redirect ? '0.45' : '';
+        deliveryField.style.pointerEvents = redirect ? 'none' : '';
+        deliveryField.title = redirect ? 'Sans objet : le client achète via le lien externe.' : '';
+      }
+      if (!redirect) return;
+      var vaultBox = document.querySelector('#admin-prod-modal .admin-vault-box-compact');
+      if (vaultBox) {
+        vaultBox.style.opacity = '0.45';
+        vaultBox.style.pointerEvents = 'none';
+      }
+      var stockHint = document.getElementById('admin-prod-stock-hint');
+      if (stockHint) stockHint.textContent = '(indicatif)';
+      var stockEl = document.getElementById('admin-prod-stock');
+      if (stockEl) {
+        stockEl.removeAttribute('readonly');
+        stockEl.style.background = '#ffffff';
+        stockEl.style.cursor = 'text';
+      }
+    }
+
+    function onPurchaseModeChange() {
+      onDeliveryModeChange(); // rétablit l'état lié à la livraison, puis applique le mode d'achat
+      if (isRedirectPurchaseSelected()) {
+        var input = document.getElementById('admin-prod-redirect-url');
+        if (input && !input.value.trim()) input.focus();
+      }
+    }
+    window.onPurchaseModeChange = onPurchaseModeChange;
+    window.testProductRedirectUrl = testProductRedirectUrl;
+
+    function setPurchaseModeFields(p) {
+      p = p || {};
+      var redirect = p.purchaseMode === 'redirect';
+      document.getElementById('admin-prod-purchase-mode').value = redirect ? 'redirect' : 'site';
+      document.getElementById('admin-prod-redirect-url').value = typeof p.redirectUrl === 'string' ? p.redirectUrl : '';
+      document.getElementById('admin-prod-show-stock').checked = p.showStock !== false;
+      onDeliveryModeChange(); // état du stock / coffre-fort cohérent avec le mode affiché
+    }
+
     function updateStockFromVaultKeys() {
-      // Livraison manuelle : le stock est saisi par l'administrateur, jamais recalculé depuis le coffre-fort
-      if (isManualDeliverySelected()) return;
+      // Livraison manuelle ou lien externe : le stock est saisi par l'administrateur, jamais recalculé depuis le coffre-fort
+      if (isDeclaredStockSelected()) return;
       var type = document.getElementById('admin-vault-type').value;
       var stockInput = document.getElementById('admin-prod-stock');
       if (!stockInput) return;
@@ -4225,6 +4382,7 @@
       document.getElementById('admin-prod-notices').value = lines(p.notices);
       document.getElementById('admin-prod-delivery-info').value = p.deliveryInfo || '';
       document.getElementById('admin-prod-published').value = p.published === false ? '0' : '1';
+      setPurchaseModeFields(p);
     }
 
     // Suggestions de catégories existantes (évite « E-mail » / « e-mail » en double)
@@ -4293,7 +4451,9 @@
 
         var vault = DB.get('vault', {}) || {};
         var v = vault[found.id];
-        var avail = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (found.stock || 0);
+        var avail = (found.purchaseMode === 'redirect' || found.deliveryMode === 'manual' || !(v && Array.isArray(v.keys)))
+          ? (found.stock || 0)
+          : v.keys.filter(function(k) { return !k.used; }).length;
         document.getElementById('admin-prod-stock').value = avail;
 
         if (banner && matchText) {
@@ -4348,6 +4508,12 @@
         }
       }
 
+      // Même mode de livraison / d'achat que l'original (stock déclaré recopié)
+      setDeliveryModeField(p.deliveryMode);
+      if (p.deliveryMode === 'manual' || p.purchaseMode === 'redirect') {
+        document.getElementById('admin-prod-stock').value = p.stock || 0;
+      }
+
       document.getElementById('admin-prod-modal').classList.add('active');
       showToast('Informations copiées. Modifiez les champs avant d\'enregistrer le nouveau produit.', 'info');
     }
@@ -4392,8 +4558,8 @@
           }
           ta.placeholder = 'Modifiez les clés disponibles (1 par ligne) ou ajoutez-en de nouvelles...';
         }
-        if (isManualDeliverySelected()) {
-          // stock déclaré conservé (produit en livraison manuelle)
+        if (isDeclaredStockSelected()) {
+          // stock déclaré conservé (livraison manuelle ou produit à lien externe)
         } else if (Array.isArray(keysList) && keysList.length > 0) {
           document.getElementById('admin-prod-stock').value = unusedKeys.length;
         } else {
@@ -4415,7 +4581,7 @@
       }
 
       setDeliveryModeField(p.deliveryMode);
-      if (p.deliveryMode === 'manual') {
+      if (p.deliveryMode === 'manual' || p.purchaseMode === 'redirect') {
         document.getElementById('admin-prod-stock').value = p.stock || 0;
       }
       document.getElementById('admin-prod-modal').classList.add('active');
@@ -4467,6 +4633,7 @@
       } else {
         setVaultType(document.getElementById('admin-vault-type').value || 'text');
       }
+      applyPurchaseModeUI();
     }
     window.onDeliveryModeChange = onDeliveryModeChange;
 
@@ -4502,6 +4669,7 @@
         document.getElementById('admin-vault-content').placeholder = type === 'link' ? 'https://monlien-securise.com/token=...' : 'Insérez 1 clé/compte unique par ligne :\nlogin1:pass1\nlogin2:pass2\nlogin3:pass3';
         updateStockFromVaultKeys();
       }
+      applyPurchaseModeUI();
     }
 
     // Redimensionne (800 px max) et compresse l'image avant enregistrement : une photo de plusieurs Mo
@@ -4616,6 +4784,15 @@
       var desc = document.getElementById('admin-prod-desc').value.trim();
       var declaredStock = parseInt(document.getElementById('admin-prod-stock')?.value, 10) || 0;
       var deliveryMode = (document.getElementById('admin-prod-delivery') || {}).value === 'manual' ? 'manual' : 'auto';
+      var purchaseMode = isRedirectPurchaseSelected() ? 'redirect' : 'site';
+      var redirectInput = document.getElementById('admin-prod-redirect-url');
+      var redirectUrl = normalizeAdminRedirectInput(redirectInput.value);
+      var showStock = document.getElementById('admin-prod-show-stock').checked;
+      if (purchaseMode === 'redirect' && !redirectUrl) {
+        showToast('Indiquez le lien de redirection du bouton « Acheter » (ex. : https://wa.me/2250700000000).', 'error');
+        redirectInput.focus();
+        return;
+      }
       var compareRaw = (document.getElementById('admin-prod-compare').value || '').trim();
       var compareAtPrice = compareRaw === '' ? null : (parseFloat(compareRaw) || null);
       var sheetFields = {
@@ -4720,8 +4897,11 @@
             name: name,
             category: cat,
             price: price,
-            stock: deliveryMode === 'manual' ? Math.max(0, declaredStock) : (vaultType === 'file' ? Math.max(1, declaredStock) : undefined),
+            stock: (deliveryMode === 'manual' || purchaseMode === 'redirect') ? Math.max(0, declaredStock) : (vaultType === 'file' ? Math.max(1, declaredStock) : undefined),
             deliveryMode: deliveryMode,
+            purchaseMode: purchaseMode,
+            redirectUrl: purchaseMode === 'redirect' ? redirectUrl : undefined, // achat sur le site : lien précédent conservé
+            showStock: showStock,
             description: desc,
             compareAtPrice: compareAtPrice,
             features: sheetFields.features,
@@ -6977,7 +7157,7 @@
 
     // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT (PANNEAU ADMIN)
     var VersionManager = {
-      currentVersion: 'v202611161430_a1a620',
+      currentVersion: 'v202611161444_261e1f',
       checkIntervalMs: 60 * 1000,
       _toastShown: false,
 

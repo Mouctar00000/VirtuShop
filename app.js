@@ -726,7 +726,8 @@ function renderLandingShowcase() {
 
   var html = '';
   topProds.forEach(function(p) {
-    var oos = p.stock <= 0;
+    var buy = productBuyInfo(p);
+    var oos = !buy.available;
     var safeImg = sanitizeProductImage(p.image, p.category, p.name);
     html += `
       <div class="showcase-item">
@@ -734,16 +735,16 @@ function renderLandingShowcase() {
           <img src="${safeImg}" class="showcase-thumb" alt="${escapeHtml(p.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
           <div style="min-width: 0; flex: 1; overflow: hidden;">
             <h4 class="showcase-title">${escapeHtml(p.name)}</h4>
-            <span class="showcase-stock-badge ${oos ? 'oos' : ''}">${oos ? '● Rupture' : '● ' + p.stock + ' en stock'}</span>
+            <span class="showcase-stock-badge ${oos ? 'oos' : ''}">${buy.shortLabel}</span>
           </div>
         </div>
         <div class="showcase-pricing-action">
           <div class="showcase-price-box">
             <span class="showcase-price-val">$${p.price.toFixed(2)}</span>
           </div>
-          <button type="button" class="btn-primary btn-sm showcase-buy-btn btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${typeof p.id === 'number' ? p.id : "'" + String(p.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"})">
+          ${buy.external ? externalBuyAnchorHtml(buy, 'btn-primary btn-sm showcase-buy-btn btn-light-sweep', 'Acheter ⚡', p.name) : `<button type="button" class="btn-primary btn-sm showcase-buy-btn btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${typeof p.id === 'number' ? p.id : "'" + String(p.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"})">
             ${oos ? 'Rupture' : 'Acheter ⚡'}
-          </button>
+          </button>`}
         </div>
       </div>
     `;
@@ -762,13 +763,18 @@ function getConsolidatedProducts() {
     if (!norm) return;
 
     var v = vault[p.id];
-    var actualStock = (v && Array.isArray(v.keys)) ? v.keys.filter(function(k) { return !k.used; }).length : (p.stock || 0);
+    // Quantité masquée par l'administrateur (stock = null) ou produit à lien externe (quantité indicative) : valeur du serveur conservée
+    var actualStock;
+    if (p.stock === null) actualStock = null;
+    else if (p.purchaseMode !== 'redirect' && v && Array.isArray(v.keys)) actualStock = v.keys.filter(function(k) { return !k.used; }).length;
+    else actualStock = p.stock || 0;
 
     if (!map.has(norm)) {
       map.set(norm, Object.assign({}, p, { stock: actualStock }));
     } else {
       var existing = map.get(norm);
-      existing.stock += actualStock;
+      if (typeof existing.stock === 'number' && typeof actualStock === 'number') existing.stock += actualStock;
+      if (p.available) existing.available = true;
     }
   });
 
@@ -864,7 +870,8 @@ function renderProductCardsInto(container, prods) {
 
   var html = '';
   prods.forEach(function(prod) {
-    var oos = prod.stock <= 0;
+    var buy = productBuyInfo(prod);
+    var oos = !buy.available;
     var safeImg = sanitizeProductImage(prod.image, prod.category, prod.name);
     var idArg = productIdArg(prod.id);
     var promo = productPromo(prod);
@@ -884,14 +891,14 @@ function renderProductCardsInto(container, prods) {
 
           <div class="product-card-footer">
             <div class="product-meta">
-              <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture de stock' : '● ' + prod.stock + ' disponible' + (prod.stock > 1 ? 's' : '')}</span>
+              <span class="stock-tag${oos ? ' oos' : ''}">${buy.stockLabel}</span>
               <span class="product-price-group">${promo ? `<span class="product-compare-price">$${promo.compareAt.toFixed(2)}</span>` : ''}<span class="product-price">$${prod.price.toFixed(2)}</span></span>
             </div>
             <div class="product-actions">
               <button type="button" class="btn-product-details" onclick="openProductDetails(${idArg})">Détails</button>
-              <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${idArg})">
+              ${buy.external ? externalBuyAnchorHtml(buy, 'btn-buy-product btn-light-sweep', 'Acheter ⚡', prod.name) : `<button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${idArg})">
                 ${oos ? 'Rupture de Stock' : 'Acheter ⚡'}
-              </button>
+              </button>`}
             </div>
           </div>
         </div>
@@ -911,6 +918,71 @@ function productIdArg(id) {
 function productPromo(p) {
   if (!p || typeof p.compareAtPrice !== 'number' || !(p.compareAtPrice > p.price)) return null;
   return { compareAt: p.compareAtPrice, percent: Math.max(1, Math.round((1 - p.price / p.compareAtPrice) * 100)) };
+}
+
+// ========== MODE D'ACHAT : SUR LE SITE (stock réel) OU REDIRECTION VERS UN LIEN EXTERNE ==========
+// Lien du bouton « Acheter » d'un produit vendu ailleurs (WhatsApp, autre plateforme) : https, http, mailto: ou tel: uniquement.
+function safeExternalBuyUrl(url) {
+  var s = String(url || '').trim();
+  if (!s || s.length > 2000) return '';
+  return /^(?:https?:\/\/[^\s<>"]+|mailto:[^\s<>"]+|tel:\+?\d{4,20})$/i.test(s) ? s : '';
+}
+
+// Nom de la destination affiché au client (« WhatsApp », « Telegram », nom du site...)
+function externalBuyTargetLabel(url) {
+  if (/^tel:/i.test(url)) return 'téléphone';
+  if (/^mailto:/i.test(url)) return 'e-mail';
+  var host = '';
+  try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch (e) { return 'le site du vendeur'; }
+  if (/(^|\.)wa\.me$|(^|\.)whatsapp\.(com|net)$/.test(host)) return 'WhatsApp';
+  if (/(^|\.)t\.me$|(^|\.)telegram\.(me|org)$/.test(host)) return 'Telegram';
+  if (/(^|\.)m\.me$|(^|\.)messenger\.com$/.test(host)) return 'Messenger';
+  if (/(^|\.)ig\.me$|(^|\.)instagram\.com$/.test(host)) return 'Instagram';
+  return host || 'le site du vendeur';
+}
+
+// Disponibilité d'un produit selon son mode d'achat :
+//  - lien externe : jamais « Rupture de stock », bouton toujours actif ; quantité (indicative) affichée seulement si l'admin l'a choisi ;
+//  - achat sur le site : fonctionnement du stock inchangé (quantité affichée, rupture à 0, bouton désactivé).
+function productBuyInfo(p) {
+  p = p || {};
+  var qty = (typeof p.stock === 'number' && isFinite(p.stock)) ? Math.max(0, Math.floor(p.stock)) : null;
+  var showQty = p.showStock !== false && qty !== null;
+  var url = p.purchaseMode === 'redirect' ? safeExternalBuyUrl(p.redirectUrl) : '';
+  if (url) {
+    var shown = showQty && qty > 0;
+    return {
+      external: true, url: url, target: externalBuyTargetLabel(url), available: true, qty: qty,
+      stockLabel: shown ? '● ' + qty + ' disponible' + (qty > 1 ? 's' : '') : '● Disponible',
+      shortLabel: shown ? '● ' + qty + ' en stock' : '● Disponible'
+    };
+  }
+  var available = qty !== null ? qty > 0 : p.available === true;
+  return {
+    external: false, url: '', target: '', available: available, qty: qty,
+    stockLabel: !available ? '● Rupture de stock' : (showQty ? '● ' + qty + ' disponible' + (qty > 1 ? 's' : '') : '● En stock'),
+    shortLabel: !available ? '● Rupture' : (showQty ? '● ' + qty + ' en stock' : '● En stock')
+  };
+}
+
+// Bouton « Acheter » d'un produit à lien externe : vrai lien (nouvel onglet sur ordinateur, application WhatsApp sur téléphone)
+function externalBuyAnchorHtml(info, cls, label, prodName) {
+  var web = /^https?:/i.test(info.url);
+  return '<a class="' + cls + ' btn-buy-external" href="' + escapeHtml(info.url) + '"' +
+    (web ? ' target="_blank" rel="noopener noreferrer"' : '') +
+    ' title="Acheter via ' + escapeHtml(info.target) + '"' +
+    ' aria-label="Acheter ' + escapeHtml(prodName || '') + ' via ' + escapeHtml(info.target) + (web ? ' (nouvelle fenêtre)' : '') + '"' +
+    ' data-external-buy="1">' + label + '</a>';
+}
+
+// Ouverture du lien externe depuis le code (lien direct #acheter, reprise après connexion...)
+function openExternalBuyLink(url) {
+  url = safeExternalBuyUrl(url);
+  if (!url) return;
+  if (!/^https?:/i.test(url)) { location.href = url; return; }
+  var w = null;
+  try { w = window.open(url, '_blank'); } catch (e) {}
+  if (w) { try { w.opener = null; } catch (e) {} } else { location.href = url; }
 }
 
 var PD_ICONS = {
@@ -954,11 +1026,15 @@ function openProductDetails(prodId) {
     showToast("Ce produit n'est plus disponible dans la boutique.", 'error');
     return;
   }
-  var oos = prod.stock <= 0;
+  var buy = productBuyInfo(prod);
+  var oos = !buy.available;
   var promo = productPromo(prod);
-  var deliveryText = String(prod.deliveryInfo || '').trim() || (prod.deliveryMode === 'manual'
+  var deliveryText = String(prod.deliveryInfo || '').trim() || (buy.external
+    ? 'L\'achat se finalise directement avec le vendeur via ' + buy.target + ' : cliquez sur « Acheter » pour le contacter, il vous indique le paiement et la livraison.'
+    : prod.deliveryMode === 'manual'
     ? 'Après le paiement, la commande passe « En attente » et nous vous contactons sur WhatsApp pour la livraison.'
     : 'Livraison automatique dans « Mes commandes » dès la confirmation du paiement.');
+  var buyLabel = 'Acheter ⚡ — $' + prod.price.toFixed(2);
 
   ensureProductDetailsModal();
   document.getElementById('pd-content').innerHTML = `
@@ -972,7 +1048,7 @@ function openProductDetails(prodId) {
       <div class="pd-price-row">
         <span class="product-price-group">${promo ? `<span class="product-compare-price">$${promo.compareAt.toFixed(2)}</span>` : ''}<span class="product-price">$${prod.price.toFixed(2)}</span></span>
         <span class="pd-fcfa">≈ ${Math.round(prod.price * FCFA_RATE).toLocaleString('fr-FR')} FCFA</span>
-        <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture de stock' : '● ' + prod.stock + ' disponible' + (prod.stock > 1 ? 's' : '')}</span>
+        <span class="stock-tag${oos ? ' oos' : ''}">${buy.stockLabel}</span>
       </div>
     </div>
     ${prod.description ? `<p class="pd-summary">${escapeHtml(prod.description)}</p>` : ''}
@@ -984,9 +1060,9 @@ function openProductDetails(prodId) {
       <p class="pd-delivery-text">${escapeHtml(deliveryText)}</p>
     </section>
     <div class="pd-actions">
-      <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="buyFromProductDetails(${productIdArg(prod.id)})">
-        ${oos ? 'Rupture de stock' : 'Acheter ⚡ — $' + prod.price.toFixed(2)}
-      </button>
+      ${buy.external ? externalBuyAnchorHtml(buy, 'btn-buy-product btn-light-sweep', buyLabel, prod.name) + `<p class="pd-external-note">Vous serez redirigé vers ${escapeHtml(buy.target)} pour finaliser votre achat avec le vendeur.</p>` : `<button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="buyFromProductDetails(${productIdArg(prod.id)})">
+        ${oos ? 'Rupture de stock' : buyLabel}
+      </button>`}
     </div>`;
   var modal = document.getElementById('modal-product');
   modal.classList.add('active');
@@ -1034,7 +1110,14 @@ function startProductPurchase(prodId) {
     prod = rawProds.find(function(p) { return p && String(p.id) === String(prodId); });
   }
 
-  if (!prod || prod.stock <= 0) {
+  var buy = productBuyInfo(prod);
+  // Produit à lien externe : le bouton « Acheter » ouvre le lien du vendeur, quel que soit le stock (aucune connexion requise)
+  if (prod && buy.external) {
+    openExternalBuyLink(buy.url);
+    return;
+  }
+
+  if (!prod || !buy.available) {
     showToast('Ce produit est actuellement en rupture de stock.', 'error');
     return;
   }
@@ -1238,7 +1321,7 @@ function renderPurchaseModal() {
         <div>
           <label style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin: 0;">Quantité à acheter</label>
           <span style="font-size: 10.5px; color: ${stock > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-weight: 600; display: block;">
-            ${stock > 0 ? (stock === 999 ? '● En stock' : '● ' + stock + ' disponible' + (stock > 1 ? 's' : '')) : '● Rupture de stock'}
+            ${stock > 0 ? ((stock === 999 || selectedPayProd.showStock === false) ? '● En stock' : '● ' + stock + ' disponible' + (stock > 1 ? 's' : '')) : '● Rupture de stock'}
           </span>
         </div>
         <div class="qty-stepper">
@@ -1499,8 +1582,17 @@ async function processProductPayment() {
     return;
   }
 
-  // Vérification de la disponibilité du stock
-  if ((selectedPayProd.stock || 0) <= 0 || selectedPayProd.stock < qty) {
+  // Produit vendu via un lien externe : jamais payé sur le site
+  var buyCheck = productBuyInfo(selectedPayProd);
+  if (buyCheck.external) {
+    var extUrl = buyCheck.url;
+    closePayModal();
+    openExternalBuyLink(extUrl);
+    return;
+  }
+
+  // Vérification de la disponibilité du stock (quantité masquée : contrôle final par le serveur)
+  if (!buyCheck.available || (buyCheck.qty !== null && buyCheck.qty < qty)) {
     showToast('Ce produit est actuellement en rupture de stock.', 'error');
     renderPurchaseModal();
     return;
@@ -1549,7 +1641,7 @@ async function processProductPayment() {
     var data = await res.json();
 
     if (!res.ok || !data.success) {
-      if (data && data.code === 'PRODUCT_UNAVAILABLE' && typeof syncProductsFromServer === 'function') {
+      if (data && (data.code === 'PRODUCT_UNAVAILABLE' || data.code === 'EXTERNAL_PURCHASE') && typeof syncProductsFromServer === 'function') {
         // Produit supprimé ou masqué entre-temps : rafraîchir le catalogue affiché
         syncProductsFromServer();
       }
@@ -1570,6 +1662,15 @@ async function processProductPayment() {
       if (pIdx !== -1) {
         allProds[pIdx].stock = data.remainingStock;
         DB.set('products', allProds);
+      }
+    } else if (typeof data.productAvailable === 'boolean') {
+      // Quantité masquée par l'administrateur : seule la disponibilité est mise à jour
+      selectedPayProd.available = data.productAvailable;
+      var allProdsH = DB.get('products', []);
+      var hIdx = allProdsH.findIndex(function(p) { return p.id === selectedPayProd.id; });
+      if (hIdx !== -1) {
+        allProdsH[hIdx].available = data.productAvailable;
+        DB.set('products', allProdsH);
       }
     }
 
@@ -4859,7 +4960,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202611161430_a1a620',
+  currentVersion: 'v202611161444_261e1f',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 

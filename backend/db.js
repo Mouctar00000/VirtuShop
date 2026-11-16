@@ -153,6 +153,30 @@ function isSafeHttpUrl(u) {
   } catch (e) { return false; }
 }
 
+/**
+ * External "Buy" link of a product sold outside the shop (WhatsApp, another platform...).
+ * Accepts https/http (a missing scheme gets https://), mailto: and tel:. Returns '' for an empty value
+ * and null for an invalid one (javascript:, data:, credentials in the URL, no domain...).
+ */
+function normalizeRedirectUrl(raw) {
+  let s = cleanText(raw, 2000);
+  if (!s) return '';
+  if (/^tel:/i.test(s)) {
+    const digits = s.slice(4).replace(/[\s.()-]/g, '');
+    return /^\+?\d{4,20}$/.test(digits) ? 'tel:' + digits : null;
+  }
+  if (/^mailto:/i.test(s)) {
+    return /^mailto:[^\s@<>"'?]+@[^\s@<>"'?]+\.[a-z]{2,}(\?[^\s<>"']*)?$/i.test(s) ? s : null;
+  }
+  if (/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?(?:[/?#]|$)/i.test(s)) s = 'https://' + s;
+  let u;
+  try { u = new URL(s); } catch (e) { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if (u.username || u.password) return null;
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z0-9-]{2,}$/i.test(u.hostname)) return null;
+  return u.href.length <= 2000 ? u.href : null;
+}
+
 class SimpleMutex {
   constructor() { this._queue = Promise.resolve(); }
   runExclusive(callback) {
@@ -680,9 +704,26 @@ class Database {
   // ============================================================ PRODUCTS & KEYS
   normalizeDeliveryMode(mode) { return mode === 'manual' ? 'manual' : 'auto'; }
 
+  /**
+   * Purchase mode of a product:
+   *  - 'site'     : bought on the shop (balance / Mobile Money), real stock, sold out at 0;
+   *  - 'redirect' : the "Buy" button opens the external link set by the administrator (WhatsApp...).
+   *    Its stock is informative only: it never makes the product unavailable.
+   * A product without a valid link always behaves as 'site'.
+   */
+  purchaseModeOf(p) {
+    return p && p.purchaseMode === 'redirect' && typeof p.redirectUrl === 'string' && p.redirectUrl ? 'redirect' : 'site';
+  }
+
+  /** Real availability (site purchase: stock > 0) vs. external-link product (always available). */
+  isProductAvailable(p) {
+    if (!p) return false;
+    return this.purchaseModeOf(p) === 'redirect' || (parseInt(p.stock, 10) || 0) > 0;
+  }
+
   getProducts() {
     for (const p of this.data.products) {
-      if (!p || p.deliveryMode === 'manual') continue;
+      if (!p || p.deliveryMode === 'manual' || this.purchaseModeOf(p) === 'redirect') continue;
       const v = this.data.vault[p.id];
       if (v && Array.isArray(v.keys) && !(v.type === 'file' && v.keys.length === 0)) {
         p.stock = v.keys.filter(k => !k.used).length;
@@ -692,24 +733,33 @@ class Database {
   }
 
   getPublicProducts() {
-    return this.getProducts().filter(p => p && p.published === true).map(p => ({
-      id: p.id,
-      name: p.name,
-      category: p.category,
-      price: p.price,
-      stock: p.stock,
-      description: p.description,
-      image: p.image || null,
-      published: true,
-      deliveryMode: p.deliveryMode,
-      compareAtPrice: typeof p.compareAtPrice === 'number' && p.compareAtPrice > p.price ? p.compareAtPrice : null,
-      features: Array.isArray(p.features) ? p.features : [],
-      benefits: Array.isArray(p.benefits) ? p.benefits : [],
-      notices: Array.isArray(p.notices) ? p.notices : [],
-      deliveryInfo: typeof p.deliveryInfo === 'string' ? p.deliveryInfo : '',
-      created_at: p.created_at,
-      updated_at: p.updated_at
-    }));
+    return this.getProducts().filter(p => p && p.published === true).map(p => {
+      const purchaseMode = this.purchaseModeOf(p);
+      const showStock = p.showStock !== false;
+      return {
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        // Quantity hidden from the public when the administrator chose not to display it
+        stock: showStock ? p.stock : null,
+        showStock,
+        available: this.isProductAvailable(p),
+        purchaseMode,
+        redirectUrl: purchaseMode === 'redirect' ? p.redirectUrl : null,
+        description: p.description,
+        image: p.image || null,
+        published: true,
+        deliveryMode: p.deliveryMode,
+        compareAtPrice: typeof p.compareAtPrice === 'number' && p.compareAtPrice > p.price ? p.compareAtPrice : null,
+        features: Array.isArray(p.features) ? p.features : [],
+        benefits: Array.isArray(p.benefits) ? p.benefits : [],
+        notices: Array.isArray(p.notices) ? p.notices : [],
+        deliveryInfo: typeof p.deliveryInfo === 'string' ? p.deliveryInfo : '',
+        created_at: p.created_at,
+        updated_at: p.updated_at
+      };
+    });
   }
 
   /** Reuses the spelling of an existing category typed with a different case ("e-mail" -> "E-mail"). */
@@ -742,7 +792,8 @@ class Database {
 
   _recomputeStock(p, declaredStock) {
     const v = this._vaultFor(p.id);
-    if (p.deliveryMode === 'manual' || (v.type === 'file' && v.keys.length === 0)) {
+    // Declared stock: manual delivery, file without keys, and external-link products (informative quantity)
+    if (p.deliveryMode === 'manual' || this.purchaseModeOf(p) === 'redirect' || (v.type === 'file' && v.keys.length === 0)) {
       if (declaredStock !== undefined) p.stock = Math.max(0, Math.min(1000000, parseInt(declaredStock, 10) || 0));
       else if (typeof p.stock !== 'number') p.stock = 0;
     } else {
@@ -794,6 +845,21 @@ class Database {
     if (typeof effCompareAt === 'number' && effCompareAt <= effPrice && (compareAtPrice !== undefined || price !== undefined)) {
       throw httpError(400, 'Le prix barré (avant promotion) doit être supérieur au prix de vente. Laissez-le vide s\'il n\'y a pas de promotion.');
     }
+    // Purchase mode: on the shop (real stock) or external "Buy" link (WhatsApp, other platform) never sold out
+    let purchaseMode;
+    if (prod.purchaseMode !== undefined) purchaseMode = prod.purchaseMode === 'redirect' ? 'redirect' : 'site';
+    let redirectUrl;
+    if (prod.redirectUrl !== undefined) {
+      redirectUrl = normalizeRedirectUrl(prod.redirectUrl);
+      if (redirectUrl === null) throw httpError(400, 'Lien de redirection invalide. Exemples : https://wa.me/2250700000000 ou https://votre-site.com/produit');
+    }
+    const effMode = purchaseMode !== undefined ? purchaseMode : (target && target.purchaseMode === 'redirect' ? 'redirect' : 'site');
+    const effRedirect = redirectUrl !== undefined ? redirectUrl : (target && typeof target.redirectUrl === 'string' ? target.redirectUrl : '');
+    if (effMode === 'redirect' && !effRedirect) {
+      throw httpError(400, 'Indiquez le lien de redirection du bouton « Acheter » (par exemple https://wa.me/2250700000000).');
+    }
+    let showStock;
+    if (prod.showStock !== undefined) showStock = !(prod.showStock === false || prod.showStock === 0 || prod.showStock === '0' || prod.showStock === 'false');
 
     let p = target;
     const removedBlobs = [];
@@ -815,6 +881,9 @@ class Database {
         image: image || null,
         published: prod.published !== undefined ? Boolean(prod.published) : true,
         deliveryMode: this.normalizeDeliveryMode(prod.deliveryMode),
+        purchaseMode: effMode,
+        redirectUrl: effRedirect || '',
+        showStock: showStock !== undefined ? showStock : true,
         created_at: now,
         updated_at: now
       };
@@ -833,6 +902,9 @@ class Database {
       }
       if (prod.published !== undefined) p.published = Boolean(prod.published);
       if (prod.deliveryMode !== undefined) p.deliveryMode = this.normalizeDeliveryMode(prod.deliveryMode);
+      if (purchaseMode !== undefined) p.purchaseMode = purchaseMode;
+      if (redirectUrl !== undefined) p.redirectUrl = redirectUrl;
+      if (showStock !== undefined) p.showStock = showStock;
       p.updated_at = now;
     }
 
@@ -1126,6 +1198,13 @@ class Database {
     let prod = this.getProductById(productId);
     if (!prod && productName) prod = this.findProductByNormalizedName(productName);
     if (!prod || prod.published !== true) throw httpError(404, "Ce produit n'est plus disponible dans la boutique.", 'PRODUCT_UNAVAILABLE');
+    // External-link product: bought from the seller through the configured link, never on the site
+    // (no order, no balance debit, no stock change).
+    if (this.purchaseModeOf(prod) === 'redirect') {
+      const e = httpError(409, "Ce produit s'achète directement auprès du vendeur : utilisez le bouton « Acheter » de la fiche produit.", 'EXTERNAL_PURCHASE');
+      e.extra = { redirectUrl: prod.redirectUrl };
+      throw e;
+    }
 
     const qty = (quantity === undefined || quantity === null || quantity === '') ? 1 : Number(quantity);
     if (!Number.isInteger(qty) || qty < 1 || qty > 100) throw httpError(400, 'La quantité doit être un nombre entier compris entre 1 et 100.');

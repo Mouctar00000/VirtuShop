@@ -237,7 +237,15 @@ module.exports = async function handler(req, res) {
             idempotencyKey: body.idempotencyKey,
             paymentLabel: body.paymentLabel
           });
-          return { success: true, order: r.order, newBalance: r.newBalance, remainingStock: r.remainingStock, duplicate: Boolean(r.duplicate) };
+          // The remaining quantity is not revealed when the administrator hides the stock of this product
+          const bought = db.getProductById(r.order && r.order.productId);
+          const hideStock = Boolean(bought && bought.showStock === false);
+          return {
+            success: true, order: r.order, newBalance: r.newBalance,
+            remainingStock: hideStock ? null : r.remainingStock,
+            productAvailable: bought ? db.isProductAvailable(bought) : undefined,
+            duplicate: Boolean(r.duplicate)
+          };
         });
         return res.status(out.duplicate ? 200 : 201).json(out);
       }

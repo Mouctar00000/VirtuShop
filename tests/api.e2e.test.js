@@ -321,6 +321,88 @@ test('purchase with balance: server-side price, balance and stock, no client-cho
   assert.equal(adminBuy.status, 403, 'admin accounts do not buy');
 });
 
+test('purchase mode: external link products are never sold out nor bought on the site; hidden stock quantity', async () => {
+  // External link product with stock 0: always available, link exposed, no "sold out"
+  const ext = await post('/api/data/products', {
+    name: 'Produit Lien WhatsApp', category: 'Services', price: 5, purchaseMode: 'redirect',
+    redirectUrl: 'wa.me/2250700000000?text=Bonjour', stock: 0, showStock: false, published: true
+  }, ctx.admin);
+  assert.equal(ext.status, 200, JSON.stringify(ext.body));
+  const extId = ext.body.product.id;
+  assert.equal(ext.body.product.purchaseMode, 'redirect');
+  assert.equal(ext.body.product.redirectUrl, 'https://wa.me/2250700000000?text=Bonjour', 'missing https:// added');
+  let pub = (await get('/api/data/products')).body.products.find(p => p.id === extId);
+  assert.equal(pub.purchaseMode, 'redirect');
+  assert.equal(pub.redirectUrl, 'https://wa.me/2250700000000?text=Bonjour');
+  assert.equal(pub.available, true, 'never unavailable because of its stock');
+  assert.equal(pub.stock, null, 'quantity hidden when the option is off');
+
+  // Informative quantity shown only when the administrator enables it
+  assert.equal((await put('/api/data/products', { id: extId, stock: 4, showStock: true }, ctx.admin)).status, 200);
+  pub = (await get('/api/data/products')).body.products.find(p => p.id === extId);
+  assert.equal(pub.stock, 4);
+  assert.equal(pub.available, true);
+  assert.equal(pub.redirectUrl, 'https://wa.me/2250700000000?text=Bonjour', 'link kept when not sent');
+
+  // Never bought on the site: no order, no debit, no stock change
+  const buyer = await register('dora-redirect@example.com', 'Dora-Pass-1');
+  assert.equal(buyer.status, 201);
+  const dora = (await login('dora-redirect@example.com', 'Dora-Pass-1')).body.session.token;
+  const doraId = (await get('/api/auth/me', dora)).body.user.id;
+  assert.equal((await post('/api/data/users', { userId: doraId, amount: 10, action: 'gift' }, ctx.admin)).status, 200);
+  const refused = await post('/api/data/orders', { productId: extId, quantity: 1 }, dora);
+  assert.equal(refused.status, 409, JSON.stringify(refused.body));
+  assert.equal(refused.body.code, 'EXTERNAL_PURCHASE');
+  assert.equal(refused.body.redirectUrl, 'https://wa.me/2250700000000?text=Bonjour');
+  const momo = await post('/api/payments/saspay/create', { amount: 5, productId: extId, isPurchase: true }, dora);
+  assert.equal(momo.status, 409, 'no Mobile Money payment for an external link product');
+  assert.equal((await get('/api/auth/me', dora)).body.user.balance, 10, 'balance untouched');
+  assert.equal((await get('/api/data/orders', dora)).body.orders.length, 0, 'no order created');
+  assert.equal((await get('/api/data/products')).body.products.find(p => p.id === extId).stock, 4, 'stock untouched');
+
+  // Validation of the link
+  for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'https://user:pw@evil.example.com', 'pas un lien', 'ftp://files.example.com']) {
+    assert.equal((await put('/api/data/products', { id: extId, redirectUrl: bad }, ctx.admin)).status, 400, bad);
+  }
+  assert.equal((await put('/api/data/products', { id: extId, redirectUrl: '' }, ctx.admin)).status, 400, 'link required in redirect mode');
+  assert.equal((await post('/api/data/products', { name: 'Sans Lien', price: 1, purchaseMode: 'redirect' }, ctx.admin)).status, 400);
+  const tel = await put('/api/data/products', { id: extId, redirectUrl: 'tel:+225 07 00 00 00 00' }, ctx.admin);
+  assert.equal(tel.body.product.redirectUrl, 'tel:+2250700000000');
+
+  // Back to site purchase: real stock rules again (sold out at 0)
+  const site = await put('/api/data/products', { id: extId, purchaseMode: 'site', deliveryMode: 'manual', stock: 0 }, ctx.admin);
+  assert.equal(site.status, 200, JSON.stringify(site.body));
+  pub = (await get('/api/data/products')).body.products.find(p => p.id === extId);
+  assert.equal(pub.purchaseMode, 'site');
+  assert.equal(pub.redirectUrl, null, 'link not exposed for site purchase');
+  assert.equal(pub.available, false, 'site product at 0 is sold out');
+  assert.equal((await post('/api/data/orders', { productId: extId, quantity: 1 }, dora)).body.code, 'INSUFFICIENT_STOCK');
+
+  // Site product with hidden quantity: purchase works, remaining quantity not revealed, availability tracked
+  assert.equal((await put('/api/data/products', { id: extId, stock: 2, showStock: false, price: 1 }, ctx.admin)).status, 200);
+  pub = (await get('/api/data/products')).body.products.find(p => p.id === extId);
+  assert.equal(pub.stock, null);
+  assert.equal(pub.available, true);
+  const b1 = await post('/api/data/orders', { productId: extId, quantity: 1 }, dora);
+  assert.equal(b1.status, 201, JSON.stringify(b1.body));
+  assert.equal(b1.body.remainingStock, null);
+  assert.equal(b1.body.productAvailable, true);
+  const b2 = await post('/api/data/orders', { productId: extId, quantity: 1 }, dora);
+  assert.equal(b2.body.productAvailable, false);
+  assert.equal((await get('/api/data/products')).body.products.find(p => p.id === extId).available, false);
+  assert.equal((await get('/api/auth/me', dora)).body.user.balance, 8);
+
+  // Existing products without the new fields keep the site behaviour
+  const legacy = (await get('/api/data/products')).body.products.find(p => p.id === ctx.gmailId);
+  assert.equal(legacy.purchaseMode, 'site');
+  assert.equal(legacy.showStock, true);
+  assert.equal(typeof legacy.stock, 'number');
+  assert.equal(legacy.available, legacy.stock > 0);
+
+  assert.ok([401, 403].includes((await put('/api/data/products', { id: extId, purchaseMode: 'redirect', redirectUrl: 'https://evil.example.com' }, ctx.alice)).status), 'customers cannot change the link');
+  assert.equal((await del('/api/data/products', { id: extId }, ctx.admin)).status, 200);
+});
+
 test('purchase idempotency: same idempotencyKey charges once', async () => {
   await post('/api/data/users', { userId: ctx.bobId, amount: 50, action: 'add' }, ctx.admin);
   const key = crypto.randomUUID();

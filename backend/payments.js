@@ -83,10 +83,15 @@ class PaymentService {
   // ================================================================== SASPAY
   async createSasPayDeposit({ user, amountUsd, country, network, phone, otp, customerName, customerEmail, returnUrl, isPurchase, productId, preferredMode }) {
     if (!user) throw httpError(401, 'Veuillez vous connecter pour initier une recharge.');
+    const { settings, externalProduct } = await db.read(() => {
+      const p = productId !== undefined && productId !== null && productId !== '' ? db.getProductById(productId) : null;
+      return { settings: db.getPublicSettings(), externalProduct: Boolean(p && db.purchaseModeOf(p) === 'redirect') };
+    });
+    // A product sold through an external link (WhatsApp...) is never paid on the site
+    if (externalProduct) throw httpError(409, "Ce produit s'achète directement auprès du vendeur via le bouton « Acheter » : aucun paiement n'est demandé sur le site.", 'EXTERNAL_PURCHASE');
     if (!this.sasPayKey) throw httpError(503, 'Clé API SasPay non configurée sur le serveur.');
 
     const isDirect = Boolean(isPurchase || productId);
-    const settings = await db.read(() => db.getPublicSettings());
     const parsedUsd = this._validateAmount(amountUsd, isDirect ? 0.5 : settings.min_recharge);
 
     const countryCode = String(country || 'CI').toUpperCase();
