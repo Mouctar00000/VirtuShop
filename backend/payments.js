@@ -1,6 +1,6 @@
 /**
  * GetVirtu — Payments (backend/payments.js)
- * SasPay (Mobile Money) and Trybit (crypto) deposits, manual deposits with proof, direct crypto purchases.
+ * SasPay (Mobile Money) deposits and direct purchases, manual deposits with proof.
  *
  * Security rules applied everywhere:
  *  - A deposit always belongs to the authenticated user (never to a userId sent by the browser).
@@ -16,7 +16,6 @@
 const crypto = require('crypto');
 const https = require('https');
 const db = require('./db');
-const trybitService = require('./trybit');
 const { OFFICIAL_SASPAY_COUNTRIES, normalizePhoneNumber } = require('./saspay-countries');
 
 const SASPAY_BASE_URL = process.env.SASPAY_BASE_URL || 'https://api.saspay.me/api/v1';
@@ -360,171 +359,6 @@ class PaymentService {
 
   async getUserTransactions(userId) {
     return db.read(() => db.getTransactions({ userId }).map(publicTx));
-  }
-
-  // ================================================================== TRYBIT
-  async createTrybitDeposit({ user, amountUsd, customerEmail, cryptocurrency, returnUrl, productId, quantity, contactInfo }) {
-    if (!user) throw httpError(401, 'Veuillez vous connecter pour initier une recharge.');
-    const txId = 'TXN-TB-' + crypto.randomBytes(6).toString('hex').toUpperCase();
-    const crypt = cleanText(cryptocurrency, 20) || null;
-
-    // Phase 1 — compute the amount on the server and record the pending payment
-    const prepared = await db.tx(() => {
-      const u = db.getUserById(user.id);
-      if (!u) throw httpError(401, 'Session invalide.', 'SESSION_INVALID');
-      let amount;
-      let meta = { customerEmail: this._customerEmail(u, customerEmail), customerName: u.name, cryptocurrency: crypt, returnUrl: this._safeReturnUrl(returnUrl, 'https://getvirtu.shop/?payment_status=success') };
-      if (productId) {
-        if (u.role === 'admin') throw httpError(403, 'Un compte administrateur ne peut pas passer de commande.');
-        const p = db.getProductById(productId);
-        if (!p || p.published !== true) throw httpError(404, "Ce produit n'est plus disponible dans la boutique.", 'PRODUCT_UNAVAILABLE');
-        const qty = parseInt(quantity, 10) || 1;
-        if (qty < 1 || qty > 100) throw httpError(400, 'Quantité invalide (1 à 100).');
-        if ((parseInt(p.stock, 10) || 0) < qty) throw httpError(409, `Stock insuffisant : ${p.stock} disponible(s).`, 'INSUFFICIENT_STOCK');
-        amount = roundMoney(p.price * qty); // never the amount sent by the browser
-        if (amount < 0.5) throw httpError(400, 'Montant trop faible pour un paiement crypto (minimum $0.50).');
-        meta = { ...meta, productId: p.id, productName: p.name, quantity: qty, unitPrice: p.price, contactInfo: cleanText(contactInfo, 120) || null };
-      } else {
-        amount = this._validateAmount(amountUsd, db.getPublicSettings().min_recharge);
-      }
-      db.createTransaction({
-        id: txId, userId: u.id, userEmail: u.email, userName: u.name,
-        amount, currency: 'USD', paymentMethod: 'Crypto Instantané (Trybit)', provider: 'trybit', status: 'pending',
-        idempotencyKey: crypto.randomBytes(16).toString('hex'), metadata: meta
-      });
-      return { amount, email: meta.customerEmail };
-    });
-
-    // Phase 2 — create the invoice (no lock held)
-    let invoice;
-    try {
-      invoice = await trybitService.createInvoice({ amount: prepared.amount, currency: 'USD', orderId: txId, email: prepared.email, cryptocurrency: crypt });
-    } catch (err) {
-      await db.tx(() => { db.updateTransaction(txId, { status: 'failed', failureReason: cleanText(err.message, 300) }); }).catch(() => {});
-      throw httpError(502, err.message || 'Échec de création de la facture Trybit.');
-    }
-    // Phase 3 — store the provider invoice id
-    await db.tx(() => {
-      const t = db.getTransactionById(txId);
-      db.updateTransaction(txId, {
-        providerTxId: invoice.uuid,
-        metadata: { ...(t.metadata || {}), invoiceUuid: invoice.uuid, paymentUrl: invoice.link, amountCrypto: invoice.amountCrypto, cryptoCurrency: invoice.currency, address: invoice.address, expiryDate: invoice.expiryDate }
-      });
-    });
-    return {
-      success: true, transactionId: txId, invoiceUuid: invoice.uuid, paymentUrl: invoice.link, amountUsd: prepared.amount,
-      amountCrypto: invoice.amountCrypto, currency: invoice.currency, address: invoice.address, status: 'pending',
-      instructions: 'Redirection vers la page de paiement sécurisée Trybit...'
-    };
-  }
-
-  async verifyTrybitPayment({ transactionId, caller = null }) {
-    const tx = await this._loadTxForCaller(transactionId, caller);
-    if (tx.provider !== 'trybit') return { success: false, status: tx.status, message: 'Transaction non Trybit.' };
-    if (tx.status === 'completed') { const s = await this._statusFor(tx.id); return { success: true, status: 'completed', ...s }; }
-    if (tx.status === 'failed') return { success: false, status: 'failed', message: tx.failureReason || 'Paiement annulé ou expiré.' };
-    const uuid = tx.providerTxId || (tx.metadata && tx.metadata.invoiceUuid);
-    if (!uuid) return { success: true, status: 'pending', message: 'En attente de paiement sur Trybit...' };
-
-    let info;
-    try {
-      const infos = await trybitService.getInvoiceInfo(uuid);
-      info = Array.isArray(infos) ? infos.find(i => i && (i.uuid === uuid || !i.uuid)) || infos[0] : null;
-    } catch (e) {
-      return { success: true, status: 'pending', message: 'Vérification Trybit en cours...' };
-    }
-    if (!info) return { success: true, status: 'pending', message: 'Vérification Trybit en cours...' };
-    const st = String(info.status || '').toLowerCase();
-    const ist = String(info.invoice_status || '').toLowerCase();
-    if (info.order_id && info.order_id !== tx.id) {
-      console.error('[Trybit] Invoice order_id does not match transaction', tx.id);
-      return { success: false, status: 'pending', message: 'Paiement non concordant : contactez le support.' };
-    }
-    if (st === 'paid' || st === 'overpaid' || st === 'success' || ist === 'success') {
-      const result = await db.tx(() => this._settleTrybit(tx.id, uuid, { status: st, invoice_status: ist, amount_usd: info.amount_usd }));
-      const s = await this._statusFor(tx.id);
-      return { success: true, status: 'completed', newBalance: s.newBalance, creditedAmount: tx.amount, transaction: s.transaction, order: result.order || null, message: 'Paiement Trybit confirmé avec succès !' };
-    }
-    if (st === 'canceled' || st === 'cancelled' || st === 'expired') {
-      await db.tx(() => { const t = db.getTransactionById(tx.id); if (t && t.status === 'pending') db.updateTransaction(tx.id, { status: 'failed', failureReason: 'Paiement annulé ou expiré sur Trybit.' }); });
-      return { success: false, status: 'failed', message: 'Paiement annulé ou expiré sur Trybit.' };
-    }
-    return { success: true, status: 'pending', message: 'Facture en attente de paiement ou de confirmation blockchain...' };
-  }
-
-  /** Inside db.tx: credits the balance or delivers the directly purchased product — exactly once. */
-  _settleTrybit(txId, providerTxId, extra) {
-    const t = db.getTransactionById(txId);
-    if (!t) throw httpError(404, 'Transaction introuvable.');
-    if (t.status === 'completed') return { alreadyCompleted: true };
-    const user = db.getUserById(t.userId);
-    if (!user) throw httpError(404, 'Client de la transaction introuvable.');
-    const meta = t.metadata || {};
-    if (meta.productId) {
-      const p = db.getProductById(meta.productId);
-      if (!p) {
-        // Product deleted meanwhile: the payment is kept as balance
-        const r = db.creditDeposit(t.id, { providerTxId, extra });
-        db.updateTransaction(t.id, { notes: `Produit ${meta.productName || meta.productId} supprimé : montant crédité sur le solde.` });
-        return { credited: r.creditedAmount };
-      }
-      const qty = parseInt(meta.quantity, 10) || 1;
-      const orderId = 'ORD-' + crypto.randomBytes(5).toString('hex').toUpperCase();
-      let status = db.ORDER_STATUS.DONE;
-      let deliveryMode = p.deliveryMode === 'manual' ? 'manual' : 'auto';
-      let vaultContent = null;
-      let note;
-      try {
-        const alloc = db.allocateKeysForProduct(p.id, qty, { orderId, userId: user.id, userEmail: user.email });
-        if (alloc.manualDelivery) status = db.ORDER_STATUS.PENDING;
-        else if (alloc.fileDelivery) vaultContent = alloc.fileDelivery;
-        else {
-          const keys = alloc.allocatedKeys.map(k => ({ id: k.id, content: k.content }));
-          vaultContent = { type: alloc.vaultType === 'link' ? 'link' : 'text', content: keys.map(k => k.content).join('\n'), keys, fileName: 'licences.txt' };
-        }
-      } catch (e) {
-        status = db.ORDER_STATUS.PENDING;
-        deliveryMode = 'manual';
-        note = 'Paiement reçu, stock épuisé au moment de la livraison automatique : livraison manuelle requise.';
-      }
-      const order = db.createOrder({
-        id: orderId, userId: user.id, userEmail: user.email, userName: user.name,
-        productId: p.id, productName: p.name, unitPrice: meta.unitPrice || p.price, quantity: qty, amount: t.amount,
-        remainingBalance: user.balance, userBalanceAfter: user.balance, contactInfo: meta.contactInfo || '',
-        method: 'Crypto Instantané (Trybit)', transactionId: t.id, deliveryMode, deliveryNote: note, status, vaultContent, refunded: false
-      });
-      db.updateTransaction(t.id, {
-        status: 'completed', type: 'purchase_crypto', providerTxId: providerTxId || t.providerTxId,
-        completedAt: new Date().toISOString(), metadata: { ...meta, orderId, completedDetails: extra }
-      });
-      return { order };
-    }
-    const r = db.creditDeposit(t.id, { providerTxId, extra });
-    return { credited: r.creditedAmount };
-  }
-
-  /** Trybit postback: only a trigger, the invoice status is re-checked with the Trybit API. */
-  async handleTrybitWebhook(payload = {}, headers = {}) {
-    if (!payload || typeof payload !== 'object') throw httpError(400, 'Payload webhook Trybit invalide.');
-    let token = payload.token || payload.jwt || String(headers['authorization'] || '').replace(/^(Bearer|Token)\s+/i, '').trim() || headers['x-token'] || '';
-    let tokenPayload = null;
-    if (token) {
-      const v = trybitService.verifyWebhookToken(token);
-      if (v.valid) tokenPayload = v.payload;
-    }
-    const orderId = payload.order_id || (tokenPayload && tokenPayload.order_id) || payload.orderId;
-    const invoiceId = payload.invoice_id || (tokenPayload && tokenPayload.invoice_id);
-    const info = payload.invoice_info || (tokenPayload && tokenPayload.invoice_info) || {};
-    const uuid = info.uuid || (invoiceId ? (String(invoiceId).startsWith('INV-') ? invoiceId : `INV-${invoiceId}`) : null);
-    const txId = await db.read(() => {
-      let t = orderId ? db.getTransactionById(orderId) : null;
-      if (!t && uuid) t = db.getTransactionByProviderTxId(uuid);
-      if (!t && invoiceId) t = db.getTransactionByProviderTxId(invoiceId);
-      return t && t.provider === 'trybit' ? t.id : null;
-    });
-    if (!txId) return { success: true, message: 'Notification reçue.' };
-    const r = await this.verifyTrybitPayment({ transactionId: txId });
-    return { success: true, message: 'Statut vérifié auprès de Trybit.', status: r.status };
   }
 
   _safeReturnUrl(url, fallback) {

@@ -2197,14 +2197,14 @@
               <div class="sys-list-title del">Supprimé définitivement</div>
               <ul class="sys-list">
                 <li>Tout ce que supprime l'option A</li>
-                <li>Moyens de paiement personnalisés (retour aux 2 passerelles par défaut : Mobile Money SasPay et Crypto Trybit)</li>
+                <li>Moyens de paiement personnalisés (retour à la passerelle par défaut : Mobile Money SasPay)</li>
                 <li>Réglages de la boutique (valeurs par défaut)</li>
                 <li>Sessions des autres administrateurs</li>
               </ul>
               <div class="sys-list-title keep">Conservé</div>
               <ul class="sys-list keep">
                 <li>Votre compte administrateur et son mot de passe</li>
-                <li>Variables d'environnement et clés API (SasPay, Trybit, Google)</li>
+                <li>Variables d'environnement et clés API (SasPay, Google)</li>
                 <li>Structure de la base de données et configuration de sécurité</li>
                 <li>L'application elle-même (pages, design, code)</li>
               </ul>
@@ -6511,7 +6511,6 @@
       body.innerHTML = [
         item('Stockage des données', escapeHtml(storageLabel) + (st.warning ? '<br><span style="font-size:11.5px;">' + escapeHtml(st.warning) + '</span>' : ''), stClass),
         item('Mobile Money (SasPay)', yes(integ.saspay, 'Configuré', 'Clé API absente'), integ.saspay ? 'ok' : 'warn'),
-        item('Crypto (Trybit)', yes(integ.trybit, 'Configuré', 'Identifiants absents'), integ.trybit ? 'ok' : 'warn'),
         item('Connexion Google', yes(integ.google, 'Configurée', 'Non configurée'), integ.google ? 'ok' : 'warn'),
         item('Mot de passe oublié (e-mail)', yes(integ.emailPasswordReset, 'Envoi d\'e-mails actif', 'Réinitialisation via le support'), integ.emailPasswordReset ? 'ok' : 'warn'),
         item('Signature des sessions', yes(integ.sessionSecret, 'SESSION_SECRET défini', 'SESSION_SECRET manquant'), integ.sessionSecret ? 'ok' : 'bad'),

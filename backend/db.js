@@ -50,20 +50,13 @@ const DEFAULT_PAYMENT_METHODS = [
     instructions: 'Paiement direct sécurisé : validation automatique par Wave, Orange Money ou notification USSD push instantanée sur votre smartphone.',
     qrCode: null,
     enabled: true
-  },
-  {
-    id: 2,
-    name: 'Crypto Instantané (Trybit - USDT, BTC, ETH, SOL, LTC...)',
-    type: 'crypto_trybit',
-    provider: 'trybit',
-    network: 'multi',
-    isBinance: false,
-    address: 'Passerelle Trybit Officielle',
-    instructions: "Paiement crypto automatisé instantané avec génération d'adresse et validation blockchain automatique en temps réel.",
-    qrCode: null,
-    enabled: true
   }
 ];
+
+// The Trybit crypto gateway was retired (2026-11-16): Mobile Money (SasPay) is the only automatic gateway.
+function isRetiredTrybitMethod(pm) {
+  return Boolean(pm) && (String(pm.provider || '').toLowerCase() === 'trybit' || String(pm.type || '').toLowerCase() === 'crypto_trybit');
+}
 
 const DEFAULT_SETTINGS = { min_recharge: 5.0 };
 
@@ -237,7 +230,9 @@ function normalizeState(s) {
     });
   }
 
-  // Payment methods
+  // Payment methods (the retired Trybit gateway is removed from existing data)
+  const keptMethods = s.payment_methods.filter(pm => !isRetiredTrybitMethod(pm));
+  if (keptMethods.length !== s.payment_methods.length) { s.payment_methods = keptMethods; changed = true; }
   let maxMid = 0;
   for (const pm of s.payment_methods) {
     const n = parseInt(pm && pm.id, 10);
@@ -1423,6 +1418,7 @@ class Database {
       if (q && !(q.startsWith('/media/pub_') || /^https:\/\//i.test(q))) throw httpError(400, 'QR code invalide.');
       fields.qrCode = q;
     }
+    if (isRetiredTrybitMethod(fields)) throw httpError(400, "Le paiement crypto Trybit n'est plus pris en charge. Utilisez le Mobile Money.");
     const id = method.id !== undefined && method.id !== null && method.id !== '' ? parseInt(method.id, 10) : null;
     let saved = id ? this.data.payment_methods.find(m => m.id === id) : null;
     if (id && !saved) throw httpError(404, 'Moyen de paiement introuvable.');

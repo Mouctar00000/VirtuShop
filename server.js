@@ -57,7 +57,7 @@ setInterval(() => ipCounts.clear(), 60 * 1000).unref();
 
 function routeApi(urlPath) {
   if (urlPath.startsWith('/api/auth')) return require('./api/auth');
-  if (urlPath.startsWith('/api/payments') || urlPath.startsWith('/api/trybit')) return require('./api/payments');
+  if (urlPath.startsWith('/api/payments')) return require('./api/payments');
   if (urlPath === '/api/version' || urlPath.startsWith('/api/data')) return require('./api/data');
   return null;
 }

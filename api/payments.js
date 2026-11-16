@@ -1,6 +1,7 @@
 /**
  * Vercel Serverless Function: /api/payments
- * SasPay (Mobile Money) & Trybit (crypto) deposits, manual deposits, verification and provider webhooks.
+ * SasPay (Mobile Money) deposits, manual deposits, verification and provider webhooks.
+ * The Trybit (crypto) gateway was retired: its former routes answer 410 Gone.
  */
 
 'use strict';
@@ -33,6 +34,7 @@ module.exports = async function handler(req, res) {
   const { action, isTrybit, isSasPay } = route(req);
 
   try {
+    if (isTrybit) throw httpError(410, "Le paiement crypto (Trybit) n'est plus proposé. Utilisez le Mobile Money.");
     const body = req.method === 'GET' ? {} : parseBody(req);
 
     if (req.method === 'GET' && action === 'countries') {
@@ -53,43 +55,12 @@ module.exports = async function handler(req, res) {
       if (!transactionId) throw httpError(400, 'transactionId requis.');
       return res.status(200).json(await paymentService.verifySasPayPayment({ transactionId, caller: user }));
     }
-    if (isTrybit && (action === 'verify' || action === 'status')) {
-      const user = await caller(req);
-      let transactionId = queryParam(req, 'transactionId') || queryParam(req, 'txId') || body.transactionId || body.txId;
-      const invoiceUuid = queryParam(req, 'invoiceUuid') || queryParam(req, 'uuid') || body.invoiceUuid;
-      if (!transactionId && invoiceUuid) {
-        transactionId = await db.read(() => {
-          const t = db.getTransactionByProviderTxId(invoiceUuid);
-          return t && (user.role === 'admin' || String(t.userId) === String(user.id)) ? t.id : null;
-        });
-      }
-      if (!transactionId) throw httpError(400, 'transactionId requis.');
-      return res.status(200).json(await paymentService.verifyTrybitPayment({ transactionId, caller: user }));
-    }
 
     if (req.method !== 'POST') throw httpError(404, 'Action paiement non reconnue.');
 
-    // Provider webhooks (public, but only trigger a server-to-server verification)
-    if ((isTrybit && (action === 'webhook' || action === 'postback')) || (action === 'webhook' && (body.invoice_id || body.invoice_info || body.token || body.order_id))) {
-      return res.status(200).json(await paymentService.handleTrybitWebhook(body, req.headers || {}));
-    }
+    // Provider webhook (public, but only triggers a server-to-server verification)
     if (action === 'webhook') {
       return res.status(200).json(await paymentService.handleWebhook({ headers: req.headers || {}, rawBody: req.rawBody, payload: body }));
-    }
-
-    if (isTrybit && ['create', 'initiate', 'deposit'].includes(action)) {
-      const user = await caller(req);
-      const r = await paymentService.createTrybitDeposit({
-        user,
-        amountUsd: body.amount,
-        customerEmail: body.customerEmail || body.email,
-        cryptocurrency: body.cryptocurrency,
-        returnUrl: body.returnUrl,
-        productId: body.productId,
-        quantity: body.quantity,
-        contactInfo: body.contactInfo
-      });
-      return res.status(201).json(r);
     }
 
     if (isSasPay && ['create', 'initiate', 'deposit'].includes(action)) {

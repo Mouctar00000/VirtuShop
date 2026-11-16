@@ -128,7 +128,7 @@ test('public endpoints: version, empty catalogue, settings, payment methods', as
   assert.equal(typeof s.body.settings.min_recharge, 'number');
   const m = await get('/api/data/methods');
   assert.equal(m.status, 200);
-  assert.ok(m.body.methods.length >= 2);
+  assert.deepEqual(m.body.methods.map(x => x.provider), ['saspay'], 'Mobile Money is the only default payment method');
 });
 
 // ------------------------------------------------------------------------------------------------ admin auth
@@ -367,7 +367,6 @@ test('cancellation: refund exactly once, cancelled orders are final, delivered k
 // ------------------------------------------------------------------------------------------------ payments
 test('payments: session required, forged webhooks never credit, foreign transactions hidden', async () => {
   assert.equal((await post('/api/payments/deposit', { userId: ctx.aliceId, amount: 50, paymentMethodId: 1 })).status, 401);
-  assert.equal((await post('/api/payments/trybit/create', { userId: ctx.aliceId, amount: 50 })).status, 401);
   assert.equal((await post('/api/payments/saspay/create', { userId: ctx.aliceId, amount: 50 })).status, 401);
 
   const noProof = await post('/api/payments/deposit', { amount: 20, paymentMethodId: 1 }, ctx.alice);
@@ -381,7 +380,6 @@ test('payments: session required, forged webhooks never credit, foreign transact
   const before = (await get('/api/auth/me', ctx.alice)).body.user.balance;
   await post('/api/payments/webhook', { event: 'transaction.success', data: { status: 'SUCCESS', metadata: { internalTxId: ctx.depositTx } } });
   await post('/api/payments/saspay/webhook', { event: 'transaction.success', data: { status: 'SUCCESS', reference: ctx.depositTx } });
-  await post('/api/payments/trybit/webhook', { order_id: ctx.depositTx, status: 'paid' });
   await post('/api/payments/webhook', { invoice_id: 'X', order_id: ctx.depositTx, status: 'success' });
   const after = (await get('/api/auth/me', ctx.alice)).body.user.balance;
   assert.equal(after, before, 'forged webhooks must not credit anything');
@@ -401,13 +399,29 @@ test('payments: session required, forged webhooks never credit, foreign transact
   assert.equal(Math.round((credited - before) * 100) / 100, 20, 'credited exactly once');
 });
 
-test('crypto direct purchase: the amount is computed by the server', async () => {
-  const r = await post('/api/payments/trybit/create', { productId: ctx.gmailId, quantity: 2, amount: 0.01 }, ctx.bob);
-  // No Trybit credentials in tests: invoice creation fails, but the recorded amount proves server-side pricing
-  assert.ok(r.status === 502 || r.status === 503 || r.status === 201, String(r.status));
-  const txs = (await get('/api/data/transactions', ctx.admin)).body.transactions.filter(t => t.provider === 'trybit');
-  assert.ok(txs.length >= 1);
-  assert.equal(txs[0].amount, 20, 'price x quantity, not the client amount');
+test('Trybit gateway retired: only Mobile Money is offered and the old routes are closed', async () => {
+  const closed = [['POST', '/api/payments/trybit/create', 410], ['POST', '/api/payments/trybit/webhook', 410],
+    ['GET', '/api/payments/trybit/verify?transactionId=x', 410], ['POST', '/api/trybit/create', 404]];
+  for (const [method, url, expected] of closed) {
+    const r = method === 'GET' ? await get(url, ctx.bob) : await post(url, { productId: ctx.gmailId, quantity: 2, amount: 0.01 }, ctx.bob);
+    assert.equal(r.status, expected, `${method} ${url} -> ${r.status}`);
+  }
+  const pub = (await get('/api/data/methods')).body.methods;
+  assert.ok(pub.some(m => m.provider === 'saspay'), 'Mobile Money still offered');
+  assert.ok(!pub.some(m => m.provider === 'trybit' || m.type === 'crypto_trybit'), 'no Trybit method');
+  const recreate = await post('/api/data/methods', { name: 'Crypto', type: 'crypto_trybit', provider: 'trybit' }, ctx.admin);
+  assert.equal(recreate.status, 400, 'the admin cannot re-create the retired gateway');
+  const txs = (await get('/api/data/transactions', ctx.admin)).body.transactions;
+  assert.ok(!txs.some(t => t.provider === 'trybit'), 'no Trybit transaction was created');
+});
+
+test('legacy data: an existing Trybit payment method is removed on load', async () => {
+  const { normalizeState, createInitialState } = require('../backend/db').helpers;
+  const s = createInitialState();
+  assert.ok(!s.payment_methods.some(m => m.provider === 'trybit'), 'defaults contain only Mobile Money');
+  s.payment_methods.push({ id: 2, name: 'Crypto Instantané (Trybit)', type: 'crypto_trybit', provider: 'trybit', enabled: true });
+  assert.equal(normalizeState(s), true, 'state marked as changed');
+  assert.deepEqual(s.payment_methods.map(m => m.provider), ['saspay']);
 });
 
 test('admin balance adjustments are validated and ledgered', async () => {
@@ -545,7 +559,7 @@ test('full reset: also restores payment methods and settings to factory defaults
   const r = await post('/api/data/reset', { mode: 'full', password: ADMIN_PASSWORD, confirmation: 'RESET WEBSITE' }, ctx.admin);
   assert.equal(r.status, 200, JSON.stringify(r.body));
   const methods = (await get('/api/data/methods', ctx.admin)).body.methods;
-  assert.deepEqual(methods.map(m => m.id).sort(), [1, 2]);
+  assert.deepEqual(methods.map(m => m.provider), ['saspay'], 'full reset restores the single default gateway (Mobile Money)');
   assert.equal((await get('/api/data/settings')).body.settings.min_recharge, 5);
   assert.deepEqual((await get('/api/data/products')).body.products, []);
   assert.equal((await get('/api/data/users', ctx.admin)).body.users.length, 1);

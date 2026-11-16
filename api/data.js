@@ -130,7 +130,6 @@ module.exports = async function handler(req, res) {
           integrations: {
             saspay: Boolean(process.env.SASPAY_API_KEY),
             saspayWebhookSignature: Boolean(process.env.SASPAY_WEBHOOK_SECRET),
-            trybit: Boolean(process.env.TRYBIT_API_KEY && process.env.TRYBIT_SHOP_ID),
             google: Boolean(process.env.GOOGLE_CLIENT_ID),
             emailPasswordReset: Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM),
             sessionSecret: Boolean(process.env.SESSION_SECRET)

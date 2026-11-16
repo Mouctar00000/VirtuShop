@@ -28,7 +28,6 @@
     { "source": "/media/:id", "destination": "/api/data?resource=media&id=:id" },
     { "source": "/api/auth/:path*", "destination": "/api/auth" },
     { "source": "/api/payments/:path*", "destination": "/api/payments" },
-    { "source": "/api/trybit/:path*", "destination": "/api/payments" },
     { "source": "/api/data/:path*", "destination": "/api/data" }
   ],
   "headers": [

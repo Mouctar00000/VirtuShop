@@ -1,11 +1,12 @@
 # GetVirtu (getvirtu.shop)
 
 Digital-goods shop (accounts, licence keys, digital services) with a customer balance, Mobile Money
-(SasPay) and crypto (Trybit) top-ups, automatic key delivery and an administration dashboard.
+(SasPay) top-ups, automatic key delivery and an administration dashboard. The Trybit crypto gateway was retired
+on 2026-11-16 (its former routes answer 410 Gone).
 
 - Storefront: `index.html` + `app.js` · Admin dashboard: `admin.html` (`/admin`)
 - API (Vercel serverless functions): `api/auth.js`, `api/data.js`, `api/payments.js`
-- Server logic: `backend/` (`db.js` data model, `store.js` storage adapters, `auth.js`, `payments.js`, `trybit.js`)
+- Server logic: `backend/` (`db.js` data model, `store.js` storage adapters, `auth.js`, `payments.js`)
 - Local server: `node server.js` (same handlers as production)
 
 ## Data storage
@@ -58,7 +59,7 @@ operation (everything or nothing). The backup is also downloaded to the admin's 
 | Customer accounts and balances | deleted | deleted |
 | Orders, transactions, top-ups, payment proofs | deleted | deleted |
 | Support tickets, visit statistics, customer sessions | deleted | deleted |
-| Payment methods (and their QR codes) | **kept** | reset to the 2 default gateways (SasPay, Trybit) |
+| Payment methods (and their QR codes) | **kept** | reset to the default gateway (SasPay Mobile Money) |
 | Shop settings (minimum top-up, WhatsApp number) | **kept** | reset to defaults |
 | Other administrators' sessions | kept | revoked |
 | Owner administrator account and password | **kept** | **kept** |
@@ -72,7 +73,7 @@ On the Edge Config fallback, the downloaded file is the only backup.
 - Authorization is enforced by the server on every endpoint; the browser never decides who is admin.
 - Sessions are HMAC-signed tokens bound to the account (`session_version`) and revocable (logout, password change, reset).
 - Prices, totals, stock and balances are computed on the server; client-supplied ids, prices and roles are ignored.
-- A payment is credited only after a server-to-server check with SasPay/Trybit using the provider id stored when
+- A payment is credited only after a server-to-server check with SasPay using the provider id stored when
   the payment was created (webhooks are only triggers); crediting is idempotent.
 - Uploads: real PNG/JPEG/WebP/GIF only (magic-number check, no SVG), size limits, stored outside the main document.
 - Strict security headers (CSP without `unsafe-eval`, HSTS, frame and MIME protections); private paths are never served.

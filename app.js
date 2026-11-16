@@ -315,10 +315,14 @@ function initDB() {
     }
   }
 
-  // Méthodes de paiement officielles : initialisation sécurisée sans écraser les ajouts admin
+  // Méthodes de paiement officielles : seul le Mobile Money est proposé. L'ancienne passerelle crypto Trybit
+  // est retirée, y compris d'un éventuel cache local d'un visiteur précédent.
   var currentMethods = DB.get('payment_methods', null);
+  if (Array.isArray(currentMethods)) {
+    currentMethods = currentMethods.filter(function(m) { return m && m.provider !== 'trybit' && m.type !== 'crypto_trybit'; });
+  }
   if (!currentMethods || !Array.isArray(currentMethods) || currentMethods.length === 0) {
-    DB.set('payment_methods', [
+    currentMethods = [
       {
         id: 1,
         name: "Mobile Money (Wave, Orange, MTN, Moov)",
@@ -329,20 +333,10 @@ function initDB() {
         address: "Passerelle SasPay Officielle",
         instructions: "Paiement direct sécurisé : validation automatique par Wave, Orange Money ou notification USSD push instantanée sur votre smartphone.",
         enabled: true
-      },
-      {
-        id: 2,
-        name: "Crypto Instantané (Trybit - USDT, BTC, ETH, SOL...)",
-        type: "crypto_trybit",
-        provider: "trybit",
-        network: "multi",
-        isBinance: false,
-        address: "Passerelle Trybit Officielle",
-        instructions: "Paiement crypto automatisé instantané avec génération d'adresse et validation blockchain automatique en temps réel.",
-        enabled: true
       }
-    ]);
+    ];
   }
+  DB.set('payment_methods', currentMethods);
 
   // Synchronisation asynchrone avec les moyens de paiement configurés sur le serveur
   try {
