@@ -547,6 +547,57 @@
       border-radius: 8px !important;
     }
 
+    /* Fiche produit détaillée : zones de texte, statut, section repliable */
+    #admin-prod-modal .admin-prod-textarea {
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      resize: vertical;
+      min-height: 58px;
+      font-family: inherit;
+      color: var(--text-primary);
+      background: #ffffff;
+    }
+    #admin-prod-modal .admin-prod-textarea:focus,
+    #admin-prod-modal .admin-prod-select:focus {
+      outline: none;
+      border-color: var(--primary-500);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+    #admin-prod-modal .admin-prod-select {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      height: 33px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    #admin-prod-modal .admin-prod-sheet {
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 7px 10px 9px;
+      margin-bottom: 7px;
+      background: #f8fafc;
+    }
+    #admin-prod-modal .admin-prod-sheet > summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      list-style-position: inside;
+    }
+    #admin-prod-modal .admin-prod-sheet > summary span {
+      font-weight: 500;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
     /* Boutons d'action compacts */
     #admin-prod-modal .modal-actions-compact,
     #admin-method-modal .modal-actions-compact {
@@ -1447,6 +1498,7 @@
 
       #admin-prod-modal input[type="text"],
       #admin-prod-modal input[type="number"],
+      #admin-prod-modal .admin-prod-select,
       #admin-method-modal input[type="text"],
       #admin-method-modal select {
         min-height: 38px !important;
@@ -2237,23 +2289,37 @@
           </div>
         </div>
 
-        <!-- Première ligne : Catégorie à gauche, Description courte à droite -->
-        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; margin-bottom: 6px;">
+        <!-- Première ligne : Catégorie à gauche, Statut (en ligne / hors ligne) à droite -->
+        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; margin-bottom: 6px;">
           <div class="field" style="margin-bottom: 0;">
             <label for="admin-prod-cat">Catégorie</label>
-            <input type="text" id="admin-prod-cat" required placeholder="gmail, youtube, discord...">
+            <input type="text" id="admin-prod-cat" list="admin-prod-cat-list" required placeholder="E-mail, Réseaux sociaux...">
+            <datalist id="admin-prod-cat-list"></datalist>
           </div>
           <div class="field" style="margin-bottom: 0;">
-            <label for="admin-prod-desc">Description courte</label>
-            <input type="text" id="admin-prod-desc" placeholder="Ex: Compte propre avec 2FA activé...">
+            <label for="admin-prod-published">Statut dans la boutique</label>
+            <select id="admin-prod-published" class="admin-prod-select">
+              <option value="1">● En ligne (visible)</option>
+              <option value="0">○ Hors ligne (masqué)</option>
+            </select>
           </div>
         </div>
 
-        <!-- Deuxième ligne : Prix à gauche, Stock disponible à droite -->
-        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+        <!-- Présentation commerciale (affichée sur la carte et en tête de la fiche) -->
+        <div class="field" style="margin-bottom: 6px;">
+          <label for="admin-prod-desc">Présentation commerciale <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">(2 à 3 phrases, affichées sur la carte produit)</span></label>
+          <textarea id="admin-prod-desc" class="admin-prod-textarea" rows="3" maxlength="2000" placeholder="Ex : Compte Gmail sécurisé avec double authentification, livré instantanément après paiement."></textarea>
+        </div>
+
+        <!-- Deuxième ligne : Prix, Prix barré (promotion), Stock disponible -->
+        <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 6px;">
           <div class="field" style="margin-bottom: 0;">
-            <label for="admin-prod-price">Prix ($ USD)</label>
+            <label for="admin-prod-price">Prix de vente ($)</label>
             <input type="number" step="0.01" min="0" id="admin-prod-price" required placeholder="1.50">
+          </div>
+          <div class="field" style="margin-bottom: 0;">
+            <label for="admin-prod-compare" style="white-space: nowrap;">Prix barré ($) <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">(promo)</span></label>
+            <input type="number" step="0.01" min="0" id="admin-prod-compare" placeholder="Vide = pas de promo" title="Ancien prix affiché barré. Doit être supérieur au prix de vente. Laissez vide s'il n'y a pas de promotion.">
           </div>
           <div class="field" style="margin-bottom: 0;">
             <label for="admin-prod-stock" style="white-space: nowrap;">Stock disponible <span id="admin-prod-stock-hint" style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
@@ -2272,6 +2338,29 @@
             Le client paie, la commande passe « En attente » et il voit un bouton WhatsApp avec un message pré-rempli (produit, référence, montant). Indiquez le stock disponible ci-dessus, puis livrez depuis Commandes › Examiner.
           </div>
         </div>
+
+        <!-- Fiche produit détaillée (affichée dans la fiche « Voir les détails » de la boutique) -->
+        <details class="admin-prod-sheet" id="admin-prod-sheet" open>
+          <summary>📋 Fiche produit détaillée <span>— une information par ligne, sections vides masquées</span></summary>
+          <div class="modal-grid-2col" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+            <div class="field" style="margin-bottom: 0;">
+              <label for="admin-prod-features">Caractéristiques principales</label>
+              <textarea id="admin-prod-features" class="admin-prod-textarea" rows="4" placeholder="Authentification à deux facteurs (2FA)&#10;Format : Gmail | Mot de passe | 2FA"></textarea>
+            </div>
+            <div class="field" style="margin-bottom: 0;">
+              <label for="admin-prod-benefits">Avantages pour le client</label>
+              <textarea id="admin-prod-benefits" class="admin-prod-textarea" rows="4" placeholder="Compte sécurisé&#10;Livraison instantanée après paiement"></textarea>
+            </div>
+            <div class="field" style="margin-bottom: 0;">
+              <label for="admin-prod-notices">Informations importantes</label>
+              <textarea id="admin-prod-notices" class="admin-prod-textarea" rows="3" placeholder="Changez le mot de passe dès réception"></textarea>
+            </div>
+            <div class="field" style="margin-bottom: 0;">
+              <label for="admin-prod-delivery-info">Conditions de livraison / d'exécution</label>
+              <textarea id="admin-prod-delivery-info" class="admin-prod-textarea" rows="3" maxlength="1000" placeholder="Livraison instantanée dans « Mes commandes » dès confirmation du paiement."></textarea>
+            </div>
+          </div>
+        </details>
 
         <!-- Section Illustration du produit ultra-compacte -->
         <div class="field" style="margin-bottom: 6px;">
@@ -3357,7 +3446,10 @@
               ${p.deliveryMode === 'manual' ? '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 7px;">📲 Livraison WhatsApp</span>' : ''}
             </td>
             <td><span class="status-indicator-pill offline">${escapeHtml(p.category)}</span></td>
-            <td><strong style="color: var(--primary-600); font-size: 14px;">${p.price.toFixed(2)} $</strong></td>
+            <td>
+              <strong style="color: var(--primary-600); font-size: 14px;">${p.price.toFixed(2)} $</strong>
+              ${typeof p.compareAtPrice === 'number' && p.compareAtPrice > p.price ? `<div style="font-size: 11px; color: var(--text-muted); text-decoration: line-through;" title="Prix barré (promotion)">${p.compareAtPrice.toFixed(2)} $</div>` : ''}
+            </td>
             <td>
               <div style="font-weight: 700; color: ${avail > 0 ? 'var(--emerald-600)' : 'var(--rose-600)'}; font-size: 12.5px;">
                 ${avail > 0 ? '● ' + avail + ' dispo' : '○ Rupture (0)'}
@@ -4073,7 +4165,13 @@
       }, false);
     }
 
+    function isManualDeliverySelected() {
+      return (document.getElementById('admin-prod-delivery') || {}).value === 'manual';
+    }
+
     function updateStockFromVaultKeys() {
+      // Livraison manuelle : le stock est saisi par l'administrateur, jamais recalculé depuis le coffre-fort
+      if (isManualDeliverySelected()) return;
       var type = document.getElementById('admin-vault-type').value;
       var stockInput = document.getElementById('admin-prod-stock');
       if (!stockInput) return;
@@ -4117,12 +4215,38 @@
       updateStockFromVaultKeys();
     }
 
+    // Fiche produit détaillée : remplissage des champs (prix barré, statut, caractéristiques, avantages, infos, livraison)
+    function fillProductSheetFields(p) {
+      p = p || {};
+      var lines = function(a) { return Array.isArray(a) ? a.join('\n') : ''; };
+      document.getElementById('admin-prod-compare').value = (typeof p.compareAtPrice === 'number' && p.compareAtPrice > 0) ? p.compareAtPrice : '';
+      document.getElementById('admin-prod-features').value = lines(p.features);
+      document.getElementById('admin-prod-benefits').value = lines(p.benefits);
+      document.getElementById('admin-prod-notices').value = lines(p.notices);
+      document.getElementById('admin-prod-delivery-info').value = p.deliveryInfo || '';
+      document.getElementById('admin-prod-published').value = p.published === false ? '0' : '1';
+    }
+
+    // Suggestions de catégories existantes (évite « E-mail » / « e-mail » en double)
+    function refreshProductCategoryList() {
+      var dl = document.getElementById('admin-prod-cat-list');
+      if (!dl) return;
+      var seen = {};
+      dl.innerHTML = (DB.get('products', []) || [])
+        .map(function(p) { return p && typeof p.category === 'string' ? p.category : ''; })
+        .filter(function(c) { var k = c.toLowerCase(); if (!c || seen[k]) return false; seen[k] = true; return true; })
+        .map(function(c) { return '<option value="' + escapeHtml(c) + '"></option>'; })
+        .join('');
+    }
+
     function openNewProductModal() {
       _editingExistingProductKeys = false;
       _prodVaultTextareaTouched = false;
       document.getElementById('prod-modal-title').textContent = 'Ajouter un Nouveau Produit';
       document.getElementById('admin-prod-id').value = '';
       document.getElementById('admin-prod-form').reset();
+      fillProductSheetFields({});
+      refreshProductCategoryList();
       document.getElementById('admin-prod-stock').value = 0;
       var banner = document.getElementById('admin-prod-match-banner');
       if (banner) banner.style.display = 'none';
@@ -4161,6 +4285,7 @@
         document.getElementById('admin-prod-cat').value = found.category || '';
         document.getElementById('admin-prod-price').value = found.price || '';
         document.getElementById('admin-prod-desc').value = found.description || '';
+        fillProductSheetFields(found);
         if (found.image) {
           editingProductImage = found.image;
           updateDropzoneUI(found.image);
@@ -4197,6 +4322,8 @@
       document.getElementById('admin-prod-cat').value = p.category;
       document.getElementById('admin-prod-price').value = p.price;
       document.getElementById('admin-prod-desc').value = p.description || '';
+      fillProductSheetFields(p);
+      refreshProductCategoryList();
 
       var banner = document.getElementById('admin-prod-match-banner');
       if (banner) banner.style.display = 'none';
@@ -4242,6 +4369,8 @@
       document.getElementById('admin-prod-cat').value = p.category;
       document.getElementById('admin-prod-price').value = p.price;
       document.getElementById('admin-prod-desc').value = p.description || '';
+      fillProductSheetFields(p);
+      refreshProductCategoryList();
 
       var banner = document.getElementById('admin-prod-match-banner');
       if (banner) banner.style.display = 'none';
@@ -4263,7 +4392,9 @@
           }
           ta.placeholder = 'Modifiez les clés disponibles (1 par ligne) ou ajoutez-en de nouvelles...';
         }
-        if (Array.isArray(keysList) && keysList.length > 0) {
+        if (isManualDeliverySelected()) {
+          // stock déclaré conservé (produit en livraison manuelle)
+        } else if (Array.isArray(keysList) && keysList.length > 0) {
           document.getElementById('admin-prod-stock').value = unusedKeys.length;
         } else {
           updateStockFromVaultKeys();
@@ -4480,14 +4611,26 @@
 
       var idVal = document.getElementById('admin-prod-id').value;
       var name = document.getElementById('admin-prod-name').value.trim();
-      var cat = document.getElementById('admin-prod-cat').value.trim().toLowerCase() || 'général';
+      var cat = document.getElementById('admin-prod-cat').value.trim() || 'Général';
       var price = parseFloat(document.getElementById('admin-prod-price').value) || 0;
       var desc = document.getElementById('admin-prod-desc').value.trim();
       var declaredStock = parseInt(document.getElementById('admin-prod-stock')?.value, 10) || 0;
       var deliveryMode = (document.getElementById('admin-prod-delivery') || {}).value === 'manual' ? 'manual' : 'auto';
+      var compareRaw = (document.getElementById('admin-prod-compare').value || '').trim();
+      var compareAtPrice = compareRaw === '' ? null : (parseFloat(compareRaw) || null);
+      var sheetFields = {
+        features: document.getElementById('admin-prod-features').value,
+        benefits: document.getElementById('admin-prod-benefits').value,
+        notices: document.getElementById('admin-prod-notices').value,
+        deliveryInfo: document.getElementById('admin-prod-delivery-info').value.trim()
+      };
 
       if (!name) {
         showToast('Veuillez renseigner le nom du produit.', 'error');
+        return;
+      }
+      if (compareAtPrice !== null && compareAtPrice <= price) {
+        showToast('Le prix barré doit être supérieur au prix de vente (laissez-le vide sans promotion).', 'error');
         return;
       }
 
@@ -4555,7 +4698,7 @@
 
       var defaultSvgImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220"><rect width="400" height="220" fill="%232563eb"/><text x="200" y="115" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="%23ffffff">GETVIRTU</text></svg>';
       var effectiveImage = editingProductImage || (existingProdObj && existingProdObj.image) || null; // pas d'image : visuel par défaut côté boutique
-      var effectivePublished = existingProdObj && typeof existingProdObj.published === 'boolean' ? existingProdObj.published : true;
+      var effectivePublished = document.getElementById('admin-prod-published').value !== '0';
 
       var submitBtn = document.querySelector('#admin-prod-form button[type="submit"]');
       var origBtnHtml = submitBtn ? submitBtn.innerHTML : '';
@@ -4580,6 +4723,11 @@
             stock: deliveryMode === 'manual' ? Math.max(0, declaredStock) : (vaultType === 'file' ? Math.max(1, declaredStock) : undefined),
             deliveryMode: deliveryMode,
             description: desc,
+            compareAtPrice: compareAtPrice,
+            features: sheetFields.features,
+            benefits: sheetFields.benefits,
+            notices: sheetFields.notices,
+            deliveryInfo: sheetFields.deliveryInfo,
             image: effectiveImage,
             published: effectivePublished,
             vaultType: vaultType,

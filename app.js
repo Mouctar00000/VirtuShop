@@ -730,7 +730,7 @@ function renderLandingShowcase() {
     var safeImg = sanitizeProductImage(p.image, p.category, p.name);
     html += `
       <div class="showcase-item">
-        <div class="showcase-item-info">
+        <div class="showcase-item-info product-open-details" role="button" tabindex="0" title="Voir la fiche produit" onclick="openProductDetails(${productIdArg(p.id)})">
           <img src="${safeImg}" class="showcase-thumb" alt="${escapeHtml(p.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
           <div style="min-width: 0; flex: 1; overflow: hidden;">
             <h4 class="showcase-title">${escapeHtml(p.name)}</h4>
@@ -866,27 +866,33 @@ function renderProductCardsInto(container, prods) {
   prods.forEach(function(prod) {
     var oos = prod.stock <= 0;
     var safeImg = sanitizeProductImage(prod.image, prod.category, prod.name);
+    var idArg = productIdArg(prod.id);
+    var promo = productPromo(prod);
 
     html += `
       <div class="product-card${oos ? ' oos' : ''}">
-        <div class="product-image-box">
+        <div class="product-image-box product-open-details" role="button" tabindex="0" aria-label="Voir la fiche : ${escapeHtml(prod.name)}" onclick="openProductDetails(${idArg})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProductDetails(${idArg});}">
           <img src="${safeImg}" class="product-img" alt="${escapeHtml(prod.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
           <div class="product-badge-overlay">⚡ Vérifié</div>
+          ${promo ? `<div class="product-promo-badge">-${promo.percent}%</div>` : ''}
         </div>
 
         <div class="product-body">
           <span class="product-category-label">${escapeHtml(prod.category)}</span>
-          <h3 class="product-name">${escapeHtml(prod.name)}</h3>
-          <p class="product-desc">${escapeHtml(prod.description || 'Service numérique vérifié.')}</p>
+          <h3 class="product-name"><button type="button" class="product-name-link" onclick="openProductDetails(${idArg})">${escapeHtml(prod.name)}</button></h3>
+          <p class="product-desc product-desc-clamp">${escapeHtml(prod.description || 'Service numérique vérifié.')}</p>
 
           <div class="product-card-footer">
             <div class="product-meta">
               <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture de stock' : '● ' + prod.stock + ' disponible' + (prod.stock > 1 ? 's' : '')}</span>
-              <span class="product-price">$${prod.price.toFixed(2)}</span>
+              <span class="product-price-group">${promo ? `<span class="product-compare-price">$${promo.compareAt.toFixed(2)}</span>` : ''}<span class="product-price">$${prod.price.toFixed(2)}</span></span>
             </div>
-            <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${typeof prod.id === 'number' ? prod.id : "'" + String(prod.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"})">
-              ${oos ? 'Rupture de Stock' : 'Acheter ⚡'}
-            </button>
+            <div class="product-actions">
+              <button type="button" class="btn-product-details" onclick="openProductDetails(${idArg})">Détails</button>
+              <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="startProductPurchase(${idArg})">
+                ${oos ? 'Rupture de Stock' : 'Acheter ⚡'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -895,6 +901,129 @@ function renderProductCardsInto(container, prods) {
 
   container.innerHTML = html;
 }
+
+// ========== FICHE PRODUIT DÉTAILLÉE (structure commune à tous les produits) ==========
+function productIdArg(id) {
+  return typeof id === 'number' ? id : "'" + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+}
+
+// Promotion : prix barré (fixé par l'administrateur) supérieur au prix de vente
+function productPromo(p) {
+  if (!p || typeof p.compareAtPrice !== 'number' || !(p.compareAtPrice > p.price)) return null;
+  return { compareAt: p.compareAtPrice, percent: Math.max(1, Math.round((1 - p.price / p.compareAtPrice) * 100)) };
+}
+
+var PD_ICONS = {
+  features: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+  benefits: '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  notices: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  delivery: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+};
+
+function findCatalogProduct(prodId) {
+  return getConsolidatedProducts().find(function(p) { return String(p.id) === String(prodId); }) || null;
+}
+
+function ensureProductDetailsModal() {
+  var modal = document.getElementById('modal-product');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'modal-product';
+  modal.className = 'modal-backdrop';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'pd-title');
+  modal.innerHTML = '<div class="modal-window modal-product-details"><button type="button" class="modal-close-btn" aria-label="Fermer" onclick="closeProductDetails()">✕</button><div id="pd-content"></div></div>';
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeProductDetails(); });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function renderPdSection(kind, title, items, extraClass) {
+  if (!Array.isArray(items) || !items.length) return '';
+  return `
+    <section class="pd-section${extraClass ? ' ' + extraClass : ''}">
+      <h3 class="pd-section-title"><span class="pd-icon pd-icon-${kind}">${PD_ICONS[kind]}</span>${title}</h3>
+      <ul class="pd-list pd-list-${kind}">${items.map(function(t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('')}</ul>
+    </section>`;
+}
+
+function openProductDetails(prodId) {
+  var prod = findCatalogProduct(prodId);
+  if (!prod) {
+    showToast("Ce produit n'est plus disponible dans la boutique.", 'error');
+    return;
+  }
+  var oos = prod.stock <= 0;
+  var promo = productPromo(prod);
+  var deliveryText = String(prod.deliveryInfo || '').trim() || (prod.deliveryMode === 'manual'
+    ? 'Après le paiement, la commande passe « En attente » et nous vous contactons sur WhatsApp pour la livraison.'
+    : 'Livraison automatique dans « Mes commandes » dès la confirmation du paiement.');
+
+  ensureProductDetailsModal();
+  document.getElementById('pd-content').innerHTML = `
+    <div class="pd-media">
+      <img src="${sanitizeProductImage(prod.image, prod.category, prod.name)}" alt="${escapeHtml(prod.name)}" onerror="this.onerror=null;this.src=window.GV_PRODUCT_FALLBACK_IMG;">
+      ${promo ? `<div class="product-promo-badge">-${promo.percent}%</div>` : ''}
+    </div>
+    <div class="pd-head">
+      <span class="product-category-label">${escapeHtml(prod.category || '')}</span>
+      <h2 class="pd-title" id="pd-title">${escapeHtml(prod.name)}</h2>
+      <div class="pd-price-row">
+        <span class="product-price-group">${promo ? `<span class="product-compare-price">$${promo.compareAt.toFixed(2)}</span>` : ''}<span class="product-price">$${prod.price.toFixed(2)}</span></span>
+        <span class="pd-fcfa">≈ ${Math.round(prod.price * FCFA_RATE).toLocaleString('fr-FR')} FCFA</span>
+        <span class="stock-tag${oos ? ' oos' : ''}">${oos ? '● Rupture de stock' : '● ' + prod.stock + ' disponible' + (prod.stock > 1 ? 's' : '')}</span>
+      </div>
+    </div>
+    ${prod.description ? `<p class="pd-summary">${escapeHtml(prod.description)}</p>` : ''}
+    ${renderPdSection('features', 'Caractéristiques principales', prod.features)}
+    ${renderPdSection('benefits', 'Avantages', prod.benefits)}
+    ${renderPdSection('notices', 'Informations importantes', prod.notices, 'pd-section-notice')}
+    <section class="pd-section">
+      <h3 class="pd-section-title"><span class="pd-icon pd-icon-delivery">${PD_ICONS.delivery}</span>Livraison et exécution</h3>
+      <p class="pd-delivery-text">${escapeHtml(deliveryText)}</p>
+    </section>
+    <div class="pd-actions">
+      <button type="button" class="btn-buy-product${oos ? ' btn-buy-disabled' : ''} btn-light-sweep" ${oos ? 'disabled' : ''} onclick="buyFromProductDetails(${productIdArg(prod.id)})">
+        ${oos ? 'Rupture de stock' : 'Acheter ⚡ — $' + prod.price.toFixed(2)}
+      </button>
+    </div>`;
+  var modal = document.getElementById('modal-product');
+  modal.classList.add('active');
+  var win = modal.querySelector('.modal-window');
+  if (win) win.scrollTop = 0;
+  try { history.replaceState(null, '', location.pathname + location.search + '#produit-' + encodeURIComponent(prod.id)); } catch (e) {}
+}
+
+function closeProductDetails() {
+  var modal = document.getElementById('modal-product');
+  if (modal) modal.classList.remove('active');
+  if (/^#produit-/.test(location.hash)) {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+}
+
+function buyFromProductDetails(prodId) {
+  closeProductDetails();
+  startProductPurchase(prodId);
+}
+
+// Lien direct vers une fiche : https://getvirtu.shop/#produit-12 (ouverte une fois le catalogue chargé)
+var _gvHashProductHandled = false;
+function maybeOpenProductFromHash(force) {
+  var m = /^#produit-(.+)$/.exec(location.hash || '');
+  if (!m || (_gvHashProductHandled && !force)) return;
+  var id = decodeURIComponent(m[1]);
+  if (!findCatalogProduct(id)) return; // catalogue pas encore chargé
+  _gvHashProductHandled = true;
+  openProductDetails(id);
+}
+window.addEventListener('hashchange', function() { maybeOpenProductFromHash(true); });
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var modal = document.getElementById('modal-product');
+  if (modal && modal.classList.contains('active')) closeProductDetails();
+});
 
 // ========== TUNNEL D'ACHAT (SOLDE, CRYPTO, MOBILE MONEY) ==========
 function startProductPurchase(prodId) {
@@ -4661,6 +4790,7 @@ function rerenderCatalogViews() {
   if (typeof renderLandingCatalog === 'function') renderLandingCatalog();
   if (typeof renderConnectedCategories === 'function') renderConnectedCategories();
   if (typeof renderConnectedCatalog === 'function') renderConnectedCatalog();
+  if (typeof maybeOpenProductFromHash === 'function') maybeOpenProductFromHash(false);
 }
 
 async function syncProductsFromServer() {

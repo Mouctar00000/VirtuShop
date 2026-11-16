@@ -253,6 +253,40 @@ test('admin product management: create, image upload, validation, publish state'
   await put('/api/data/products', { id: ctx.gmailId, price: 10 }, ctx.admin);
 });
 
+test('detailed product sheet: promo price, features, benefits, notices, delivery terms, status, category spelling', async () => {
+  const c = await post('/api/data/products', {
+    name: 'Fiche Détaillée', category: 'gmail', price: 8, compareAtPrice: 10, description: 'Présentation courte',
+    features: '- Caractéristique A\n\n• Caractéristique B', benefits: ['Avantage 1', ' '], notices: 'Info importante',
+    deliveryInfo: 'Livraison instantanée', deliveryMode: 'manual', stock: 3, published: true
+  }, ctx.admin);
+  assert.equal(c.status, 200, JSON.stringify(c.body));
+  const id = c.body.product.id;
+  assert.equal(c.body.product.category, 'Gmail', 'the spelling of an existing category is reused');
+  assert.deepEqual(c.body.product.features, ['Caractéristique A', 'Caractéristique B'], 'one item per line, bullets removed');
+  assert.deepEqual(c.body.product.benefits, ['Avantage 1'], 'empty items dropped');
+  let pub = (await get('/api/data/products')).body.products.find(p => p.id === id);
+  assert.equal(pub.compareAtPrice, 10);
+  assert.deepEqual(pub.notices, ['Info importante']);
+  assert.equal(pub.deliveryInfo, 'Livraison instantanée');
+
+  assert.equal((await put('/api/data/products', { id, compareAtPrice: 7 }, ctx.admin)).status, 400, 'struck price below the price refused');
+  assert.equal((await put('/api/data/products', { id, price: 11 }, ctx.admin)).status, 400, 'price above the struck price refused while a promotion is set');
+
+  assert.equal((await put('/api/data/products', { id, name: 'Fiche Détaillée', published: false }, ctx.admin)).status, 200);
+  assert.ok(!(await get('/api/data/products')).body.products.some(p => p.id === id), 'offline product hidden from the shop');
+  const back = await put('/api/data/products', { id, published: true, compareAtPrice: null, features: '', benefits: 'Nouvel avantage' }, ctx.admin);
+  assert.equal(back.status, 200, JSON.stringify(back.body));
+  pub = (await get('/api/data/products')).body.products.find(p => p.id === id);
+  assert.equal(pub.compareAtPrice, null, 'promotion removed');
+  assert.deepEqual(pub.features, []);
+  assert.deepEqual(pub.benefits, ['Nouvel avantage']);
+  assert.deepEqual(pub.notices, ['Info importante'], 'fields not sent are kept');
+  assert.equal(pub.description, 'Présentation courte');
+
+  assert.ok([401, 403].includes((await put('/api/data/products', { id, price: 0 }, ctx.alice)).status), 'customers cannot edit products');
+  assert.equal((await del('/api/data/products', { id }, ctx.admin)).status, 200);
+});
+
 // ------------------------------------------------------------------------------------------------ purchases
 test('purchase with balance: server-side price, balance and stock, no client-chosen ids', async () => {
   const poor = await post('/api/data/orders', { productId: ctx.gmailId, quantity: 1 }, ctx.alice);

@@ -91,6 +91,14 @@ function cleanText(v, max = 500) {
   if (v === undefined || v === null) return '';
   return String(v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim().slice(0, max);
 }
+// Product sheet lists (features, benefits, important notices): an array or one item per line; leading bullets removed.
+function cleanList(v, maxItems = 20, maxLen = 300) {
+  const raw = Array.isArray(v) ? v : String(v === undefined || v === null ? '' : v).split(/\r?\n/);
+  return raw
+    .map(x => cleanText(String(x === undefined || x === null ? '' : x).replace(/^\s*(?:[-*•·✓✔]|\d+[.)])\s+/, ''), maxLen))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
 function httpError(status, message, code) {
   const e = new Error(message);
   e.status = status;
@@ -355,6 +363,9 @@ class Database {
           // normalizeState already ran (and marked dirty) inside _runTx
           await this._migrateInlineMedia();
         });
+        // One-time catalogue update, in its own transaction: on failure nothing is written and the site keeps working
+        await this._runTx(() => this._catalogUpdate20261116b())
+          .catch(err => console.error('[catalog-update] failed, nothing written:', err && err.message));
         this._migrationsDone = true;
       })().catch(err => {
         this._readyPromise = null;
@@ -416,6 +427,34 @@ class Database {
         this._dirty = false;
       }
     }));
+  }
+
+  // One-time catalogue update requested by the owner (2026-11-16, second batch): new sheet content for the existing
+  // products (matched by id AND current name, so a product the owner renamed meanwhile is left alone) and 3 new
+  // products. Runs once (meta flag), then this code is removed; everything stays editable from the dashboard.
+  async _catalogUpdate20261116b() {
+    if (process.env.VERCEL_ENV !== 'production' || this.store.kind !== 'postgres') return;
+    const m = this.data.meta;
+    if (m.catalog_update_20261116b) return;
+    const { updates, creations } = require('./catalog-update-20261116b');
+    const log = [];
+    for (const u of updates) {
+      const { id, expectName, ...fields } = u;
+      const p = this.getProductById(id);
+      if (!p || normalizeProductName(p.name) !== normalizeProductName(expectName)) { log.push(`#${id} skipped`); continue; }
+      this.saveProduct({ id, ...fields });
+      log.push(`#${id} updated`);
+    }
+    for (const c of creations) {
+      const { png, ...fields } = c;
+      if (this.findProductByNormalizedName(fields.name)) { log.push(`"${fields.name}" already exists`); continue; }
+      const image = await this.saveImageDataUrl('data:image/png;base64,' + png);
+      const p = this.saveProduct({ ...fields, image });
+      log.push(`#${p.id} created`);
+    }
+    m.catalog_update_20261116b = nowIso();
+    this.persist();
+    console.log('[catalog-update] ' + log.join(', '));
   }
 
   // One-time migration: inline data: URL images (several MB in the JSON document) -> blob storage
@@ -694,9 +733,22 @@ class Database {
       image: p.image || null,
       published: true,
       deliveryMode: p.deliveryMode,
+      compareAtPrice: typeof p.compareAtPrice === 'number' && p.compareAtPrice > p.price ? p.compareAtPrice : null,
+      features: Array.isArray(p.features) ? p.features : [],
+      benefits: Array.isArray(p.benefits) ? p.benefits : [],
+      notices: Array.isArray(p.notices) ? p.notices : [],
+      deliveryInfo: typeof p.deliveryInfo === 'string' ? p.deliveryInfo : '',
       created_at: p.created_at,
       updated_at: p.updated_at
     }));
+  }
+
+  /** Reuses the spelling of an existing category typed with a different case ("e-mail" -> "E-mail"). */
+  _canonicalCategory(raw, selfId) {
+    const c = cleanText(raw, 60) || 'Général';
+    const low = c.toLowerCase();
+    const other = this.data.products.find(x => x && x.id !== selfId && typeof x.category === 'string' && x.category.toLowerCase() === low);
+    return other ? other.category : c;
   }
 
   getProductById(id) {
@@ -755,6 +807,25 @@ class Database {
     const image = prod.image === undefined ? undefined : (prod.image ? String(prod.image).slice(0, 1000) : null);
     if (image && !(image.startsWith('/media/pub_') || /^https:\/\//i.test(image))) throw httpError(400, "URL d'image invalide.");
 
+    // Detailed product sheet (all optional; only the fields sent are changed)
+    const sheet = {};
+    if (prod.features !== undefined) sheet.features = cleanList(prod.features);
+    if (prod.benefits !== undefined) sheet.benefits = cleanList(prod.benefits);
+    if (prod.notices !== undefined) sheet.notices = cleanList(prod.notices);
+    if (prod.deliveryInfo !== undefined) sheet.deliveryInfo = cleanText(prod.deliveryInfo, 1000);
+    // Promotion: "compare-at" price shown struck through; the customer always pays `price`
+    let compareAtPrice;
+    if (prod.compareAtPrice !== undefined) {
+      const cap = prod.compareAtPrice === null || prod.compareAtPrice === '' ? 0 : roundMoney(prod.compareAtPrice);
+      if (!isFinite(cap) || cap < 0 || cap > MAX_MONEY) throw httpError(400, `Prix barré invalide (0 à ${MAX_MONEY} $).`);
+      compareAtPrice = cap > 0 ? cap : null;
+    }
+    const effPrice = price !== undefined ? price : (target ? target.price : 0);
+    const effCompareAt = compareAtPrice !== undefined ? compareAtPrice : (target ? target.compareAtPrice : null);
+    if (typeof effCompareAt === 'number' && effCompareAt <= effPrice && (compareAtPrice !== undefined || price !== undefined)) {
+      throw httpError(400, 'Le prix barré (avant promotion) doit être supérieur au prix de vente. Laissez-le vide s\'il n\'y a pas de promotion.');
+    }
+
     let p = target;
     const removedBlobs = [];
     if (!p) {
@@ -763,10 +834,15 @@ class Database {
       p = {
         id,
         name,
-        category: cleanText(prod.category, 60) || 'Général',
+        category: this._canonicalCategory(prod.category, id),
         price: price !== undefined ? price : 0,
+        compareAtPrice: compareAtPrice !== undefined ? compareAtPrice : null,
         stock: 0,
         description: cleanText(prod.description, 2000),
+        features: sheet.features || [],
+        benefits: sheet.benefits || [],
+        notices: sheet.notices || [],
+        deliveryInfo: sheet.deliveryInfo || '',
         image: image || null,
         published: prod.published !== undefined ? Boolean(prod.published) : true,
         deliveryMode: this.normalizeDeliveryMode(prod.deliveryMode),
@@ -776,8 +852,10 @@ class Database {
       this.data.products.push(p);
     } else {
       p.name = name;
-      if (prod.category !== undefined) p.category = cleanText(prod.category, 60) || 'Général';
+      if (prod.category !== undefined) p.category = this._canonicalCategory(prod.category, p.id);
       if (price !== undefined) p.price = price;
+      if (compareAtPrice !== undefined) p.compareAtPrice = compareAtPrice;
+      Object.assign(p, sheet);
       if (prod.description !== undefined) p.description = cleanText(prod.description, 2000);
       if (image !== undefined && image !== p.image) {
         const old = this.blobIdFromUrl(p.image);
