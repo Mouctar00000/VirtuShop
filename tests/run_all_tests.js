@@ -24,6 +24,7 @@ const suites = [
   { name: 'API end-to-end (Edge Config store, mocked API)', file: 'tests/api.e2e.test.js', env: { TEST_STORE: 'edge-config' } },
   { name: 'Legacy Edge Config migration', file: 'tests/edge-config.migration.test.js' },
   { name: 'Postgres store guarantees', file: 'tests/postgres.store.test.js', pg: true },
+  { name: 'Edge Config -> Postgres migration', file: 'tests/postgres.migration.test.js', pg: true },
   { name: 'API end-to-end (Postgres)', file: 'tests/api.e2e.test.js', pg: true, requirePg: true },
   { name: 'Deposit modal layout (legacy check)', file: 'tests/test_deposit_methods_layout.js', plain: true },
   { name: 'Version & cache headers (legacy check)', file: 'tests/test_version_cache.js', plain: true }

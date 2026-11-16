@@ -279,17 +279,39 @@ class PostgresStore {
     }
     const existing = await this.pool.query(`SELECT 1 FROM ${S}.state WHERE id = 1`);
     if (existing.rowCount === 0) {
+      // An importer error propagates on purpose: init() is retried on the next request instead of silently
+      // starting an empty shop because the legacy store was briefly unreachable.
       let seed = null;
+      let blobs = [];
       if (this.legacyImporter) {
-        try {
-          seed = await this.legacyImporter();
-          if (seed) console.log('[Store:pg] Initial data imported from the legacy Edge Config store.');
-        } catch (e) {
-          console.warn('[Store:pg] Legacy import failed, starting from a clean store:', e.message);
+        const imported = await this.legacyImporter();
+        if (imported && Object.prototype.hasOwnProperty.call(imported, 'state') && Array.isArray(imported.blobs)) {
+          seed = imported.state || null;
+          blobs = imported.blobs;
+        } else {
+          seed = imported || null;
         }
       }
+      const fromLegacy = Boolean(seed);
       if (!seed) seed = seedFactory ? seedFactory() : {};
-      await this.pool.query(`INSERT INTO ${S}.state (id, data, version) VALUES (1, $1::jsonb, 1) ON CONFLICT (id) DO NOTHING`, [JSON.stringify(seed)]);
+      // State and files are written together: a crash in between can never leave a shop without its images.
+      const tx = await this.pool.connect();
+      try {
+        await tx.query('BEGIN');
+        const ins = await tx.query(`INSERT INTO ${S}.state (id, data, version) VALUES (1, $1::jsonb, 1) ON CONFLICT (id) DO NOTHING RETURNING id`, [JSON.stringify(seed)]);
+        if (ins.rowCount) {
+          for (const b of blobs) {
+            await tx.query(`INSERT INTO ${S}.blobs (id, mime, data) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`, [String(b.id), b.mime || 'application/octet-stream', b.data]);
+          }
+        }
+        await tx.query('COMMIT');
+        if (ins.rowCount && fromLegacy) console.log(`[Store:pg] Initial data imported from the legacy Edge Config store (${blobs.length} file(s)).`);
+      } catch (e) {
+        try { await tx.query('ROLLBACK'); } catch (_) {}
+        throw e;
+      } finally {
+        tx.release();
+      }
     }
   }
 
@@ -477,9 +499,7 @@ class EdgeConfigStore {
   }
 
   // Legacy layout (db_users, db_products, ...) -> raw state (normalized later by the Database layer)
-  async readLegacyState() {
-    const map = await this._readLegacyItems();
-    if (!map) return null;
+  static stateFromItems(map) {
     if (map[EDGE_STATE_KEY]) return map[EDGE_STATE_KEY];
     if (!map.db_users && !map.db_products) return null;
     return {
@@ -491,6 +511,22 @@ class EdgeConfigStore {
       payment_methods: map.db_payment_methods || [],
       settings: map.db_settings || {}
     };
+  }
+
+  async readLegacyState() {
+    const map = await this._readLegacyItems();
+    return map ? EdgeConfigStore.stateFromItems(map) : null;
+  }
+
+  // One-time export when a Postgres database replaces Edge Config: the state AND the binary files
+  // (product images, delivery files, payment proofs). Throws when Edge Config cannot be read.
+  async exportForMigration() {
+    const map = await this._readLegacyItems();
+    if (!map) throw new Error('Edge Config export failed: items could not be read');
+    const blobs = Object.keys(map)
+      .filter(k => k.startsWith('gv_blob_') && map[k] && typeof map[k].b64 === 'string')
+      .map(k => ({ id: k.slice('gv_blob_'.length), mime: map[k].mime || 'application/octet-stream', data: Buffer.from(map[k].b64, 'base64') }));
+    return { state: EdgeConfigStore.stateFromItems(map), blobs };
   }
 
   async init(seedFactory) {
@@ -605,7 +641,7 @@ function createStore({ dataDir } = {}) {
   if (!IS_SERVERLESS && forced !== 'postgres' && forced !== 'edge-config') return new FileStore(dataDir);
   if ((forced === 'postgres' || !forced) && dbUrl) {
     const legacyImporter = edgeAvailable
-      ? () => new EdgeConfigStore({ edgeConfigId: edgeId, token: vercelToken, teamId: process.env.VERCEL_TEAM_ID }).readLegacyState()
+      ? () => new EdgeConfigStore({ edgeConfigId: edgeId, token: vercelToken, teamId: process.env.VERCEL_TEAM_ID }).exportForMigration()
       : null;
     return new PostgresStore(dbUrl, { legacyImporter });
   }
