@@ -355,9 +355,6 @@ class Database {
           // normalizeState already ran (and marked dirty) inside _runTx
           await this._migrateInlineMedia();
         });
-        // One-time initial catalogue, in its own transaction: on failure nothing is written and the site keeps working
-        await this._runTx(() => this._seedCatalog20261116())
-          .catch(err => console.error('[catalog-seed] failed, nothing written:', err && err.message));
         this._migrationsDone = true;
       })().catch(err => {
         this._readyPromise = null;
@@ -419,29 +416,6 @@ class Database {
         this._dirty = false;
       }
     }));
-  }
-
-  // One-time initial catalogue requested by the owner (2026-11-16): writes 6 product sheets into the production
-  // database once (meta flag), never overwrites an existing product, then this code is removed. The products are
-  // ordinary records afterwards, fully editable from the admin dashboard.
-  async _seedCatalog20261116() {
-    if (process.env.VERCEL_ENV !== 'production' || this.store.kind !== 'postgres') return;
-    const m = this.data.meta;
-    if (m.catalog_seed_20261116) return;
-    const items = require('./catalog-seed-20261116');
-    const created = [];
-    for (const it of items) {
-      if (this.findProductByNormalizedName(it.name)) continue;
-      const image = await this.saveImageDataUrl('data:image/png;base64,' + it.png);
-      const p = this.saveProduct({
-        name: it.name, category: it.category, price: it.price, stock: it.stock, description: it.description,
-        image, published: it.published, deliveryMode: 'manual'
-      });
-      created.push(`#${p.id} ${p.name} (${p.published ? 'en ligne' : 'hors ligne'})`);
-    }
-    m.catalog_seed_20261116 = nowIso();
-    this.persist();
-    console.log(`[catalog-seed] ${created.length} product(s) created: ${created.join(', ')}`);
   }
 
   // One-time migration: inline data: URL images (several MB in the JSON document) -> blob storage
