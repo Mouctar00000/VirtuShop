@@ -1574,6 +1574,25 @@ async function completeCryptoPurchase(txId, prod, total, qty, contactVal) {
 }
 
 
+// Commande momentanément impossible (refus du serveur avant tout débit) : message clair dans la fenêtre d'achat
+function showPurchaseUnavailableNotice(message) {
+  var msg = message || 'Nous rencontrons actuellement un problème technique lié au traitement des commandes. Merci de réessayer un peu plus tard. Nous vous prions de nous excuser pour ce désagrément.';
+  var container = document.getElementById('pay-dynamic-content');
+  if (!container) { showToast(msg, 'error'); return; }
+  container.innerHTML = `
+    <div class="purchase-success-box" id="purchase-unavailable-box" role="alert">
+      <div class="success-icon-badge" style="background: var(--amber-500, #f59e0b); color: white;">⚠️</div>
+      <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Commande momentanément indisponible</h3>
+      <p style="font-size: 13.5px; color: #475569; line-height: 1.55; margin-bottom: 12px;">${escapeHtml(msg)}</p>
+      <p style="font-size: 12px; color: #64748b; margin: 0 0 16px 0;">Aucun montant n'a été débité de votre solde.</p>
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn-primary" style="flex: 1;" onclick="closePayModal()">J'ai compris</button>
+      </div>
+    </div>
+  `;
+  syncUserSessionAndBalance();
+}
+
 // RÈGLEMENT EXCLUSIF PAR SOLDE DU CLIENT AVEC TRANSACTION PERMANENTE EN BASE DE DONNÉES
 var isPurchaseProcessing = false;
 
@@ -1652,6 +1671,12 @@ async function processProductPayment() {
     var data = await res.json();
 
     if (!res.ok || !data.success) {
+      if (data && data.code === 'PURCHASES_UNAVAILABLE') {
+        // Commande refusée par le serveur avant tout débit : message d'indisponibilité affiché proprement
+        window._gvPurchaseKey = null;
+        showPurchaseUnavailableNotice(data.error);
+        return;
+      }
       if (data && (data.code === 'PRODUCT_UNAVAILABLE' || data.code === 'EXTERNAL_PURCHASE') && typeof syncProductsFromServer === 'function') {
         // Produit supprimé ou masqué entre-temps : rafraîchir le catalogue affiché
         syncProductsFromServer();

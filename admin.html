@@ -1742,6 +1742,14 @@
     .sys-error { background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; line-height: 1.4; }
     .sys-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
     .sys-check:last-child { border-bottom: none; }
+
+    /* Interrupteur « Achats autorisés / suspendus » (section Clients) */
+    .purchase-access-switch input[type="checkbox"] { -webkit-appearance: none; appearance: none; position: relative; flex: 0 0 auto; width: 34px !important; height: 18px !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: none; border-radius: 999px; background: #cbd5e1; cursor: pointer; transition: background 0.2s ease; }
+    .purchase-access-switch input[type="checkbox"]::before { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25); transition: transform 0.2s ease; }
+    .purchase-access-switch input[type="checkbox"]:checked { background: var(--emerald-600, #059669); }
+    .purchase-access-switch input[type="checkbox"]:checked::before { transform: translateX(16px); }
+    .purchase-access-switch input[type="checkbox"]:focus-visible { outline: 2px solid var(--primary-600, #2563eb); outline-offset: 2px; }
+    .purchase-access-switch input[type="checkbox"]:disabled { opacity: 0.6; cursor: wait; }
   </style>
 </head>
 <body>
@@ -2038,6 +2046,7 @@
                   <th>Email</th>
                   <th>Rôle</th>
                   <th>Solde Actuel</th>
+                  <th>Achats</th>
                   <th>Actions Rapides</th>
                 </tr>
               </thead>
@@ -5702,6 +5711,7 @@
             <td><span style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(u.email)}</span></td>
             <td><span class="status-indicator-pill ${isAdmin ? 'online' : 'offline'}">${isAdmin ? 'Administrateur' : 'Client'}</span></td>
             <td><strong style="color: var(--primary-600); font-size: 15px;">$${bal.toFixed(2)}</strong></td>
+            <td>${renderPurchaseAccessCell(u, isAdmin)}</td>
             <td>
               <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
                 <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 10)" title="Offrir +10 $ gratuitement à ce client" style="font-weight: 600;">🎁 +10 $</button>
@@ -5723,8 +5733,50 @@
         `;
       });
 
-      tbody.innerHTML = html || '<tr><td colspan="5" style="text-align: center; padding: 20px;">Aucun utilisateur.</td></tr>';
+      tbody.innerHTML = html || '<tr><td colspan="6" style="text-align: center; padding: 20px;">Aucun utilisateur.</td></tr>';
     }
+
+    // ---------- Suspension individuelle des achats (n'affecte ni la connexion, ni les recharges, ni le solde)
+    function renderPurchaseAccessCell(u, isAdmin) {
+      if (isAdmin) return '<span style="font-size: 11px; color: var(--text-muted);">—</span>';
+      var suspended = u.purchasesSuspended === true;
+      var since = suspended && u.purchasesSuspensionUpdatedAt ? ' depuis le ' + new Date(u.purchasesSuspensionUpdatedAt).toLocaleString('fr-FR') : '';
+      return '<div class="purchase-access-cell" data-user-id="' + escapeHtml(String(u.id)) + '" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 150px;">' +
+        '<span class="status-indicator-pill ' + (suspended ? 'rejected' : 'online') + '" title="' + escapeHtml(suspended ? 'Achats suspendus' + since : 'Ce client peut acheter normalement') + '">' + (suspended ? '⛔ Achats suspendus' : '✓ Achats autorisés') + '</span>' +
+        '<label class="purchase-access-switch" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); cursor: pointer; user-select: none;" title="' + (suspended ? 'Réactiver les achats de ce client' : 'Suspendre temporairement les achats de ce client') + '">' +
+          '<input type="checkbox" role="switch" aria-label="Achats autorisés pour ' + escapeHtml(u.name || u.email || '') + '" ' + (suspended ? '' : 'checked') + ' onchange="togglePurchaseSuspension(\'' + escapeJsStr(u.id) + '\', !this.checked, this)" style="width: 30px; height: 16px; min-height: 0; margin: 0; padding: 0; accent-color: var(--emerald-600, #059669); cursor: pointer;">' +
+          '<span>' + (suspended ? 'Réactiver' : 'Autorisés') + '</span>' +
+        '</label>' +
+      '</div>';
+    }
+
+    async function togglePurchaseSuspension(userId, suspend, inputEl) {
+      var users = DB.get('users', []) || [];
+      var u = users.find(function(x) { return String(x.id) === String(userId); });
+      var label = u ? (u.name + ' (' + u.email + ')') : userId;
+      var question = suspend
+        ? 'Suspendre les achats de ' + label + ' ?\n\nLe client pourra toujours se connecter, recharger son solde et consulter son historique, mais toute commande sera refusée (sans aucun débit) avec un message d\'indisponibilité technique.'
+        : 'Réactiver les achats de ' + label + ' ?';
+      if (!window.confirm(question)) {
+        if (inputEl) inputEl.checked = suspend; // revert the switch
+        return;
+      }
+      if (inputEl) inputEl.disabled = true;
+      try {
+        var data = await adminApi('/api/data/users', { method: 'POST', body: JSON.stringify({ userId: userId, action: suspend ? 'suspend_purchases' : 'resume_purchases' }) });
+        if (u && data.user) {
+          u.purchasesSuspended = data.user.purchasesSuspended;
+          u.purchasesSuspensionUpdatedAt = data.user.purchasesSuspensionUpdatedAt;
+          DB.set('users', users);
+        }
+        renderUsersTable(DB.get('users', []) || []);
+        showToast(suspend ? 'Achats suspendus pour ' + label + '.' : 'Achats réactivés pour ' + label + '.', 'success');
+      } catch (err) {
+        if (inputEl) { inputEl.checked = suspend; inputEl.disabled = false; }
+        showToast(err.message || 'Modification impossible.', 'error');
+      }
+    }
+    window.togglePurchaseSuspension = togglePurchaseSuspension;
 
     async function quickGiftUser(userId, amount) {
       var users = DB.get('users', []);

@@ -32,7 +32,9 @@ function safeUser(u) {
   return {
     id: u.id, name: u.name, email: u.email, username: u.username, role: u.role,
     balance: u.balance || 0, auth_provider: u.auth_provider, created_at: u.created_at,
-    mustChangePassword: Boolean(u.must_change_password)
+    mustChangePassword: Boolean(u.must_change_password),
+    purchasesSuspended: Boolean(u.purchasesSuspended),
+    purchasesSuspensionUpdatedAt: u.purchasesSuspensionUpdatedAt || null
   };
 }
 
@@ -361,6 +363,10 @@ module.exports = async function handler(req, res) {
           const auth = requireAdmin(req);
           const userId = body.userId || body.id;
           if (!userId) throw httpError(400, 'Paramètre userId manquant.');
+          if (body.action === 'suspend_purchases' || body.action === 'resume_purchases') {
+            const u = db.setPurchaseSuspension(userId, body.action === 'suspend_purchases', { adminName: auth.user.name || 'Administrateur' });
+            return { success: true, user: safeUser(u) };
+          }
           if (body.action === 'reset_password') {
             const temp = authService.adminResetCustomerPassword(userId);
             return { success: true, temporaryPassword: temp, user: safeUser(db.getUserById(userId)) };

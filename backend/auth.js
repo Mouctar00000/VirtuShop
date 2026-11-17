@@ -385,7 +385,8 @@ class AuthService {
 
   sanitizeUser(user) {
     if (!user) return null;
-    const { password_hash, session_version, google_id, ...safe } = user;
+    // Purchase-suspension fields are administrator-only information: never sent to the customer
+    const { password_hash, session_version, google_id, purchasesSuspended, purchasesSuspendedAt, purchasesSuspensionUpdatedAt, purchasesSuspensionUpdatedBy, ...safe } = user;
     safe.mustChangePassword = Boolean(user.must_change_password);
     safe.hasPassword = Boolean(password_hash);
     return safe;

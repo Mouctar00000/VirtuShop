@@ -13,6 +13,9 @@
 
 'use strict';
 
+// Message shown to a customer whose purchases are suspended (deliberately neutral)
+const PURCHASES_UNAVAILABLE_MESSAGE = 'Nous rencontrons actuellement un problème technique lié au traitement des commandes. Merci de réessayer un peu plus tard. Nous vous prions de nous excuser pour ce désagrément.';
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -582,6 +585,25 @@ class Database {
     }
     if (typeof u.balance === 'number') u.balance = roundMoney(u.balance);
     u.updated_at = nowIso();
+    this.persist();
+    return u;
+  }
+
+  /** Individual purchase suspension (administrator). Stored on the customer record: survives logout / login. */
+  arePurchasesSuspended(u) {
+    return Boolean(u && u.purchasesSuspended === true);
+  }
+
+  setPurchaseSuspension(userId, suspended, { adminName = 'Administrateur' } = {}) {
+    const u = this.getUserById(userId);
+    if (!u) throw httpError(404, 'Client introuvable.');
+    if (isAdminUser(u)) throw httpError(400, "Les achats d'un compte administrateur ne peuvent pas être suspendus.");
+    const now = nowIso();
+    u.purchasesSuspended = Boolean(suspended);
+    u.purchasesSuspensionUpdatedAt = now;
+    u.purchasesSuspensionUpdatedBy = cleanText(adminName, 80) || 'Administrateur';
+    if (u.purchasesSuspended) u.purchasesSuspendedAt = now;
+    u.updated_at = now;
     this.persist();
     return u;
   }
@@ -1188,6 +1210,9 @@ class Database {
     const u = this.getUserById(user.id);
     if (!u) throw httpError(401, 'Compte client introuvable.', 'SESSION_INVALID');
     if (isAdminUser(u)) throw httpError(403, 'Un compte administrateur ne peut pas passer de commande. Utilisez un compte client.');
+    // Purchases suspended for this customer by the administrator: refused BEFORE any debit, order or delivery.
+    // Top-ups, Mobile Money confirmations and the wallet are not affected (they never go through this method).
+    if (this.arePurchasesSuspended(u)) throw httpError(409, PURCHASES_UNAVAILABLE_MESSAGE, 'PURCHASES_UNAVAILABLE');
 
     const idem = cleanText(idempotencyKey, 80);
     if (idem) {
