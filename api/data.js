@@ -170,6 +170,16 @@ module.exports = async function handler(req, res) {
 
       if (method === 'POST' || method === 'PUT') {
         await db.read(() => requireAdmin(req));
+        if (body.action === 'suspend_product_purchases' || body.action === 'resume_product_purchases') {
+          const out = await db.tx(() => {
+            const auth = requireAdmin(req);
+            const pid = parseInt(body.productId !== undefined ? body.productId : body.id, 10);
+            if (!pid) throw httpError(400, 'ID produit valide requis.');
+            const product = db.setProductPurchaseSuspension(pid, body.action === 'suspend_product_purchases', { adminName: auth.user.name || 'Administrateur' });
+            return { success: true, product, ...adminProductsPayload() };
+          });
+          return res.status(200).json(out);
+        }
         const isKeyUpdate = body.action === 'update_key' || (method === 'PUT' && (resource === 'keys' || body.keyId !== undefined || body.keyIndex !== undefined));
         const isAddKeys = !isKeyUpdate && (resource === 'keys' || body.action === 'add_keys');
         const media = (isKeyUpdate || isAddKeys) ? null : await prepareProductMedia(body);

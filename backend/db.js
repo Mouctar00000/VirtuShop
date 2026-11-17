@@ -635,6 +635,24 @@ class Database {
     return this.getPurchaseControl();
   }
 
+  /** Per-product purchase suspension (administrator): blocks this product for every customer. Stored on the product
+   *  record (admin views only — never in the public catalogue); other products and settings are not touched. */
+  isProductPurchaseSuspended(p) {
+    return Boolean(p && p.purchasesSuspended === true);
+  }
+
+  setProductPurchaseSuspension(productId, suspended, { adminName = 'Administrateur' } = {}) {
+    const p = this.getProductById(productId);
+    if (!p) throw httpError(404, 'Produit introuvable.');
+    const now = nowIso();
+    p.purchasesSuspended = Boolean(suspended);
+    p.purchasesSuspensionUpdatedAt = now;
+    p.purchasesSuspensionUpdatedBy = cleanText(adminName, 80) || 'Administrateur';
+    if (p.purchasesSuspended) p.purchasesSuspendedAt = now;
+    this.persist();
+    return p;
+  }
+
   bumpSessionVersion(userId) {
     const u = this.getUserById(userId);
     if (!u) return null;
@@ -1264,10 +1282,10 @@ class Database {
       e.extra = { currentBalance: balance, requiredAmount: total, missingAmount: roundMoney(total - balance) };
       throw e;
     }
-    // Purchases suspended (globally, or for this customer) by the administrator. Checked only once the balance is
-    // sufficient (an insufficient balance keeps the usual "please top up" flow), and BEFORE any debit, order or
-    // delivery. Top-ups, Mobile Money confirmations and the wallet are not affected (they never go through here).
-    if (this.isGlobalPurchaseSuspensionOn() || this.arePurchasesSuspended(u)) throw httpError(409, PURCHASES_UNAVAILABLE_MESSAGE, 'PURCHASES_UNAVAILABLE');
+    // Purchases suspended by the administrator (globally, for this customer, or for this product). Checked only once
+    // the balance is sufficient (an insufficient balance keeps the usual "please top up" flow), and BEFORE any debit,
+    // order or delivery. Top-ups, Mobile Money confirmations and the wallet are not affected (they never go through here).
+    if (this.isGlobalPurchaseSuspensionOn() || this.arePurchasesSuspended(u) || this.isProductPurchaseSuspended(prod)) throw httpError(409, PURCHASES_UNAVAILABLE_MESSAGE, 'PURCHASES_UNAVAILABLE');
 
     const orderId = randomId('ORD-', 5);
     const alloc = this.allocateKeysForProduct(prod.id, qty, { orderId, userId: u.id, userEmail: u.email });

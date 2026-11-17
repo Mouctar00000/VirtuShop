@@ -1945,6 +1945,7 @@
                   <th>Stock & Ventes</th>
                   <th>Clés & Inventaire</th>
                   <th>Visibilité</th>
+                  <th>Achats</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -3584,6 +3585,7 @@
                 ${p.published ? '● En ligne' : '○ Hors ligne'}
               </span>
             </td>
+            <td>${renderProductPurchaseCell(p, isExternal)}</td>
             <td>
               <div style="display: flex; gap: 6px;">
                 <button type="button" class="btn-icon-action edit" title="Modifier le produit / ajouter des clés" onclick="editProduct(${p.id})">✏️</button>
@@ -3595,8 +3597,52 @@
         `;
       });
 
-      tbody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun produit configuré.</td></tr>';
+      tbody.innerHTML = html || '<tr><td colspan="9" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucun produit configuré.</td></tr>';
     }
+
+    // ---------- Suspension des achats par produit (bloque ce produit pour tous les clients ; recharges et soldes non concernés)
+    function renderProductPurchaseCell(p, isExternal) {
+      if (isExternal) return '<span style="font-size: 11px; color: var(--text-muted);" title="Ce produit s\'achète auprès du vendeur via son lien externe, jamais sur le site.">— lien externe</span>';
+      var suspended = p.purchasesSuspended === true;
+      var since = suspended && p.purchasesSuspensionUpdatedAt ? ' depuis le ' + new Date(p.purchasesSuspensionUpdatedAt).toLocaleString('fr-FR') : '';
+      var globalNote = (window._gvPurchaseControl && window._gvPurchaseControl.globalSuspended === true)
+        ? '<span class="purchase-global-note" style="font-size: 10.5px; color: #b91c1c;" title="La suspension globale est active. Le réglage de ce produit est conservé et s\'appliquera dès sa désactivation.">⛔ Bloqué par la suspension globale</span>'
+        : '';
+      return '<div class="product-purchase-cell" data-product-id="' + escapeHtml(String(p.id)) + '" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 140px;">' +
+        '<span class="status-indicator-pill ' + (suspended ? 'rejected' : 'online') + '" title="' + escapeHtml(suspended ? 'Achats suspendus pour tous les clients' + since : 'Ce produit peut être acheté normalement') + '">' + (suspended ? '⛔ Achats suspendus' : '✓ Achats autorisés') + '</span>' +
+        '<label class="purchase-access-switch" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); cursor: pointer; user-select: none;" title="' + (suspended ? 'Réactiver les achats de ce produit' : 'Suspendre temporairement les achats de ce produit') + '">' +
+          '<input type="checkbox" role="switch" aria-label="Achats autorisés pour ' + escapeHtml(p.name || '') + '" ' + (suspended ? '' : 'checked') + ' onchange="toggleProductPurchaseSuspension(' + Number(p.id) + ', !this.checked, this)">' +
+          '<span>' + (suspended ? 'Réactiver' : 'Autorisés') + '</span>' +
+        '</label>' +
+        globalNote +
+      '</div>';
+    }
+
+    async function toggleProductPurchaseSuspension(productId, suspend, inputEl) {
+      var prods = DB.get('products', []) || [];
+      var p = prods.find(function(x) { return Number(x.id) === Number(productId); });
+      var label = p ? '« ' + p.name + ' »' : 'ce produit';
+      var question = suspend
+        ? 'Suspendre les achats de ' + label + ' pour tous les clients ?\n\nLe produit reste visible dans la boutique. Un client dont le solde est suffisant verra un message d\'indisponibilité technique (aucun débit, aucune commande). Les autres produits, les recharges et les soldes ne sont pas concernés.'
+        : 'Réactiver les achats de ' + label + ' ?';
+      if (!window.confirm(question)) {
+        if (inputEl) inputEl.checked = suspend; // revert the switch
+        return;
+      }
+      if (inputEl) inputEl.disabled = true;
+      try {
+        var data = await adminApi('/api/data/products', { method: 'POST', body: JSON.stringify({ productId: productId, action: suspend ? 'suspend_product_purchases' : 'resume_product_purchases' }) });
+        if (data && Array.isArray(data.products)) DB.set('products', data.products);
+        else if (p && data && data.product) { p.purchasesSuspended = data.product.purchasesSuspended; p.purchasesSuspensionUpdatedAt = data.product.purchasesSuspensionUpdatedAt; DB.set('products', prods); }
+        if (data && data.vault && typeof data.vault === 'object') DB.set('vault', data.vault);
+        renderProductsTable(DB.get('products', []) || []);
+        showToast(suspend ? 'Achats suspendus pour ' + label + '.' : 'Achats réactivés pour ' + label + '.', 'success');
+      } catch (err) {
+        if (inputEl) { inputEl.checked = suspend; inputEl.disabled = false; }
+        showToast(err.message || 'Modification impossible.', 'error');
+      }
+    }
+    window.toggleProductPurchaseSuspension = toggleProductPurchaseSuspension;
 
     var currentInspectedProductId = null;
     var currentInspectedKeys = [];
@@ -5803,6 +5849,7 @@
         var data = await adminApi('/api/data/users', { method: 'POST', body: JSON.stringify({ action: suspend ? 'suspend_all_purchases' : 'resume_all_purchases' }) });
         if (data && data.purchaseControl) window._gvPurchaseControl = data.purchaseControl;
         renderUsersTable(DB.get('users', []) || []);
+        renderProductsTable(DB.get('products', []) || []);
         showToast(suspend ? 'Achats suspendus pour tous les clients.' : 'Achats réactivés pour tous les clients (hors suspensions individuelles).', 'success');
       } catch (err) {
         if (inputEl) { inputEl.checked = suspend; inputEl.disabled = false; }

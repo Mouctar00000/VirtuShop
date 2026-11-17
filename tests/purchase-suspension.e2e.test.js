@@ -1,5 +1,5 @@
 /**
- * GetVirtu — individual AND global purchase suspension (administrator) end-to-end tests.
+ * GetVirtu — purchase suspension per customer, per product and global (administrator) end-to-end tests.
  * Real HTTP server + isolated temporary database + local SasPay double (Mobile Money top-ups keep working).
  * Run: node --test tests/purchase-suspension.e2e.test.js
  */
@@ -297,4 +297,87 @@ test('global OFF: individual suspensions stay intact, the others buy normally (s
   await post('/api/data/users', { userId: ctx.zoeId, action: 'resume_purchases' }, ctx.admin);
   const z = await post('/api/data/orders', { productId: ctx.expId, quantity: 1 }, ctx.zoe);
   assert.equal(z.status, 201, 'reactivated customer buys the product they could not buy before');
+});
+
+// ============================================================ per-product suspension (third level)
+test('product switch: administrator only, stored on the product, never in the public catalogue, product stays editable', async () => {
+  ctx.pA = (await post('/api/data/products', { name: 'Produit Bloquable', price: 2, newKeys: Array.from({ length: 10 }, (_, i) => 'PA-' + i) }, ctx.admin)).body.product.id;
+  ctx.pB = (await post('/api/data/products', { name: 'Produit Libre', price: 2, newKeys: Array.from({ length: 10 }, (_, i) => 'PB-' + i) }, ctx.admin)).body.product.id;
+  for (const t of [ctx.zoe, ctx.yan, undefined]) assert.equal((await post('/api/data/products', { productId: ctx.pA, action: 'suspend_product_purchases' }, t)).status, 403);
+  assert.equal((await post('/api/data/products', { productId: 999999, action: 'suspend_product_purchases' }, ctx.admin)).status, 404);
+  const r = await post('/api/data/products', { productId: ctx.pA, action: 'suspend_product_purchases' }, ctx.admin);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.product.purchasesSuspended, true);
+  assert.equal(r.body.products.find(p => p.id === ctx.pB).purchasesSuspended, undefined, 'other products untouched');
+  const db = JSON.parse(fs.readFileSync(path.join(TMP, 'database.json'), 'utf8'));
+  assert.equal(db.products.find(p => p.id === ctx.pA).purchasesSuspended, true, 'stored in the database');
+  const pub = (await get('/api/data/products')).body.products;
+  assert.doesNotMatch(JSON.stringify(pub), /suspen/i, 'never exposed in the public catalogue');
+  assert.equal(pub.find(p => p.id === ctx.pA).available, true, 'still visible and in stock');
+  // editing the product (price) keeps the suspension
+  const e = await post('/api/data/products', { id: ctx.pA, name: 'Produit Bloquable', price: 2.5 }, ctx.admin);
+  assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.equal(e.body.product.purchasesSuspended, true, 'suspension kept after editing');
+  assert.equal(e.body.product.price, 2.5);
+});
+
+test('product suspended: low balance -> usual top-up answer; enough balance -> neutral message, nothing debited; other products OK', async () => {
+  const n = await post('/api/auth/register', { email: 'pia@example.com', password: 'Client-Pass-12', confirmPassword: 'Client-Pass-12', name: 'pia' });
+  ctx.pia = n.body.session.token; ctx.piaId = n.body.user.id;
+  await post('/api/data/users', { userId: ctx.piaId, amount: 1, action: 'gift', reason: 'test' }, ctx.admin);
+  const low = await post('/api/data/orders', { productId: ctx.pA, quantity: 1 }, ctx.pia);
+  assert.equal(low.status, 400);
+  assert.equal(low.body.code, 'INSUFFICIENT_BALANCE', 'scenario A first');
+  await post('/api/data/users', { userId: ctx.piaId, amount: 9, action: 'gift', reason: 'test' }, ctx.admin);
+  const stockBefore = (await get('/api/data/products')).body.products.find(p => p.id === ctx.pA).stock;
+  for (const t of [ctx.pia, ctx.yan, ctx.neo]) {
+    const before = (await me(t)).balance;
+    const ordersBefore = (await get('/api/data/orders', t)).body.orders.length;
+    const r = await post('/api/data/orders', { productId: ctx.pA, quantity: 1 }, t);
+    assert.equal(r.status, 409, JSON.stringify(r.body));
+    assert.equal(r.body.error, MESSAGE);
+    assert.doesNotMatch(JSON.stringify(r.body), /suspen|admin|bloqu/i);
+    assert.equal((await me(t)).balance, before, 'nothing debited');
+    assert.equal((await get('/api/data/orders', t)).body.orders.length, ordersBefore, 'no order');
+  }
+  assert.equal((await post('/api/data/orders', { productName: 'Produit Bloquable', quantity: 1 }, ctx.pia)).body.code, 'PURCHASES_UNAVAILABLE', 'also by name (direct API)');
+  assert.equal((await get('/api/data/products')).body.products.find(p => p.id === ctx.pA).stock, stockBefore, 'no key delivered');
+  const ok = await post('/api/data/orders', { productId: ctx.pB, quantity: 1 }, ctx.pia);
+  assert.equal(ok.status, 201, 'other products keep working');
+  assert.equal(ok.body.newBalance, 8);
+  // Mobile Money top-up started from the suspended product: credited, automatic order refused
+  const c = await post('/api/payments/saspay/create', { amount: 5, country: 'CM', network: 'orange_cm', phone: '699123442', purchase: { productId: ctx.pA, quantity: 1 } }, ctx.pia);
+  assert.equal(c.status, 201, JSON.stringify(c.body));
+  payments.get(c.body.providerTxId).status = 'SUCCESS';
+  const v = await get('/api/payments/saspay/verify?transactionId=' + c.body.transactionId, ctx.pia);
+  assert.equal(v.body.status, 'completed');
+  assert.equal(v.body.orderError, MESSAGE);
+  assert.equal((await me(ctx.pia)).balance, 13, 'top-up credited, nothing debited');
+});
+
+test('three levels combined and independent: turning one off never changes the others', async () => {
+  const code = async (t, pid) => { const r = await post('/api/data/orders', { productId: pid, quantity: 1 }, t); return r.status === 201 ? 'OK' : r.body.code; };
+  // product A suspended, customer pia suspended, global on
+  await post('/api/data/users', { userId: ctx.piaId, action: 'suspend_purchases' }, ctx.admin);
+  await post('/api/data/users', { action: 'suspend_all_purchases' }, ctx.admin);
+  assert.equal(await code(ctx.yan, ctx.pB), 'PURCHASES_UNAVAILABLE', 'global: nobody buys anything');
+  // global off -> customer and product levels still in force
+  await post('/api/data/users', { action: 'resume_all_purchases' }, ctx.admin);
+  assert.equal(await code(ctx.pia, ctx.pB), 'PURCHASES_UNAVAILABLE', 'suspended customer: no product at all');
+  assert.equal(await code(ctx.yan, ctx.pA), 'PURCHASES_UNAVAILABLE', 'suspended product: nobody');
+  assert.equal(await code(ctx.yan, ctx.pB), 'OK', 'allowed customer + allowed product');
+  // customer resumed -> product still suspended
+  await post('/api/data/users', { userId: ctx.piaId, action: 'resume_purchases' }, ctx.admin);
+  assert.equal(await code(ctx.pia, ctx.pA), 'PURCHASES_UNAVAILABLE', 'product suspension kept');
+  assert.equal(await code(ctx.pia, ctx.pB), 'OK');
+  // product resumed, but global switched on again -> still blocked; global off -> everything normal
+  await post('/api/data/products', { productId: ctx.pA, action: 'resume_product_purchases' }, ctx.admin);
+  await post('/api/data/users', { action: 'suspend_all_purchases' }, ctx.admin);
+  assert.equal(await code(ctx.pia, ctx.pA), 'PURCHASES_UNAVAILABLE');
+  const db = JSON.parse(fs.readFileSync(path.join(TMP, 'database.json'), 'utf8'));
+  assert.equal(db.products.find(p => p.id === ctx.pA).purchasesSuspended, false, 'global switch does not touch products');
+  assert.equal(db.users.find(u => u.id === ctx.zoeId).purchasesSuspended, false);
+  await post('/api/data/users', { action: 'resume_all_purchases' }, ctx.admin);
+  assert.equal(await code(ctx.pia, ctx.pA), 'OK', 'all restrictions off: normal purchase');
+  assert.equal(await code(ctx.yan, ctx.pA), 'OK');
 });
