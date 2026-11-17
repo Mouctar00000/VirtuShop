@@ -1750,6 +1750,7 @@
     .purchase-access-switch input[type="checkbox"]:checked::before { transform: translateX(16px); }
     .purchase-access-switch input[type="checkbox"]:focus-visible { outline: 2px solid var(--primary-600, #2563eb); outline-offset: 2px; }
     .purchase-access-switch input[type="checkbox"]:disabled { opacity: 0.6; cursor: wait; }
+    @media (max-width: 640px) { #admin-global-purchase-flag .global-flag-text { display: none; } #admin-global-purchase-flag { padding: 6px 8px !important; } }
   </style>
 </head>
 <body>
@@ -1797,6 +1798,7 @@
       </div>
 
       <div class="admin-header-actions">
+        <button type="button" id="admin-global-purchase-flag" class="hidden" onclick="switchAdminTab('users')" title="La suspension globale des achats est active : aucun client ne peut finaliser un achat. Cliquez pour la gérer." style="align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid #fecaca; background: #fff1f2; color: #b91c1c; font-size: 12px; font-weight: 700; cursor: pointer;"><span aria-hidden="true">⛔</span><span class="global-flag-text">Achats suspendus (tous)</span></button>
         <button type="button" id="btn-reset-website-header" class="btn-admin-reset-website" onclick="switchAdminTab('system')" title="Système & réinitialisation du site (Reset Website)">
           <span>🛡️</span>
           <span class="reset-website-btn-text">Système / Reset</span>
@@ -2037,6 +2039,9 @@
               <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Consultez les utilisateurs inscrits et ajustez ou créditez manuellement leurs soldes.</p>
             </div>
           </div>
+
+          <!-- Suspension globale des achats (tous les clients) — les réglages individuels restent intacts -->
+          <div id="admin-global-purchase-control" style="margin: 0 0 14px 0;"></div>
 
           <div style="overflow-x: auto;">
             <table class="admin-table">
@@ -5698,6 +5703,7 @@
 
     // ========== 4. TABLE DES UTILISATEURS & GESTION DES SOLDES (PROMPT 6) ==========
     function renderUsersTable(users) {
+      renderGlobalPurchaseControl();
       var tbody = document.getElementById('admin-users-tbody');
       if (!tbody) return;
       var html = '';
@@ -5740,6 +5746,9 @@
     function renderPurchaseAccessCell(u, isAdmin) {
       if (isAdmin) return '<span style="font-size: 11px; color: var(--text-muted);">—</span>';
       var suspended = u.purchasesSuspended === true;
+      var globalNote = (window._gvPurchaseControl && window._gvPurchaseControl.globalSuspended === true)
+        ? '<span class="purchase-global-note" style="font-size: 10.5px; color: #b91c1c;" title="La suspension globale est active. Le réglage individuel de ce client est conservé et s\'appliquera dès sa désactivation.">⛔ Bloqué par la suspension globale</span>'
+        : '';
       var since = suspended && u.purchasesSuspensionUpdatedAt ? ' depuis le ' + new Date(u.purchasesSuspensionUpdatedAt).toLocaleString('fr-FR') : '';
       return '<div class="purchase-access-cell" data-user-id="' + escapeHtml(String(u.id)) + '" style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 150px;">' +
         '<span class="status-indicator-pill ' + (suspended ? 'rejected' : 'online') + '" title="' + escapeHtml(suspended ? 'Achats suspendus' + since : 'Ce client peut acheter normalement') + '">' + (suspended ? '⛔ Achats suspendus' : '✓ Achats autorisés') + '</span>' +
@@ -5747,8 +5756,60 @@
           '<input type="checkbox" role="switch" aria-label="Achats autorisés pour ' + escapeHtml(u.name || u.email || '') + '" ' + (suspended ? '' : 'checked') + ' onchange="togglePurchaseSuspension(\'' + escapeJsStr(u.id) + '\', !this.checked, this)" style="width: 30px; height: 16px; min-height: 0; margin: 0; padding: 0; accent-color: var(--emerald-600, #059669); cursor: pointer;">' +
           '<span>' + (suspended ? 'Réactiver' : 'Autorisés') + '</span>' +
         '</label>' +
+        globalNote +
       '</div>';
     }
+
+    // ---------- Suspension globale des achats (tous les clients) : ne modifie jamais les réglages individuels
+    window._gvPurchaseControl = window._gvPurchaseControl || { globalSuspended: false };
+    function renderGlobalPurchaseControl() {
+      var pc = window._gvPurchaseControl || { globalSuspended: false };
+      var on = pc.globalSuspended === true;
+      var flag = document.getElementById('admin-global-purchase-flag');
+      if (flag) { flag.classList.toggle('hidden', !on); flag.style.display = on ? 'inline-flex' : 'none'; }
+      var box = document.getElementById('admin-global-purchase-control');
+      if (!box) return;
+      var since = on && pc.globalUpdatedAt ? ' depuis le ' + new Date(pc.globalUpdatedAt).toLocaleString('fr-FR') : '';
+      box.innerHTML =
+        '<div class="global-purchase-card" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid ' + (on ? '#fecaca' : 'var(--border-color, #e2e8f0)') + '; background: ' + (on ? '#fff1f2' : 'var(--bg-secondary, #f8fafc)') + ';">' +
+          '<div style="min-width: 0; flex: 1 1 260px;">' +
+            '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' +
+              '<strong style="font-size: 14px; color: var(--text-primary);">🌐 Achats — tous les clients</strong>' +
+              '<span class="status-indicator-pill ' + (on ? 'rejected' : 'online') + '" id="global-purchase-status">' + (on ? '⛔ Achats suspendus pour tous' : '✓ Achats autorisés') + '</span>' +
+            '</div>' +
+            '<p style="font-size: 12px; color: var(--text-secondary); margin: 4px 0 0 0;">' +
+              (on
+                ? 'Aucun client ne peut finaliser un achat' + escapeHtml(since) + '. Connexions, recharges et soldes fonctionnent normalement. Les suspensions individuelles restent conservées.'
+                : 'Suspend en une seule action les achats de tous les clients (recharges et soldes non concernés). Les suspensions individuelles ci-dessous restent indépendantes.') +
+            '</p>' +
+          '</div>' +
+          '<label class="purchase-access-switch" style="display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; user-select: none;">' +
+            '<input type="checkbox" id="global-purchase-switch" role="switch" aria-label="Achats autorisés pour tous les clients" ' + (on ? '' : 'checked') + ' onchange="toggleGlobalPurchaseSuspension(!this.checked, this)">' +
+            '<span>' + (on ? 'Réactiver les achats' : 'Achats ouverts') + '</span>' +
+          '</label>' +
+        '</div>';
+    }
+
+    async function toggleGlobalPurchaseSuspension(suspend, inputEl) {
+      var question = suspend
+        ? 'Suspendre les achats de TOUS les clients ?\n\nPlus aucun client ne pourra finaliser un achat (aucun débit) : ceux qui ont un solde suffisant verront un message d\'indisponibilité technique. Les connexions, les recharges et les soldes continuent de fonctionner normalement. Les suspensions individuelles sont conservées.'
+        : 'Réactiver les achats pour tous les clients ?\n\nLes clients suspendus individuellement resteront suspendus.';
+      if (!window.confirm(question)) {
+        if (inputEl) inputEl.checked = suspend; // revert the switch
+        return;
+      }
+      if (inputEl) inputEl.disabled = true;
+      try {
+        var data = await adminApi('/api/data/users', { method: 'POST', body: JSON.stringify({ action: suspend ? 'suspend_all_purchases' : 'resume_all_purchases' }) });
+        if (data && data.purchaseControl) window._gvPurchaseControl = data.purchaseControl;
+        renderUsersTable(DB.get('users', []) || []);
+        showToast(suspend ? 'Achats suspendus pour tous les clients.' : 'Achats réactivés pour tous les clients (hors suspensions individuelles).', 'success');
+      } catch (err) {
+        if (inputEl) { inputEl.checked = suspend; inputEl.disabled = false; }
+        showToast(err.message || 'Modification impossible.', 'error');
+      }
+    }
+    window.toggleGlobalPurchaseSuspension = toggleGlobalPurchaseSuspension;
 
     async function togglePurchaseSuspension(userId, suspend, inputEl) {
       var users = DB.get('users', []) || [];
@@ -7431,6 +7492,7 @@
 
       // 5. Utilisateurs, soldes, transactions & demandes de recharge manuelles
       if (uData) {
+        if (uData.purchaseControl) window._gvPurchaseControl = uData.purchaseControl;
         if (Array.isArray(uData.users)) {
           DB.set('users', uData.users);
           var curSess = DB.get('session');

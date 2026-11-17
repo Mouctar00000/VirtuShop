@@ -355,12 +355,16 @@ module.exports = async function handler(req, res) {
       if (method === 'GET') {
         return res.status(200).json(await db.read(() => {
           requireAdmin(req);
-          return { users: db.getUsers().map(safeUser), transactions: db.getTransactions().map(publicTx) };
+          return { users: db.getUsers().map(safeUser), transactions: db.getTransactions().map(publicTx), purchaseControl: db.getPurchaseControl() };
         }));
       }
       if (method === 'POST' || method === 'PUT') {
         const out = await db.tx(() => {
           const auth = requireAdmin(req);
+          if (body.action === 'suspend_all_purchases' || body.action === 'resume_all_purchases') {
+            const purchaseControl = db.setGlobalPurchaseSuspension(body.action === 'suspend_all_purchases', { adminName: auth.user.name || 'Administrateur' });
+            return { success: true, purchaseControl };
+          }
           const userId = body.userId || body.id;
           if (!userId) throw httpError(400, 'Paramètre userId manquant.');
           if (body.action === 'suspend_purchases' || body.action === 'resume_purchases') {

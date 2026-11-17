@@ -608,6 +608,33 @@ class Database {
     return u;
   }
 
+  /** Global purchase suspension (administrator): blocks purchases for ALL customers without touching the
+   *  individual settings, which stay intact when the global suspension is turned off. Stored in the shop settings. */
+  isGlobalPurchaseSuspensionOn() {
+    const s = this.data.settings || {};
+    return s.purchasesSuspendedGlobal === true;
+  }
+
+  getPurchaseControl() {
+    const s = this.data.settings || {};
+    return {
+      globalSuspended: s.purchasesSuspendedGlobal === true,
+      globalUpdatedAt: s.purchasesSuspendedGlobalUpdatedAt || null,
+      globalUpdatedBy: s.purchasesSuspendedGlobalUpdatedBy || null
+    };
+  }
+
+  setGlobalPurchaseSuspension(suspended, { adminName = 'Administrateur' } = {}) {
+    const s = this.data.settings;
+    const now = nowIso();
+    s.purchasesSuspendedGlobal = Boolean(suspended);
+    s.purchasesSuspendedGlobalUpdatedAt = now;
+    s.purchasesSuspendedGlobalUpdatedBy = cleanText(adminName, 80) || 'Administrateur';
+    s.updated_at = now;
+    this.persist();
+    return this.getPurchaseControl();
+  }
+
   bumpSessionVersion(userId) {
     const u = this.getUserById(userId);
     if (!u) return null;
@@ -1210,9 +1237,6 @@ class Database {
     const u = this.getUserById(user.id);
     if (!u) throw httpError(401, 'Compte client introuvable.', 'SESSION_INVALID');
     if (isAdminUser(u)) throw httpError(403, 'Un compte administrateur ne peut pas passer de commande. Utilisez un compte client.');
-    // Purchases suspended for this customer by the administrator: refused BEFORE any debit, order or delivery.
-    // Top-ups, Mobile Money confirmations and the wallet are not affected (they never go through this method).
-    if (this.arePurchasesSuspended(u)) throw httpError(409, PURCHASES_UNAVAILABLE_MESSAGE, 'PURCHASES_UNAVAILABLE');
 
     const idem = cleanText(idempotencyKey, 80);
     if (idem) {
@@ -1240,6 +1264,10 @@ class Database {
       e.extra = { currentBalance: balance, requiredAmount: total, missingAmount: roundMoney(total - balance) };
       throw e;
     }
+    // Purchases suspended (globally, or for this customer) by the administrator. Checked only once the balance is
+    // sufficient (an insufficient balance keeps the usual "please top up" flow), and BEFORE any debit, order or
+    // delivery. Top-ups, Mobile Money confirmations and the wallet are not affected (they never go through here).
+    if (this.isGlobalPurchaseSuspensionOn() || this.arePurchasesSuspended(u)) throw httpError(409, PURCHASES_UNAVAILABLE_MESSAGE, 'PURCHASES_UNAVAILABLE');
 
     const orderId = randomId('ORD-', 5);
     const alloc = this.allocateKeysForProduct(prod.id, qty, { orderId, userId: u.id, userEmail: u.email });

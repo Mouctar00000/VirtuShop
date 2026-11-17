@@ -1,5 +1,5 @@
 /**
- * GetVirtu — individual purchase suspension (administrator) end-to-end tests.
+ * GetVirtu — individual AND global purchase suspension (administrator) end-to-end tests.
  * Real HTTP server + isolated temporary database + local SasPay double (Mobile Money top-ups keep working).
  * Run: node --test tests/purchase-suspension.e2e.test.js
  */
@@ -192,4 +192,109 @@ test('suspend again then resume: switch works repeatedly, existing balance adjus
   assert.equal((await post('/api/data/orders', { productId: ctx.autoId, quantity: 1 }, ctx.yan)).body.code, 'PURCHASES_UNAVAILABLE');
   assert.equal((await post('/api/data/users', { userId: ctx.yanId, action: 'resume_purchases' }, ctx.admin)).body.user.purchasesSuspended, false);
   assert.equal((await post('/api/data/orders', { productId: ctx.autoId, quantity: 1 }, ctx.yan)).status, 201);
+});
+
+// ============================================================ balance first, then restrictions (scenarios A / B / C)
+test('A. insufficient balance: the usual "please top up" answer, even when the customer is suspended', async () => {
+  ctx.expId = (await post('/api/data/products', { name: 'Produit Premium', price: 40, newKeys: ['E-1', 'E-2', 'E-3'] }, ctx.admin)).body.product.id;
+  ctx.stockId = (await post('/api/data/products', { name: 'Licence Stock', price: 3, newKeys: Array.from({ length: 20 }, (_, i) => 'S-' + i) }, ctx.admin)).body.product.id;
+  assert.equal((await post('/api/data/users', { userId: ctx.zoeId, action: 'suspend_purchases' }, ctx.admin)).body.user.purchasesSuspended, true);
+  const before = (await me(ctx.zoe)).balance;
+  assert.ok(before < 40, 'balance below the price: ' + before);
+  const r = await post('/api/data/orders', { productId: ctx.expId, quantity: 1 }, ctx.zoe);
+  assert.equal(r.status, 400, JSON.stringify(r.body));
+  assert.equal(r.body.code, 'INSUFFICIENT_BALANCE', 'normal top-up message first');
+  assert.match(r.body.error, /Solde insuffisant/);
+  assert.equal((await me(ctx.zoe)).balance, before);
+});
+
+test('B. after a Mobile Money top-up the balance is sufficient: neutral message, nothing debited', async () => {
+  const before = (await me(ctx.zoe)).balance;
+  const missing = Math.round((40 - before) * 100) / 100;
+  const c = await post('/api/payments/saspay/create', { amount: Math.max(5, missing), country: 'CM', network: 'orange_cm', phone: '699123440' }, ctx.zoe);
+  assert.equal(c.status, 201, JSON.stringify(c.body));
+  payments.get(c.body.providerTxId).status = 'SUCCESS';
+  assert.equal((await get('/api/payments/saspay/verify?transactionId=' + c.body.transactionId, ctx.zoe)).body.status, 'completed');
+  const after = (await me(ctx.zoe)).balance;
+  assert.ok(after >= 40, 'top-up credited normally: ' + after);
+  const ordersBefore = (await get('/api/data/orders', ctx.zoe)).body.orders.length;
+  const r = await post('/api/data/orders', { productId: ctx.expId, quantity: 1 }, ctx.zoe);
+  assert.equal(r.status, 409, JSON.stringify(r.body));
+  assert.equal(r.body.code, 'PURCHASES_UNAVAILABLE');
+  assert.equal(r.body.error, MESSAGE);
+  assert.equal((await me(ctx.zoe)).balance, after, 'nothing debited');
+  assert.equal((await get('/api/data/orders', ctx.zoe)).body.orders.length, ordersBefore, 'no order');
+});
+
+// ============================================================ global suspension
+test('global switch: administrator only, stored in the database, never exposed to customers', async () => {
+  for (const t of [ctx.zoe, ctx.yan, undefined]) assert.equal((await post('/api/data/users', { action: 'suspend_all_purchases' }, t)).status, 403);
+  assert.equal((await get('/api/data/users', ctx.admin)).body.purchaseControl.globalSuspended, false, 'off by default');
+  const r = await post('/api/data/users', { action: 'suspend_all_purchases' }, ctx.admin);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.purchaseControl.globalSuspended, true);
+  assert.equal((await get('/api/data/users', ctx.admin)).body.purchaseControl.globalSuspended, true);
+  const db = JSON.parse(fs.readFileSync(path.join(TMP, 'database.json'), 'utf8'));
+  assert.equal(db.settings.purchasesSuspendedGlobal, true, 'stored in the database');
+  assert.equal(db.settings.min_recharge, 5, 'other settings untouched');
+  assert.doesNotMatch(JSON.stringify((await get('/api/data/settings')).body), /suspend/i, 'not in public settings');
+  assert.doesNotMatch(JSON.stringify(await me(ctx.yan)), /suspend/i, 'not in the customer profile');
+  const list = (await get('/api/data/users', ctx.admin)).body.users;
+  assert.equal(list.find(u => u.id === ctx.zoeId).purchasesSuspended, true, 'individual settings untouched');
+  assert.equal(list.find(u => u.id === ctx.yanId).purchasesSuspended, false, 'individual settings untouched');
+});
+
+test('global ON: every customer with enough balance is refused (nothing debited); low balance -> top up; top-ups credited', async () => {
+  const before = (await me(ctx.yan)).balance;
+  const ordersBefore = (await get('/api/data/orders', ctx.yan)).body.orders.length;
+  const stockBefore = (await get('/api/data/products')).body.products.find(p => p.id === ctx.stockId).stock;
+  const r = await post('/api/data/orders', { productId: ctx.stockId, quantity: 1 }, ctx.yan);
+  assert.equal(r.status, 409, JSON.stringify(r.body));
+  assert.equal(r.body.error, MESSAGE);
+  assert.doesNotMatch(JSON.stringify(r.body), /suspen|admin|bloqu/i);
+  assert.equal((await me(ctx.yan)).balance, before, 'nothing debited');
+  assert.equal((await get('/api/data/orders', ctx.yan)).body.orders.length, ordersBefore, 'no order');
+  assert.equal((await get('/api/data/products')).body.products.find(p => p.id === ctx.stockId).stock, stockBefore, 'no key delivered');
+  // a brand-new customer is blocked too
+  const n = await post('/api/auth/register', { email: 'neo@example.com', password: 'Client-Pass-12', confirmPassword: 'Client-Pass-12', name: 'neo' });
+  ctx.neo = n.body.session.token; ctx.neoId = n.body.user.id;
+  await post('/api/data/users', { userId: ctx.neoId, amount: 10, action: 'gift', reason: 'test' }, ctx.admin);
+  assert.equal((await post('/api/data/orders', { productId: ctx.stockId, quantity: 1 }, ctx.neo)).body.code, 'PURCHASES_UNAVAILABLE');
+  // insufficient balance: usual top-up answer
+  const low = await post('/api/data/orders', { productId: ctx.stockId, quantity: 20 }, ctx.neo);
+  assert.equal(low.body.code, 'INSUFFICIENT_BALANCE');
+  // Mobile Money top-ups keep working (plain, and started from a product)
+  const c = await post('/api/payments/saspay/create', { amount: 5, country: 'CM', network: 'orange_cm', phone: '699123441' }, ctx.yan);
+  assert.equal(c.status, 201, JSON.stringify(c.body));
+  payments.get(c.body.providerTxId).status = 'SUCCESS';
+  assert.equal((await get('/api/payments/saspay/verify?transactionId=' + c.body.transactionId, ctx.yan)).body.status, 'completed');
+  assert.equal((await me(ctx.yan)).balance, before + 5, 'wallet credited');
+  const c2 = await post('/api/payments/saspay/create', { amount: 5, country: 'CM', network: 'orange_cm', phone: '699123441', purchase: { productId: ctx.stockId, quantity: 1 } }, ctx.yan);
+  assert.equal(c2.status, 201, JSON.stringify(c2.body));
+  payments.get(c2.body.providerTxId).status = 'SUCCESS';
+  const v2 = await get('/api/payments/saspay/verify?transactionId=' + c2.body.transactionId, ctx.yan);
+  assert.equal(v2.body.status, 'completed');
+  assert.equal(v2.body.orderError, MESSAGE);
+  assert.equal((await me(ctx.yan)).balance, before + 10, 'credited, nothing debited');
+  // an individually reactivated customer stays blocked while the global suspension is on
+  await post('/api/data/users', { userId: ctx.zoeId, action: 'resume_purchases' }, ctx.admin);
+  assert.equal((await post('/api/data/orders', { productId: ctx.stockId, quantity: 1 }, ctx.zoe)).body.code, 'PURCHASES_UNAVAILABLE', 'global has priority');
+  await post('/api/data/users', { userId: ctx.zoeId, action: 'suspend_purchases' }, ctx.admin);
+});
+
+test('global OFF: individual suspensions stay intact, the others buy normally (scenario C)', async () => {
+  const r = await post('/api/data/users', { action: 'resume_all_purchases' }, ctx.admin);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.purchaseControl.globalSuspended, false);
+  const list = (await get('/api/data/users', ctx.admin)).body.users;
+  assert.equal(list.find(u => u.id === ctx.zoeId).purchasesSuspended, true, 'individual suspension kept');
+  assert.equal((await post('/api/data/orders', { productId: ctx.stockId, quantity: 1 }, ctx.zoe)).body.code, 'PURCHASES_UNAVAILABLE', 'still suspended individually');
+  const before = (await me(ctx.yan)).balance;
+  const y = await post('/api/data/orders', { productId: ctx.stockId, quantity: 1 }, ctx.yan);
+  assert.equal(y.status, 201, JSON.stringify(y.body));
+  assert.equal(y.body.newBalance, Math.round((before - 3) * 100) / 100, 'normal debit');
+  assert.equal((await post('/api/data/orders', { productId: ctx.stockId, quantity: 1 }, ctx.neo)).status, 201);
+  await post('/api/data/users', { userId: ctx.zoeId, action: 'resume_purchases' }, ctx.admin);
+  const z = await post('/api/data/orders', { productId: ctx.expId, quantity: 1 }, ctx.zoe);
+  assert.equal(z.status, 201, 'reactivated customer buys the product they could not buy before');
 });
