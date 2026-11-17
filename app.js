@@ -5180,7 +5180,7 @@ function switchToAdmin() {
 
 // GESTIONNAIRE DE VERSION & CACHE BUSTING EN DIRECT
 var VersionManager = {
-  currentVersion: 'v202611161720_edebee',
+  currentVersion: 'v202611171852_cbf747',
   checkIntervalMs: 60 * 1000,
   _toastShown: false,
 
