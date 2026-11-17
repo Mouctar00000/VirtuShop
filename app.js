@@ -1381,8 +1381,19 @@ function renderPurchaseModal() {
 }
 
 function promptDepositFromPurchase(suggestedAmount) {
+  // Commande à valider automatiquement dès que le paiement Mobile Money est confirmé (côté serveur)
+  if (selectedPayProd) {
+    var qty = parseInt(currentPurchaseQty, 10) || 1;
+    pendingDepositPurchase = {
+      productId: selectedPayProd.id,
+      productName: selectedPayProd.name,
+      quantity: qty,
+      total: Math.round((Number(selectedPayProd.price) || 0) * qty * 100) / 100,
+      contactInfo: ((document.getElementById('purchase-contact-input') || {}).value || '').trim().slice(0, 120)
+    };
+  }
   closePayModal();
-  openDepositModal(suggestedAmount);
+  openDepositModal(suggestedAmount, true);
 }
 
 // LIVRAISON DU PRODUIT NUMÉRIQUE ACHETÉ AVEC CLÉ UNIQUE ET ENREGISTREMENT DÉFINITIF
@@ -1984,10 +1995,11 @@ async function checkOrderMomoStatus(txId, total, qty, contactVal) {
 }
 
 // ========== RECHARGEMENT DU SOLDE (+) ==========
-function openDepositModal(suggestedAmount) {
+function openDepositModal(suggestedAmount, fromPurchase) {
   var s = DB.get('session');
   if (!s || !s.userId) { openAuthModal('login', 'Veuillez vous connecter pour recharger votre solde.'); return; }
 
+  if (fromPurchase !== true) pendingDepositPurchase = null;
   currentDepositProofBase64 = null;
   var min = getMinRecharge();
 
@@ -2013,6 +2025,12 @@ function openDepositModal(suggestedAmount) {
   renderDepositMethodsTabs();
   renderDepositMethodContent();
   updateDepositCalculation();
+
+  // Un paiement Mobile Money récent est encore en attente : on affiche son suivi plutôt qu'un nouveau formulaire
+  if (!fromPurchase && momoTrack && !momoTrack.done && (Date.now() - momoTrack.startedAt) < 15 * 60 * 1000) {
+    renderMomoWaitingState('Paiement en attente de confirmation : vérification en cours…');
+    startMomoTracking();
+  }
 
   document.getElementById('modal-deposit').classList.add('active');
 
@@ -2130,7 +2148,6 @@ var MOMO_COUNTRIES = [
     networks: [
       { id: 'orange_ml', name: 'Orange Money', icon: '🍊', otp_required: false, instruction: 'Validez la demande avec votre code secret Orange Money.' },
       { id: 'moov_ml', name: 'Moov Money', icon: '🔵', otp_required: false, instruction: 'Validez l\'invite sur votre téléphone Moov.' },
-      { id: 'wave_ml', name: 'Wave Mali', icon: '🌊', otp_required: false, instruction: 'Ouvrez votre application Wave pour valider.' },
       { id: 'mobi_cash_ml', name: 'Mobi Cash', icon: '🟣', otp_required: false, instruction: 'Validez la transaction sur votre compte Mobi Cash.' }
     ]
   },
@@ -2299,10 +2316,8 @@ function updateDepositCalculation() {
 function closeDepositModal() {
   document.getElementById('modal-deposit').classList.remove('active');
   currentDepositProofBase64 = null;
-  if (momoPollingTimer) {
-    clearInterval(momoPollingTimer);
-    momoPollingTimer = null;
-  }
+  // Le suivi est mémorisé : il reprend à la prochaine ouverture / au prochain chargement de page
+  stopMomoTracking();
   if (trybitPollingTimer) {
     clearInterval(trybitPollingTimer);
     trybitPollingTimer = null;
@@ -2649,25 +2664,41 @@ function renderSasPayDepositContent(container) {
       <label class="momo-phone-label" style="color: #92400e; font-weight: 700; font-size: 11.5px;">
         🔑 Code d'autorisation temporaire / OTP (Requis)
       </label>
-      <input type="text" id="momo-otp-input" placeholder="" autocomplete="one-time-code" style="height: 32px; font-size: 13px; font-weight: 700; letter-spacing: 2px;">
+      <div style="font-size: 11px; color: #92400e; margin: 0 0 4px 0; line-height: 1.35;">${escapeHtml(currentNet.instruction || 'Générez votre code de paiement depuis votre téléphone.')}</div>
+      <input type="text" id="momo-otp-input" placeholder="Code reçu" autocomplete="one-time-code" inputmode="numeric" style="height: 32px; font-size: 13px; font-weight: 700; letter-spacing: 2px;">
     </div>
   ` : '';
 
-  var cmTipHtml = (country.code === 'CM' && selectedMomoNetwork === 'orange_cm') ? `
-    <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; font-size: 12px; color: #9a3412; text-align: center; font-weight: 700;">
-      Tapez #150*50#
+  // Ce que le client devra faire sur son téléphone, affiché AVANT de lancer le paiement
+  var tipText = '';
+  if (!isHosted && currentNet) {
+    if (currentNet.id === 'orange_cm') tipText = 'Après avoir cliqué sur « Payer », gardez votre téléphone en main : validez la demande Orange Money avec votre code secret. Si rien ne s\'affiche, composez #150*50#. Vous avez environ 3 minutes.';
+    else if (currentNet.id === 'mtn_cm') tipText = 'Après avoir cliqué sur « Payer », validez la demande MTN MoMo avec votre code PIN. Si rien ne s\'affiche, composez *126#. Vous avez environ 3 minutes.';
+    else if (!currentNet.otp_required) tipText = 'Après avoir cliqué sur « Payer », validez la demande sur votre téléphone dans les 3 minutes (' + (currentNet.instruction || 'code secret Mobile Money') + ').';
+  }
+  var cmTipHtml = tipText ? `
+    <div style="background: #fff7ed; border: 1px solid #ffedd5; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; font-size: 11.5px; color: #9a3412; text-align: left; font-weight: 600; line-height: 1.4;">
+      📱 ${escapeHtml(tipText)}
     </div>
   ` : '';
 
+  var phoneExamples = { CM: '6XX XX XX XX', CI: '07 XX XX XX XX', SN: '7X XXX XX XX', BJ: '01 XX XX XX XX', BF: 'XX XX XX XX', TG: '9X XX XX XX', ML: 'XX XX XX XX', NE: '9X XX XX XX', GN: '6XX XX XX XX', CG: '06 XXX XX XX', GH: '24X XXX XXX', KE: '7XX XXX XXX', CD: '8X XXX XXXX', RW: '78X XXX XXX', UG: '7XX XXX XXX', TZ: '7XX XXX XXX', NG: '80X XXX XXXX', SL: '7X XXX XXX' };
   var phoneFieldHtml = isHosted ? '' : `
     <div class="field" style="margin-top: 4px; margin-bottom: 4px;">
       <label class="momo-phone-label">Numéro Mobile Money (${country.name})</label>
       <div class="phone-input-group">
         <span class="phone-prefix">${country.prefix || '+'}</span>
-        <input type="tel" id="momo-phone-input" placeholder="" autocomplete="tel">
+        <input type="tel" id="momo-phone-input" placeholder="${escapeHtml(phoneExamples[country.code] || '')}" autocomplete="tel" inputmode="tel">
       </div>
     </div>
   `;
+
+  var autoPurchaseHtml = pendingDepositPurchase ? `
+    <label style="display: flex; gap: 8px; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 7px 10px; margin: 4px 0 6px 0; font-size: 11.5px; line-height: 1.4; cursor: pointer;">
+      <input type="checkbox" id="momo-auto-purchase" checked style="margin-top: 2px; width: auto; min-height: 0;">
+      <span>Valider automatiquement ma commande <strong>${escapeHtml(pendingDepositPurchase.productName || 'produit')}</strong> (x${pendingDepositPurchase.quantity}, $${Number(pendingDepositPurchase.total || 0).toFixed(2)}) dès que le paiement est confirmé.</span>
+    </label>
+  ` : '';
 
   container.innerHTML = `
     <div class="momo-country-wrapper">
@@ -2700,11 +2731,12 @@ function renderSasPayDepositContent(container) {
       </div>
     </div>
     <div style="font-size: 10px; color: var(--text-muted); margin: 3px 0 6px 2px; line-height: 1.35;">
-      💡 Prévoyez au moins <strong>~${Math.round(localAmount * 1.035)} ${country.currency}</strong> sur votre SIM pour couvrir les frais de réseau opérateur.
+      💡 Prévoyez au moins <strong>~${Math.ceil(localAmount * 1.06).toLocaleString('fr-FR')} ${country.currency}</strong> sur votre compte Mobile Money : les frais de l'opérateur (≈ 3,5 à 6 %) s'ajoutent au montant.
     </div>
 
     ${phoneFieldHtml}
     ${otpFieldHtml}
+    ${autoPurchaseHtml}
 
     <div style="display: flex; justify-content: center; width: 100%; margin-top: 8px;">
       <button type="button" class="btn-primary btn-light-sweep" id="btn-submit-momo" onclick="submitSasPayDeposit()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; height: 38px; font-size: 13px; font-weight: 700; border-radius: 8px; margin: 0 auto;">
@@ -2814,6 +2846,36 @@ async function handleDepositProofSelected(event) {
   showToast('Capture enregistrée !', 'success');
 }
 
+// ========== MOBILE MONEY (SASPAY) : PAIEMENT SUIVI JUSQU'À SA CONFIRMATION OU SON ÉCHEC ==========
+// Le suivi est mémorisé (localStorage) : un rechargement, un retour depuis la page de paiement ou une fermeture
+// de la fenêtre ne perd jamais un paiement. Le serveur vérifie toujours le statut réel auprès de SasPay.
+var MOMO_TRACK_KEY = 'gv_momo_pending';
+var momoTrack = null;
+var momoCountdownTimer = null;
+var pendingDepositPurchase = null;
+
+function saveMomoTrack(t) {
+  try { localStorage.setItem(MOMO_TRACK_KEY, JSON.stringify(t)); } catch (e) {}
+}
+function loadMomoTrack() {
+  try {
+    var t = JSON.parse(localStorage.getItem(MOMO_TRACK_KEY) || 'null');
+    if (t && t.txId && (Date.now() - (t.startedAt || 0)) < 72 * 3600 * 1000) return t;
+    if (t) localStorage.removeItem(MOMO_TRACK_KEY);
+  } catch (e) {}
+  return null;
+}
+function clearMomoTrack(txId) {
+  try {
+    var t = loadMomoTrack();
+    if (!txId || !t || t.txId === txId) localStorage.removeItem(MOMO_TRACK_KEY);
+  } catch (e) {}
+}
+function stopMomoTracking() {
+  if (momoPollingTimer) { clearTimeout(momoPollingTimer); clearInterval(momoPollingTimer); momoPollingTimer = null; }
+  if (momoCountdownTimer) { clearInterval(momoCountdownTimer); momoCountdownTimer = null; }
+}
+
 async function submitSasPayDeposit(forcedMode) {
   var u = getCurrentUser();
   if (!u) {
@@ -2836,65 +2898,63 @@ async function submitSasPayDeposit(forcedMode) {
   var phoneInput = document.getElementById('momo-phone-input');
   var rawPhone = phoneInput ? phoneInput.value.trim() : '';
 
-  if (!isCheckoutMode) {
-    if (!rawPhone || rawPhone.length < 6) {
-      showToast('Veuillez renseigner un numéro de téléphone valide.', 'error');
-      if (phoneInput) phoneInput.focus();
-      return;
-    }
+  if (!isCheckoutMode && rawPhone.replace(/\D/g, '').length < 6) {
+    showMomoFormError('Veuillez renseigner votre numéro Mobile Money complet.');
+    if (phoneInput) phoneInput.focus();
+    return;
   }
 
   var currentNet = country.networks.find(function(n) { return n.id === selectedMomoNetwork; });
   var otpInput = document.getElementById('momo-otp-input');
   var otpVal = otpInput ? otpInput.value.trim() : '';
   if (!isCheckoutMode && currentNet && currentNet.otp_required && !otpVal) {
-    showToast('Veuillez renseigner votre code d\'autorisation / OTP généré sur votre mobile.', 'error');
+    showMomoFormError('Ce réseau exige un code de paiement : ' + (currentNet.instruction || 'générez-le depuis votre téléphone') + ' Saisissez-le puis relancez.');
     if (otpInput) otpInput.focus();
     return;
   }
 
-  var cleanDigits = (rawPhone || '').replace(/[^\d]/g, '');
-  var fullPhone = cleanDigits;
-  if (cleanDigits && country.prefix) {
-    var prefixDigits = country.prefix.replace('+', '');
-    if (cleanDigits.startsWith(prefixDigits)) {
-      fullPhone = '+' + cleanDigits;
-    } else {
-      fullPhone = country.prefix + cleanDigits.replace(/^0+/, '');
-    }
+  // Le numéro est envoyé tel que saisi : le serveur le valide et le met au format de l'opérateur (règles par pays)
+  var phoneToSend = rawPhone;
+  if (rawPhone && !/^\s*(\+|00)/.test(rawPhone) && country.prefix) {
+    var digits = rawPhone.replace(/\D/g, '');
+    var cc = country.prefix.replace('+', '');
+    phoneToSend = digits.indexOf(cc) === 0 && digits.length > cc.length + 7 ? '+' + digits : digits;
   }
+
+  var autoBox = document.getElementById('momo-auto-purchase');
+  var purchase = (pendingDepositPurchase && (!autoBox || autoBox.checked)) ? {
+    productId: pendingDepositPurchase.productId,
+    quantity: pendingDepositPurchase.quantity,
+    contactInfo: pendingDepositPurchase.contactInfo || ''
+  } : null;
 
   var submitBtn = document.getElementById('btn-submit-momo');
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.innerHTML = 'Initialisation sécurisée SasPay... ⚡';
+    submitBtn.innerHTML = 'Envoi de la demande à l\'opérateur... ⏳';
   }
-
-  var session = DB.get('session');
-  var token = session ? session.token : null;
+  var alertBox0 = document.getElementById('momo-error-alert');
+  if (alertBox0) alertBox0.style.display = 'none';
 
   var controller = new AbortController();
-  var timeoutId = setTimeout(function() { controller.abort(); }, 18000);
+  var timeoutId = setTimeout(function() { controller.abort(); }, 32000);
 
   try {
     var resp = await fetch('/api/payments/saspay/create', {
       method: 'POST',
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: u.id,
         amount: amount,
         country: country.code,
         network: isCheckoutMode ? 'checkout_hosted' : selectedMomoNetwork,
         preferredMode: isCheckoutMode ? 'checkout' : 'push',
-        phone: fullPhone,
+        phone: phoneToSend,
         otp: otpVal,
         customerName: u.name,
         customerEmail: u.email,
-        returnUrl: window.location.origin
+        returnUrl: window.location.origin + '/',
+        purchase: purchase
       })
     });
     clearTimeout(timeoutId);
@@ -2903,94 +2963,46 @@ async function submitSasPayDeposit(forcedMode) {
     try {
       data = await resp.json();
     } catch (parseErr) {
-      throw new Error('Erreur de communication avec le serveur de paiement.');
+      throw new Error('Réponse illisible du serveur de paiement (erreur ' + resp.status + '). Aucun paiement n\'a été lancé.');
     }
 
     if (!resp.ok || !data.success) {
-      throw new Error(data.error || 'Erreur lors de l\'initialisation du paiement SasPay.');
+      var e = new Error(data.error || data.message || 'Le paiement n\'a pas pu être lancé.');
+      e.code = data.code;
+      if (data.status === 'failed' && data.transactionId) e.code = 'PAYMENT_FAILED';
+      throw e;
     }
 
-    var localAmount = Math.round(amount * country.rate);
-    var formattedLocal = localAmount.toLocaleString('fr-FR') + ' ' + country.currency;
-    var container = document.getElementById('deposit-dynamic-content');
+    momoTrack = {
+      txId: data.transactionId,
+      amount: amount,
+      mode: data.mode || (isCheckoutMode ? 'checkout' : 'push'),
+      startedAt: Date.now(),
+      windowSec: data.validationWindowSec || 180,
+      network: data.network || selectedMomoNetwork,
+      networkName: data.networkName || (currentNet ? currentNet.name : 'Mobile Money'),
+      countryName: country.name,
+      phone: data.phone || '',
+      localAmount: data.localAmount ? Math.round(parseFloat(data.localAmount)).toLocaleString('fr-FR') + ' ' + (data.currency || country.currency) : '',
+      checkoutUrl: data.checkoutUrl || null,
+      instructions: Array.isArray(data.instructions) ? data.instructions : (data.instructions ? [String(data.instructions)] : []),
+      purchase: purchase && pendingDepositPurchase ? { productId: pendingDepositPurchase.productId, productName: pendingDepositPurchase.productName, quantity: pendingDepositPurchase.quantity, total: pendingDepositPurchase.total } : null
+    };
+    saveMomoTrack(momoTrack);
+    pendingDepositPurchase = null;
 
-    if (container) {
-      var netObj = country.networks.find(function(n) { return n.id === selectedMomoNetwork; }) || { name: 'Mobile Money' };
-      var checkoutBtnHtml = data.checkoutUrl ? `
-        <a href="${data.checkoutUrl}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-light-sweep" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 10px; font-weight: 700; font-size: 13px; margin-bottom: 8px; border-radius: 6px;">
-          ⚡ Ouvrir la page de paiement sécurisée (${escapeHtml(netObj.name)}) ↗
-        </a>
-      ` : '';
-
-      var instructionsText = Array.isArray(data.instructions) ? data.instructions.join(' ') : (data.instructions || 'Validez le prélèvement sur votre téléphone portable ou sur la page de paiement.');
-
-      container.innerHTML = `
-        <div class="deposit-active-flow" id="deposit-momo-status-box" style="text-align: center; padding: 10px 6px;">
-          <div class="pulse-spinner"></div>
-          <div class="pulse-indicator">● En attente de confirmation</div>
-          <h3 style="font-size: 15px; margin: 0 0 4px 0; color: var(--text-primary);">Paiement Initié auprès de l'Opérateur ⚡</h3>
-          
-          <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.45;">
-            ${escapeHtml(instructionsText)}
-          </div>
-
-          <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; text-align: left; font-size: 11.5px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--text-secondary);">Montant crédité :</span>
-              <strong style="color: var(--emerald-600); font-size: 12.5px;">+$${amount.toFixed(2)} USD</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--text-secondary);">Débit local :</span>
-              <strong>${formattedLocal}</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: var(--text-secondary);">Opérateur :</span>
-              <span>${escapeHtml(netObj.name)} (${country.name})</span>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--text-secondary);">Réf. Transaction :</span>
-              <code style="font-size: 10.5px; background: #f1f5f9; padding: 1px 4px; border-radius: 3px;">${escapeHtml(data.transactionId)}</code>
-            </div>
-          </div>
-
-          ${checkoutBtnHtml}
-
-          <div style="display: flex; gap: 6px;">
-            <button type="button" class="btn-secondary" id="btn-manual-verify-momo" onclick="checkSasPayStatusManual('${data.transactionId}', '${data.providerTxId || ''}', ${amount})" style="flex: 1; padding: 7px; font-size: 12px;">
-              Vérifier le statut 🔄
-            </button>
-            <button type="button" class="btn-secondary" onclick="renderDepositMethodContent()" style="padding: 7px 10px; font-size: 12px;" title="Changer d'opérateur">
-              Modifier
-            </button>
-          </div>
-          <div id="momo-polling-countdown" style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
-            Vérification en temps réel active...
-          </div>
-        </div>
-      `;
-    }
-
-    startSasPayPolling(data.transactionId, data.providerTxId, amount);
-
+    if (data.status === 'completed') { handleMomoResult(data); return; }
+    renderMomoWaitingState('Demande envoyée. En attente de votre validation…');
+    startMomoTracking();
   } catch (err) {
     clearTimeout(timeoutId);
-    var errMsg = err.name === 'AbortError' 
-      ? 'Délai d\'attente dépassé. Veuillez réessayer.' 
+    var errMsg = err.name === 'AbortError'
+      ? 'Le serveur de paiement n\'a pas répondu à temps. Si une demande arrive sur votre téléphone, vous pouvez la valider : le paiement sera vérifié automatiquement. Sinon, réessayez.'
       : (err.message || 'Impossible d\'initier le paiement.');
     showToast(errMsg, 'error');
-
-    // Affichage d'un bandeau d'information bien visible si l'opérateur est en incident
-    var alertBox = document.getElementById('momo-error-alert');
-    if (!alertBox && submitBtn && submitBtn.parentElement) {
-      alertBox = document.createElement('div');
-      alertBox.id = 'momo-error-alert';
-      alertBox.style.cssText = 'background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 6px; padding: 8px 10px; font-size: 11.5px; margin-bottom: 8px; line-height: 1.45; text-align: center; font-weight: 500;';
-      submitBtn.parentElement.insertBefore(alertBox, submitBtn);
-    }
-    if (alertBox) {
-      alertBox.innerHTML = `⚠️ ${escapeHtml(errMsg)}`;
-      alertBox.style.display = 'block';
-    }
+    showMomoFormError(errMsg);
+    if (err.code === 'INVALID_PHONE' && phoneInput) phoneInput.focus();
+    if (err.code === 'OTP_REQUIRED' && otpInput) otpInput.focus();
 
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -3000,23 +3012,207 @@ async function submitSasPayDeposit(forcedMode) {
   }
 }
 
-function showSasPayFailedState(message) {
-  if (momoPollingTimer) {
-    clearInterval(momoPollingTimer);
-    momoPollingTimer = null;
+// Bandeau d'erreur bien visible au-dessus du bouton « Payer » (motif exact renvoyé par le serveur / l'opérateur)
+function showMomoFormError(message) {
+  var submitBtn = document.getElementById('btn-submit-momo');
+  var alertBox = document.getElementById('momo-error-alert');
+  if (!alertBox && submitBtn && submitBtn.parentElement) {
+    alertBox = document.createElement('div');
+    alertBox.id = 'momo-error-alert';
+    alertBox.setAttribute('role', 'alert');
+    alertBox.style.cssText = 'background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 6px; padding: 8px 10px; font-size: 11.5px; margin-bottom: 8px; line-height: 1.45; text-align: left; font-weight: 500;';
+    submitBtn.parentElement.parentElement.insertBefore(alertBox, submitBtn.parentElement);
   }
+  if (alertBox) {
+    alertBox.innerHTML = `⚠️ ${escapeHtml(message)}`;
+    alertBox.style.display = 'block';
+  }
+}
+
+function momoFormatClock(sec) {
+  sec = Math.max(0, Math.round(sec));
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+function renderMomoWaitingState(statusMessage) {
+  var t = momoTrack;
+  var container = document.getElementById('deposit-dynamic-content');
+  if (!container || !t) return;
+  var isPush = t.mode === 'push';
+  var title = isPush ? '📱 Validez le paiement sur votre téléphone' : (t.mode === 'bank_transfer' ? '🏦 Effectuez le virement indiqué' : '🔐 Finalisez le paiement sur la page sécurisée');
+  var steps = (t.instructions || []).map(function(s) { return `<li style="margin-bottom: 4px;">${escapeHtml(s)}</li>`; }).join('');
+  var openBtn = t.checkoutUrl ? `
+    <a href="${escapeHtml(t.checkoutUrl)}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-light-sweep" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; padding: 10px; font-weight: 700; font-size: 13px; margin-bottom: 8px; border-radius: 6px;">
+      ⚡ Ouvrir la page de paiement (${escapeHtml(t.networkName || 'SasPay')}) ↗
+    </a>` : '';
+  var purchaseLine = t.purchase ? `
+    <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 6px; padding: 7px 10px; margin-bottom: 8px; font-size: 11.5px; text-align: left; line-height: 1.4;">
+      🛒 Dès que le paiement est confirmé, votre commande <strong>${escapeHtml(t.purchase.productName || 'produit')}</strong> (x${escapeHtml(String(t.purchase.quantity || 1))}) est validée automatiquement.
+    </div>` : '';
+
+  container.innerHTML = `
+    <div class="deposit-active-flow" id="deposit-momo-status-box" style="text-align: center; padding: 10px 6px;">
+      <div class="pulse-spinner"></div>
+      <div class="pulse-indicator">● En attente de confirmation</div>
+      <h3 style="font-size: 15px; margin: 0 0 6px 0; color: var(--text-primary);">${title}</h3>
+      ${isPush ? `<div id="momo-validate-timer" style="font-size: 12px; font-weight: 700; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;">Temps restant pour valider : <span id="momo-validate-clock">${momoFormatClock(t.windowSec - (Date.now() - t.startedAt) / 1000)}</span></div>` : ''}
+      ${steps ? `<ol style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px 8px 26px; margin: 0 0 10px 0; font-size: 11.5px; color: var(--text-secondary); line-height: 1.45; text-align: left;">${steps}</ol>` : ''}
+      ${openBtn}
+      ${purchaseLine}
+      <div style="background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; text-align: left; font-size: 11.5px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="color: var(--text-secondary);">Montant crédité :</span>
+          <strong style="color: var(--emerald-600); font-size: 12.5px;">+$${Number(t.amount || 0).toFixed(2)} USD</strong>
+        </div>
+        ${t.localAmount ? `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="color: var(--text-secondary);">Débit opérateur :</span>
+          <strong id="momo-charged">${escapeHtml(t.charged || t.localAmount)}${t.charged ? '' : ' + frais'}</strong>
+        </div>` : ''}
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+          <span style="color: var(--text-secondary);">Opérateur :</span>
+          <span>${escapeHtml(t.networkName || 'Mobile Money')}${t.phone ? ' · ' + escapeHtml(t.phone) : ''}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: var(--text-secondary);">Réf. transaction :</span>
+          <code style="font-size: 10.5px; background: #f1f5f9; padding: 1px 4px; border-radius: 3px;">${escapeHtml(t.txId)}</code>
+        </div>
+      </div>
+      <div id="momo-status-line" role="status" aria-live="polite" style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.4;">${escapeHtml(statusMessage || 'Vérification en temps réel active…')}</div>
+      <div style="display: flex; gap: 6px;">
+        <button type="button" class="btn-secondary" id="btn-manual-verify-momo" onclick="checkSasPayStatusManual()" style="flex: 1; padding: 7px; font-size: 12px;">
+          Vérifier maintenant 🔄
+        </button>
+        <button type="button" class="btn-secondary" onclick="abandonMomoTracking()" style="padding: 7px 10px; font-size: 12px;" title="Lancer un nouveau paiement">
+          Nouveau paiement
+        </button>
+      </div>
+      <div id="momo-polling-countdown" style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
+        Le statut est vérifié automatiquement auprès de l'opérateur.
+      </div>
+    </div>
+  `;
+}
+
+function updateMomoStatusLine(message, isWarning) {
+  var el = document.getElementById('momo-status-line');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color = isWarning ? '#b45309' : 'var(--text-secondary)';
+}
+
+function startMomoTracking() {
+  stopMomoTracking();
+  if (!momoTrack) return;
+  var t = momoTrack;
+  if (t.mode === 'push') {
+    momoCountdownTimer = setInterval(function() {
+      var clock = document.getElementById('momo-validate-clock');
+      var box = document.getElementById('momo-validate-timer');
+      var left = t.windowSec - (Date.now() - t.startedAt) / 1000;
+      if (clock) clock.textContent = momoFormatClock(left);
+      if (left <= 0 && box) {
+        box.textContent = 'Délai de validation écoulé : en attente de la réponse finale de l\'opérateur…';
+        clearInterval(momoCountdownTimer);
+        momoCountdownTimer = null;
+      }
+    }, 1000);
+  }
+  var tick = async function() {
+    momoPollingTimer = null;
+    if (!momoTrack || momoTrack !== t || t.done) return;
+    var r = await fetchMomoStatus(t.txId);
+    if (!momoTrack || momoTrack !== t || t.done) return;
+    handleMomoResult(r);
+    if (t.done) return;
+    var elapsed = (Date.now() - t.startedAt) / 1000;
+    var limit = t.mode === 'push' ? 900 : Math.max(900, t.windowSec + 120);
+    if (elapsed > limit) {
+      var cd = document.getElementById('momo-polling-countdown');
+      if (cd) cd.innerHTML = '<span style="color: var(--amber-600);">Toujours aucune réponse finale de l\'opérateur. Vous pouvez fermer cette fenêtre : le paiement continue d\'être vérifié automatiquement et votre solde sera crédité dès sa confirmation. Cliquez sur « Vérifier maintenant » pour relancer la vérification.</span>';
+      return;
+    }
+    momoPollingTimer = setTimeout(tick, elapsed < 240 ? 4000 : 10000);
+  };
+  momoPollingTimer = setTimeout(tick, 3000);
+}
+
+async function fetchMomoStatus(txId) {
+  try {
+    var resp = await fetch('/api/payments/saspay/verify?transactionId=' + encodeURIComponent(txId) + '&_t=' + Date.now(), { cache: 'no-store' });
+    var data = await resp.json().catch(function() { return {}; });
+    if (resp.status === 401 || resp.status === 403) return { status: 'auth', message: 'Votre session a expiré : reconnectez-vous pour suivre ce paiement (il reste enregistré et sera vérifié automatiquement).' };
+    if (resp.status === 404) return { status: 'unknown_tx', message: data.error || 'Paiement introuvable.' };
+    if (!resp.ok) return { status: 'error', message: (data && data.error) || ('Serveur momentanément indisponible (erreur ' + resp.status + '). Nouvelle tentative…') };
+    return data;
+  } catch (e) {
+    return { status: 'network', message: 'Connexion internet instable : nouvelle vérification dans quelques secondes…' };
+  }
+}
+
+function handleMomoResult(r) {
+  var t = momoTrack;
+  if (!t || !r) return;
+  if (r.status === 'completed' || r.status === 'SUCCESS') {
+    t.done = true;
+    stopMomoTracking();
+    clearMomoTrack(t.txId);
+    onSasPayPaymentConfirmed(t.txId, typeof r.creditedAmount === 'number' ? r.creditedAmount : t.amount, r.newBalance, r);
+    return;
+  }
+  if (r.status === 'failed' || r.status === 'cancelled' || r.status === 'FAILED' || r.status === 'EXPIRED') {
+    t.done = true;
+    stopMomoTracking();
+    clearMomoTrack(t.txId);
+    showSasPayFailedState(r.message, t.txId);
+    return;
+  }
+  if (r.status === 'unknown_tx') {
+    t.done = true;
+    stopMomoTracking();
+    clearMomoTrack(t.txId);
+    showSasPayFailedState(r.message, t.txId);
+    return;
+  }
+  if (r.charged && r.charged !== t.charged) {
+    t.charged = r.charged;
+    saveMomoTrack(t);
+    var ch = document.getElementById('momo-charged');
+    if (ch) ch.textContent = r.charged;
+  }
+  var warn = r.status === 'auth' || r.status === 'network' || r.status === 'error' || r.providerReachable === false;
+  if (r.message) updateMomoStatusLine(r.message, warn);
+  if (r.status === 'auth') stopMomoTracking();
+}
+
+function retryMomoPayment() {
+  stopMomoTracking();
+  momoTrack = null;
+  renderDepositMethodContent();
+}
+
+function abandonMomoTracking() {
+  stopMomoTracking();
+  if (momoTrack) clearMomoTrack(momoTrack.txId);
+  momoTrack = null;
+  renderDepositMethodContent();
+}
+
+// Écran d'échec : motif exact transmis par l'opérateur / SasPay + conseil pour réussir le prochain paiement
+function showSasPayFailedState(message, txId) {
+  stopMomoTracking();
   var container = document.getElementById('deposit-dynamic-content');
   if (!container) return;
   container.innerHTML = `
     <div class="deposit-active-flow" style="text-align: center; padding: 14px 10px;">
       <div style="font-size: 34px; margin-bottom: 6px;">❌</div>
       <h3 style="color: var(--rose-600); font-size: 15.5px; margin: 0 0 6px 0;">Paiement non abouti</h3>
-      <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px; color: #9f1239; line-height: 1.45; text-align: left;">
-        <strong>Motif communiqué par l'opérateur :</strong><br>
-        ${escapeHtml(message || 'Le paiement a été rejeté ou a expiré auprès de votre opérateur.')}
+      <div role="alert" style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px; color: #9f1239; line-height: 1.5; text-align: left;">
+        ${escapeHtml(message || 'Le paiement a été refusé ou a expiré auprès de votre opérateur.')}
       </div>
-      <button type="button" class="btn-primary" onclick="renderDepositMethodContent()" style="width: 100%; margin-bottom: 6px; padding: 8px;">
-        Réessayer ou Choisir un autre moyen 🔄
+      <p style="font-size: 11px; color: var(--text-muted); margin: 0 0 12px 0; white-space: normal; overflow-wrap: anywhere;">Votre solde GetVirtu n'a pas été modifié${txId ? ' · Réf. ' + escapeHtml(txId) : ''}.</p>
+      <button type="button" class="btn-primary" onclick="retryMomoPayment()" style="width: 100%; margin-bottom: 6px; padding: 8px;">
+        Réessayer le paiement 🔄
       </button>
       <button type="button" class="btn-secondary" onclick="closeDepositModal()" style="width: 100%; padding: 7px;">
         Fermer
@@ -3025,110 +3221,65 @@ function showSasPayFailedState(message) {
   `;
 }
 
-function startSasPayPolling(txId, providerTxId, amount) {
-  if (momoPollingTimer) clearInterval(momoPollingTimer);
-  var attempts = 0;
-  var maxAttempts = 60; // 60 x 3.5s = ~3.5 minutes
-
-  momoPollingTimer = setInterval(async function() {
-    attempts++;
-    var countdownEl = document.getElementById('momo-polling-countdown');
-    if (countdownEl) {
-      var remainingSec = Math.max(0, Math.round((maxAttempts - attempts) * 3.5));
-      var min = Math.floor(remainingSec / 60);
-      var sec = remainingSec % 60;
-      countdownEl.textContent = `En attente de validation opérateur (${min}:${sec < 10 ? '0' : ''}${sec})...`;
-    }
-
-    if (attempts > maxAttempts) {
-      clearInterval(momoPollingTimer);
-      momoPollingTimer = null;
-      if (countdownEl) {
-        countdownEl.innerHTML = '<span style="color: var(--amber-600);">Validation toujours en attente. Cliquez sur "Vérifier le statut" dès que validé sur votre téléphone.</span>';
-      }
-      return;
-    }
-
-    try {
-      var query = `transactionId=${encodeURIComponent(txId)}`;
-      if (providerTxId) query += `&providerTxId=${encodeURIComponent(providerTxId)}`;
-      var resp = await fetch(`/api/payments/saspay/verify?${query}`);
-      var result = await resp.json();
-
-      if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
-        clearInterval(momoPollingTimer);
-        momoPollingTimer = null;
-        onSasPayPaymentConfirmed(txId, amount, result.newBalance);
-      } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired' || result.status === 'cancelled') {
-        clearInterval(momoPollingTimer);
-        momoPollingTimer = null;
-        showSasPayFailedState(result.message);
-      }
-    } catch (e) {}
-  }, 3500);
-}
-
-async function checkSasPayStatusManual(txId, providerTxId, amount) {
+async function checkSasPayStatusManual() {
+  if (!momoTrack) return;
   var btn = document.getElementById('btn-manual-verify-momo');
-  if (btn) btn.textContent = 'Vérification en cours... 🔄';
+  if (btn) { btn.disabled = true; btn.textContent = 'Vérification en cours... 🔄'; }
   try {
-    showToast('Vérification auprès de SasPay...', 'info');
-    var query = `transactionId=${encodeURIComponent(txId)}`;
-    if (providerTxId) query += `&providerTxId=${encodeURIComponent(providerTxId)}`;
-    var resp = await fetch(`/api/payments/saspay/verify?${query}`);
-    var result = await resp.json();
-
-    if (resp.ok && (result.status === 'completed' || result.status === 'SUCCESS')) {
-      if (momoPollingTimer) clearInterval(momoPollingTimer);
-      momoPollingTimer = null;
-      onSasPayPaymentConfirmed(txId, amount, result.newBalance);
-    } else if (result.status === 'FAILED' || result.status === 'failed' || result.status === 'EXPIRED' || result.status === 'expired' || result.status === 'cancelled') {
-      showSasPayFailedState(result.message);
-    } else {
-      showToast(result.message || 'Paiement toujours en attente de validation sur votre mobile.', 'info');
+    var r = await fetchMomoStatus(momoTrack.txId);
+    handleMomoResult(r);
+    if (momoTrack && !momoTrack.done) {
+      if (r.message) showToast(r.message, r.status === 'pending' ? 'info' : 'warning');
+      if (!momoPollingTimer) startMomoTracking();
     }
-  } catch (err) {
-    showToast('Erreur lors de la vérification : ' + err.message, 'error');
   } finally {
-    if (btn) btn.textContent = 'Vérifier le statut 🔄';
+    var b = document.getElementById('btn-manual-verify-momo');
+    if (b) { b.disabled = false; b.textContent = 'Vérifier maintenant 🔄'; }
   }
 }
 
-function onSasPayPaymentConfirmed(txId, amount, newBalance) {
-  var session = DB.get('session');
-  if (session) {
-    if (typeof newBalance === 'number') {
-      session.balance = newBalance;
-    } else {
-      session.balance = (session.balance || 0) + amount;
-    }
-    DB.set('session', session);
+function onSasPayPaymentConfirmed(txId, amount, newBalance, result) {
+  result = result || {};
+  amount = Number(amount) || 0;
+  if (typeof newBalance === 'number') updateUserBalance(newBalance);
+  else {
+    var session = DB.get('session');
+    if (session) { session.balance = (session.balance || 0) + amount; DB.set('session', session); }
   }
-
-  var users = DB.get('users', []);
-  var u = users.find(function(user) { return user.id === (session ? session.userId : null); });
-  if (u) {
-    if (typeof newBalance === 'number') {
-      u.balance = newBalance;
-    } else {
-      u.balance = (u.balance || 0) + amount;
-    }
-    DB.set('users', users);
-  }
-
   updateNavbar();
   renderConnectedCatalog();
   renderLandingCatalog();
 
+  // Commande validée automatiquement par le serveur dès la confirmation du paiement : on livre la VRAIE commande
+  if (result.order && result.order.id) {
+    var order = result.order;
+    var prod = (DB.get('products', []) || []).find(function(p) { return p && String(p.id) === String(order.productId); }) ||
+      { id: order.productId, name: order.productName || 'Produit', category: '', image: '' };
+    closeDepositModal();
+    selectedPayProd = prod;
+    var payModal = document.getElementById('modal-pay');
+    if (payModal) payModal.classList.add('active');
+    deliverCompletedOrder(prod, order.amount, order.quantity, order.contactInfo, order.method || 'Mobile Money', newBalance, order);
+    pendingPurchaseProductId = null;
+    return;
+  }
+
   var container = document.getElementById('deposit-dynamic-content');
+  var orderWarn = result.orderError ? `
+        <div style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 6px; padding: 8px 10px; margin: 0 0 12px 0; font-size: 12px; line-height: 1.45; text-align: left;">
+          ⚠️ La commande n'a pas pu être validée automatiquement : ${escapeHtml(result.orderError)}<br>Le montant reste disponible sur votre solde.
+        </div>` : '';
   if (container) {
+    var modal = document.getElementById('modal-deposit');
+    if (modal && !modal.classList.contains('active')) modal.classList.add('active');
     container.innerHTML = `
       <div class="deposit-active-flow" style="border-color: #86efac; background: #f0fdf4;">
         <div style="font-size: 42px; margin-bottom: 8px;">🎉</div>
-        <h3 style="font-size: 17px; margin: 0 0 6px 0; color: #166534;">Paiement Validé avec Succès !</h3>
-        <p style="font-size: 13px; color: #15803d; margin: 0 0 16px 0;">
-          Votre solde a été crédité de <strong>+$${amount.toFixed(2)} USD</strong>.
+        <h3 style="font-size: 17px; margin: 0 0 6px 0; color: #166534;">Paiement confirmé par l'opérateur !</h3>
+        <p style="font-size: 13px; color: #15803d; margin: 0 0 12px 0;">
+          Votre solde a été crédité de <strong>+$${amount.toFixed(2)} USD</strong>${typeof newBalance === 'number' ? ' (nouveau solde : $' + newBalance.toFixed(2) + ')' : ''}.
         </p>
+        ${orderWarn}
         <button type="button" class="btn-primary" onclick="closeDepositModal()" style="width: 100%;">
           Parfait, Continuer mes achats ⚡
         </button>
@@ -3136,9 +3287,9 @@ function onSasPayPaymentConfirmed(txId, amount, newBalance) {
     `;
   }
 
-  showToast(`🎉 Félicitations ! Solde crédité de +$${amount.toFixed(2)} USD.`, 'success');
+  showToast(`🎉 Paiement confirmé ! Solde crédité de +$${amount.toFixed(2)} USD.`, 'success');
 
-  if (pendingPurchaseProductId) {
+  if (pendingPurchaseProductId && !result.orderError) {
     setTimeout(function() {
       closeDepositModal();
       var prodId = pendingPurchaseProductId;
@@ -3146,6 +3297,73 @@ function onSasPayPaymentConfirmed(txId, amount, newBalance) {
       startProductPurchase(prodId);
     }, 1200);
   }
+}
+
+// Paiements Mobile Money restés en attente (autre appareil, navigateur fermé) : revérifiés auprès de SasPay
+// au retour du client (au plus une fois toutes les 10 minutes par navigateur).
+function reconcileMyPendingPayments() {
+  try {
+    var last = parseInt(localStorage.getItem('gv_momo_reconcile_at') || '0', 10) || 0;
+    if (Date.now() - last < 10 * 60 * 1000) return;
+    localStorage.setItem('gv_momo_reconcile_at', String(Date.now()));
+  } catch (e) {}
+  fetch('/api/payments/saspay/reconcile', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(r) {
+      var results = (r && Array.isArray(r.results)) ? r.results : [];
+      if (results.some(function(x) { return x.status === 'completed'; })) {
+        showToast('Paiement Mobile Money confirmé par l\'opérateur : votre solde a été mis à jour.', 'success');
+        syncUserSessionAndBalance();
+      } else if (results.some(function(x) { return x.status === 'failed'; })) {
+        showToast('Un paiement Mobile Money en attente n\'a pas abouti : aucun montant n\'a été crédité.', 'info');
+      }
+    })
+    .catch(function() {});
+}
+
+// Reprise automatique d'un paiement en cours (retour depuis la page de paiement, rechargement, nouvel onglet)
+function resumeMomoTracking() {
+  var ret = null;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    ret = params.get('momo_return');
+    if (ret) {
+      params.delete('momo_return');
+      var q = params.toString();
+      history.replaceState(null, '', window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+    }
+  } catch (e) {}
+  var t = loadMomoTrack();
+  if (ret && /^TXN-[A-Z0-9-]{4,40}$/i.test(ret) && (!t || t.txId !== ret)) {
+    t = { txId: ret, amount: 0, mode: 'checkout', startedAt: Date.now(), windowSec: 1800, networkName: 'SasPay', instructions: [] };
+  }
+  var s = DB.get('session');
+  if (!s || !s.token) return;
+  if (!t) { reconcileMyPendingPayments(); return; }
+  momoTrack = t;
+  fetchMomoStatus(t.txId).then(function(r) {
+    if (momoTrack !== t) return;
+    var openModal = function() {
+      var modal = document.getElementById('modal-deposit');
+      if (modal) modal.classList.add('active');
+    };
+    if (r.status === 'completed' || r.status === 'failed' || r.status === 'cancelled' || r.status === 'unknown_tx') {
+      if (!r.order) openModal();
+      if (!t.amount && r.transaction && typeof r.transaction.amount === 'number') t.amount = r.transaction.amount;
+      handleMomoResult(r);
+      return;
+    }
+    if (r.status === 'pending') {
+      var recent = (Date.now() - t.startedAt) < 15 * 60 * 1000;
+      if (ret || recent) {
+        openModal();
+        renderMomoWaitingState(r.message);
+        startMomoTracking();
+      } else {
+        showToast('Un paiement Mobile Money (' + t.txId + ') attend encore la confirmation de l\'opérateur. Il sera crédité automatiquement dès sa validation.', 'info');
+      }
+    }
+  });
 }
 
 // ========== PASSERELLE CRYPTO INSTANTANÉE TRYBIT ==========
@@ -4758,6 +4976,8 @@ function startApp() {
     syncUserSessionAndBalance();
     syncProductsFromServer();
     syncPaymentMethodsFromServer();
+    // Paiement Mobile Money en cours (retour de la page de paiement, rechargement) : reprise du suivi
+    setTimeout(function() { try { resumeMomoTracking(); } catch (err) { console.error('[GetVirtu momo resume]', err); } }, 700);
   } catch (e) {
     console.error('[GetVirtu startApp]', e);
   }

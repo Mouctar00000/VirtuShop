@@ -75,6 +75,23 @@ On the Edge Config fallback, the downloaded file is the only backup.
 - Prices, totals, stock and balances are computed on the server; client-supplied ids, prices and roles are ignored.
 - A payment is credited only after a server-to-server check with SasPay using the provider id stored when
   the payment was created (webhooks are only triggers); crediting is idempotent.
+
+## Mobile Money (SasPay) lifecycle
+
+1. `POST /api/payments/saspay/create` validates the number for the chosen country (leading 0 kept in Côte d'Ivoire,
+   Bénin, Congo), the operator and its OTP, then calls SasPay softpay with an `Idempotency-Key` (one safe retry).
+   Answer: `mode` `push` (request on the phone, operator-specific steps, ~3 min to validate), `redirect` /
+   `checkout` (`checkoutUrl` to open: Wave, Orange CI, hosted page — expires after 30 min) — never a silent fallback.
+2. The browser polls `GET /api/payments/saspay/verify` (tracking kept in `localStorage`, resumed after a reload or
+   on return from the hosted page via `?momo_return=`). The server asks SasPay for the real status:
+   `SUCCESS` → balance credited once (amount/currency checked) and, when the payment was started from a product,
+   the order is placed server-side (`metadata.purchase`); `FAILED` → reason from SasPay `status_logs` shown to
+   the customer with what to do; refusals at creation are mapped to clear messages.
+3. Nothing stays blocked: SasPay webhooks (`POST /api/payments/webhook`, HMAC on the raw body when
+   `SASPAY_WEBHOOK_SECRET` is set), the customer history, the admin dashboard and a daily Vercel cron
+   (`/api/payments/saspay/reconcile`) re-check pending payments; after 72 h without answer a payment is closed.
+4. Admin › Système › « Mobile Money (SasPay) — diagnostic » checks the API key, active operators, webhook setup
+   and the last notifications; each pending recharge has a « Vérifier SasPay » button.
 - Uploads: real PNG/JPEG/WebP/GIF only (magic-number check, no SVG), size limits, stored outside the main document.
 - Strict security headers (CSP without `unsafe-eval`, HSTS, frame and MIME protections); private paths are never served.
 

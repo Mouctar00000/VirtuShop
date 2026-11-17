@@ -91,7 +91,10 @@ function sendError(res, err, tag) {
     return res.status(status).json(payload);
   }
   if (status === 502 || status === 503 || status === 504) {
-    return res.status(status).json({ error: err.message || 'Service externe indisponible.' });
+    const payload = { error: err.message || 'Service externe indisponible.' };
+    if (err.code) payload.code = err.code;
+    if (err.extra) Object.assign(payload, err.extra);
+    return res.status(status).json(payload);
   }
   console.error(`[${tag || 'API'} Error]`, err && err.stack ? err.stack : err);
   return res.status(500).json({ error: 'Erreur interne du serveur. Veuillez réessayer.' });

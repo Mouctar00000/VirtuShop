@@ -2211,6 +2211,20 @@
           <div id="system-status-body" class="sys-status-grid"><div class="sys-status-item">Chargement…</div></div>
         </div>
 
+        <div class="admin-section" id="saspay-health-card" style="margin-bottom: 20px;">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">📲 Mobile Money (SasPay) — diagnostic</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Clé API, opérateurs actifs, webhooks de notification et paiements en attente.</p>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="btn-secondary btn-sm" onclick="reconcileSasPayNow(false)">🔄 Vérifier les paiements en attente</button>
+              <button type="button" class="btn-secondary btn-sm" onclick="loadSasPayHealth()">🩺 Lancer le diagnostic</button>
+            </div>
+          </div>
+          <div id="saspay-health-body" class="sys-status-grid"><div class="sys-status-item">Cliquez sur « Lancer le diagnostic ».</div></div>
+        </div>
+
         <div class="admin-section" id="admin-account-password-card" style="margin-bottom: 20px;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
             <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">🔑 Mot de passe administrateur</h3>
@@ -3167,6 +3181,7 @@
       }
       if (tabName === 'system') {
         loadSystemStatus();
+        loadSasPayHealth();
       }
       try {
         if (window.history && window.history.replaceState) {
@@ -5095,6 +5110,11 @@
         var isRejected = r.status === 'Rejeté';
 
         var statusClass = isApproved ? 'online' : (isPending ? 'pending' : 'rejected');
+        var isSasPay = r.methodType === 'saspay';
+        var reasonHtml = (isRejected && r.failureReason) ? '<div style="font-size: 10.5px; color: #9f1239; max-width: 260px; margin-top: 4px; line-height: 1.35; white-space: normal;">' + escapeHtml(r.failureReason) + '</div>' : '';
+        var oi = r.orderInfo;
+        var orderHtml = oi ? '<div style="font-size: 10.5px; color: #1e40af; max-width: 260px; margin-top: 4px; line-height: 1.35; white-space: normal;">🛒 ' + escapeHtml(oi.productName || 'Commande') + ' (x' + escapeHtml(String(oi.quantity || 1)) + ')' +
+          (oi.orderId ? ' → ' + escapeHtml(oi.orderId) : (oi.error ? ' — non validée : ' + escapeHtml(oi.error) : ' — validée à la confirmation')) + '</div>' : '';
 
         var proofBtn = r.proofImage ? `
           <button type="button" class="proof-thumbnail-btn" onclick="openRechargeProofLightbox('${escapeJsStr(r.id)}')">
@@ -5104,6 +5124,9 @@
 
         var actions = `
           <div style="display: flex; gap: 6px; align-items: center;">
+            ${isPending && isSasPay ? `
+              <button type="button" class="btn-secondary btn-sm" style="padding: 5px 8px;" onclick="verifySasPayRecharge('${escapeJsStr(r.id)}')" title="Vérifier le statut réel auprès de SasPay (crédite automatiquement si le paiement est validé)">🔄 Vérifier SasPay</button>
+            ` : ''}
             ${isPending ? `
               <button type="button" class="btn-primary btn-sm" style="background: var(--emerald-600); border-color: var(--emerald-600); padding: 5px 10px;" onclick="approveRecharge('${escapeJsStr(r.id)}')" title="Approuver et créditer le solde client">
                 ✓ Approuver
@@ -5137,7 +5160,7 @@
               <code style="font-size: 11px; color: var(--primary-600);">${escapeHtml(r.address || '-')}</code>
             </td>
             <td>${proofBtn}</td>
-            <td><span class="status-indicator-pill ${statusClass}">${escapeHtml(r.status)}</span></td>
+            <td><span class="status-indicator-pill ${statusClass}">${escapeHtml(r.status)}</span>${reasonHtml}${orderHtml}</td>
             <td>${actions}</td>
           </tr>
         `;
@@ -5177,6 +5200,7 @@
       var recharges = DB.get('recharges', []);
       var r = recharges.find(function(x) { return x.id === rechargeId; });
       if (!r || r.status !== 'En attente') return;
+      if (r.methodType === 'saspay' && !window.confirm("Ce paiement Mobile Money n'est pas (encore) confirmé par SasPay.\n\nUtilisez d'abord « Vérifier SasPay » : le client est crédité automatiquement si l'opérateur a validé le paiement.\n\nCréditer quand même le client manuellement ?")) return;
 
       var token = getAdminAuthToken();
       {
@@ -7000,6 +7024,72 @@
     }
 
     window.loadSystemStatus = loadSystemStatus;
+
+    // ---------- Mobile Money (SasPay) : vérification réelle, diagnostic et rapprochement des paiements en attente
+    async function verifySasPayRecharge(txId) {
+      try {
+        showToast('Vérification auprès de SasPay…', 'info');
+        var r = await adminApi('/api/payments/saspay/verify?transactionId=' + encodeURIComponent(txId) + '&_t=' + Date.now());
+        if (r.status === 'completed') showToast('Paiement confirmé par SasPay : client crédité' + (r.order ? ' et commande ' + r.order.id + ' validée' : '') + '.', 'success');
+        else if (r.status === 'failed') showToast('Paiement non abouti : ' + (r.message || ''), 'error');
+        else showToast(r.message || "Toujours en attente chez l'opérateur.", 'info');
+        await syncAdminDataFromServer();
+        renderDashboard();
+      } catch (e) {
+        showToast(e.message || 'Vérification impossible.', 'error');
+      }
+    }
+    window.verifySasPayRecharge = verifySasPayRecharge;
+
+    async function reconcileSasPayNow(silent) {
+      try {
+        var r = await adminApi('/api/payments/saspay/reconcile?_t=' + Date.now());
+        if (!silent) showToast((r.checked || 0) + ' paiement(s) en attente vérifié(s) auprès de SasPay.', 'success');
+        if (r.checked) { await syncAdminDataFromServer(); renderDashboard(); }
+      } catch (e) {
+        if (!silent) showToast(e.message || 'Vérification impossible.', 'error');
+      }
+    }
+    window.reconcileSasPayNow = reconcileSasPayNow;
+
+    async function loadSasPayHealth() {
+      var body = document.getElementById('saspay-health-body');
+      if (!body) return;
+      body.innerHTML = '<div class="sys-status-item">Diagnostic en cours auprès de SasPay…</div>';
+      try {
+        var r = await adminApi('/api/payments/saspay/health?_t=' + Date.now());
+        renderSasPayHealth(r.saspay || {});
+      } catch (e) {
+        body.innerHTML = '<div class="sys-status-item bad">⚠️ ' + escapeHtml(e.message) + '</div>';
+      }
+    }
+    window.loadSasPayHealth = loadSasPayHealth;
+
+    function renderSasPayHealth(h) {
+      var body = document.getElementById('saspay-health-body');
+      if (!body) return;
+      var item = function(title, value, cls) { return '<div class="sys-status-item ' + cls + '"><strong>' + escapeHtml(title) + '</strong>' + value + '</div>'; };
+      var fmt = function(d) { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return String(d || ''); } };
+      var html = [];
+      if (!h.configured) {
+        html.push(item('Clé API SasPay', '✕ Absente : ajoutez SASPAY_API_KEY dans Vercel', 'bad'));
+        body.innerHTML = html.join('');
+        return;
+      }
+      html.push(item('Clé API SasPay', h.keyValid ? '✓ Acceptée par SasPay (' + escapeHtml(h.environment === 'sandbox' ? 'sandbox' : 'production réelle') + ')' : '✕ Refusée par SasPay (HTTP ' + escapeHtml(String(h.keyHttpStatus || '?')) + ')' + (h.keyError ? ' : ' + escapeHtml(h.keyError) : ''), h.keyValid ? 'ok' : 'bad'));
+      html.push(item('Opérateurs actifs', escapeHtml(String(h.activeNetworks || 0)) + ' réseau(x) Mobile Money' + (h.otpNetworks && h.otpNetworks.length ? '<br><span style="font-size:11.5px;">Code OTP exigé : ' + escapeHtml(h.otpNetworks.join(', ')) + '</span>' : ''), h.activeNetworks ? 'ok' : 'warn'));
+      var hooks = (h.webhooks || []).map(function(w) { return escapeHtml(w.url) + ' — ' + escapeHtml(w.environment || '') + (w.active ? '' : ' (inactif)') + (w.events && w.events.length ? '<br><span style="font-size:11px;">' + escapeHtml(w.events.join(', ')) + '</span>' : '<br><span style="font-size:11px;">aucun événement abonné</span>'); }).join('<br>');
+      var hookOk = h.webhookPointsHere && h.webhookHasSuccessEvent;
+      html.push(item('Webhook de notification', hookOk ? '✓ ' + hooks
+        : '✕ ' + (hooks ? 'Mal configuré : ' + hooks + '<br>' : 'Aucun webhook configuré chez SasPay.<br>') +
+          '<span style="font-size:11.5px;">Dans app.saspay.me → Développeur → Webhooks : créez un webhook <strong>LIVE</strong> vers <code>' + escapeHtml(h.expectedWebhookUrl || '') + '</code>, abonnez <code>transaction.success</code>, <code>transaction.failed</code> et <code>transaction.cancelled</code>, puis copiez le secret de signature dans Vercel (variable <code>SASPAY_WEBHOOK_SECRET</code>). Sans webhook, les paiements restent confirmés par la vérification automatique du site.</span>', hookOk ? 'ok' : 'warn'));
+      html.push(item('Signature des webhooks', h.signatureSecretConfigured ? '✓ SASPAY_WEBHOOK_SECRET défini (notifications authentifiées)' : '⚠️ SASPAY_WEBHOOK_SECRET absent : les notifications sont acceptées mais toujours revérifiées auprès de SasPay', h.signatureSecretConfigured ? 'ok' : 'warn'));
+      var lw = h.lastWebhook;
+      html.push(item('Dernière notification reçue', lw ? escapeHtml(fmt(lw.lastWebhookAt)) + ' — ' + escapeHtml(lw.lastWebhookEvent || '?') + ' (signature ' + escapeHtml(lw.lastWebhookSignature || '?') + ')' : 'Aucune notification SasPay reçue pour le moment', lw ? 'ok' : 'warn'));
+      var del = (h.recentDeliveries || []).map(function(d) { return escapeHtml(fmt(d.at)) + ' · ' + escapeHtml(d.event || '') + ' · ' + escapeHtml(d.status || '') + (d.httpStatus ? ' (HTTP ' + escapeHtml(String(d.httpStatus)) + ')' : ''); }).join('<br>');
+      html.push(item('Dernières livraisons SasPay', del || 'Aucune', del ? '' : 'warn'));
+      body.innerHTML = html.join('');
+    }
     window.openStoreResetModal = openStoreResetModal;
     window.closeStoreResetModal = closeStoreResetModal;
     window.onStoreResetInput = onStoreResetInput;
@@ -7326,6 +7416,9 @@
                 var uMatch = usersLookup.find(function(u) { return u.id === tx.userId; });
                 if (existingR) {
                   existingR.status = mappedStatus;
+                  existingR.failureReason = tx.failureReason || '';
+                  existingR.methodType = tx.provider || existingR.methodType;
+                  existingR.orderInfo = tx.metadata && tx.metadata.purchase ? tx.metadata.purchase : null;
                   if (tx.proofImage && !existingR.proofImage) existingR.proofImage = tx.proofImage;
                 } else {
                   rechargeMap[tx.id] = {
@@ -7339,6 +7432,9 @@
                     txHash: tx.externalReference || '',
                     proofImage: tx.proofImage || null,
                     status: mappedStatus,
+                    failureReason: tx.failureReason || '',
+                    orderInfo: tx.metadata && tx.metadata.purchase ? tx.metadata.purchase : null,
+                    network: tx.metadata && tx.metadata.networkName ? tx.metadata.networkName : '',
                     date: tx.createdAt || new Date().toISOString()
                   };
                 }
@@ -7436,7 +7532,7 @@
       VersionManager.init();
       checkAdminAuth();
       renderDashboard();
-      syncAdminDataFromServer();
+      syncAdminDataFromServer().then(function() { if (getAdminAuthToken()) reconcileSasPayNow(true); }).catch(function() {});
       setupDropzone();
 
       // Fermeture des modales au clic sur le fond (backdrop)

@@ -257,13 +257,6 @@ const OFFICIAL_SASPAY_COUNTRIES = [
         instruction: 'Validez l\'invite sur votre téléphone Moov.'
       },
       {
-        id: 'wave_ml',
-        name: 'Wave Mali',
-        icon: '🌊',
-        otp_required: false,
-        instruction: 'Ouvrez votre application Wave pour valider.'
-      },
-      {
         id: 'mobi_cash_ml',
         name: 'Mobi Cash',
         icon: '🟣',
@@ -527,26 +520,90 @@ const OFFICIAL_SASPAY_COUNTRIES = [
   }
 ];
 
-function normalizePhoneNumber(phone, countryCode) {
-  if (!phone) return '';
-  let clean = String(phone).replace(/[^\d+]/g, '');
-  const country = OFFICIAL_SASPAY_COUNTRIES.find(c => c.code === countryCode);
-  const prefix = country ? country.prefix : '+225';
-  const prefixDigits = prefix ? prefix.replace('+', '') : '';
+// Mobile numbering plans (national significant number, i.e. what follows the country code).
+// len: accepted lengths. keep0: the leading 0 is PART of the number (Côte d'Ivoire since 2021, Bénin since 2024,
+// Congo) — it must never be removed, otherwise the operator push goes to a non-existent number.
+// legacy8Prefix: official migration of the old 8-digit numbers (Bénin: "01" + old number).
+// Countries without a rule are sent as typed: SasPay adds the country code itself and never reformats a local number.
+const PHONE_RULES = {
+  CM: { len: [9], example: '6XX XX XX XX' },
+  CI: { len: [10], keep0: true, example: '07 XX XX XX XX', hint: "Depuis 2021, les numéros ivoiriens comportent 10 chiffres (07… Orange, 05… MTN, 01… Moov)." },
+  SN: { len: [9], example: '7X XXX XX XX' },
+  BJ: { len: [10], keep0: true, legacy8Prefix: '01', example: '01 XX XX XX XX' },
+  BF: { len: [8], example: 'XX XX XX XX' },
+  TG: { len: [8], example: '9X XX XX XX' },
+  ML: { len: [8], example: 'XX XX XX XX' },
+  NE: { len: [8], example: '9X XX XX XX' },
+  GN: { len: [9], example: '6XX XX XX XX' },
+  CG: { len: [9], keep0: true, example: '06 XXX XX XX' },
+  GH: { len: [9], example: '24X XXX XXX' },
+  KE: { len: [9], example: '7XX XXX XXX' },
+  CD: { len: [9], example: '8X XXX XXXX' },
+  RW: { len: [9], example: '78X XXX XXX' },
+  UG: { len: [9], example: '7XX XXX XXX' },
+  TZ: { len: [9], example: '7XX XXX XXX' },
+  NG: { len: [10], example: '80X XXX XXXX' },
+  SL: { len: [8], example: '7X XXX XXX' }
+};
 
-  if (clean.startsWith('+')) {
-    return clean;
+/**
+ * Validates and normalizes a Mobile Money number for the chosen country.
+ * Returns { phone, error }: phone in international format (+CC…) when the numbering plan is known,
+ * error = clear French message when the number cannot be valid (wrong length, other country...).
+ */
+function normalizeMobileNumber(phone, countryCode) {
+  const raw = String(phone || '').trim();
+  let digits = raw.replace(/\D/g, '');
+  if (!digits) return { phone: '', error: 'Veuillez indiquer votre numéro Mobile Money.' };
+  const country = OFFICIAL_SASPAY_COUNTRIES.find(c => c.code === countryCode);
+  const prefix = country && country.prefix ? country.prefix : '';
+  const cc = prefix.replace('+', '');
+  const rule = PHONE_RULES[countryCode];
+  const international = /^(\+|00)/.test(raw);
+  if (raw.startsWith('00')) digits = digits.slice(2);
+  if (!cc) return { phone: (international ? '+' : '') + digits, error: digits.length < 6 ? 'Numéro de téléphone invalide.' : null };
+
+  let national;
+  if (international) {
+    if (!digits.startsWith(cc)) {
+      return { phone: '', error: `Ce numéro n'appartient pas au pays choisi (${country.name.replace(/\s*\S*$/u, '')}, indicatif ${prefix}). Choisissez le bon pays ou saisissez le numéro local.` };
+    }
+    national = digits.slice(cc.length);
+  } else if (digits.startsWith(cc) && rule) {
+    const rest = digits.slice(cc.length);
+    const plausible = rule.len.includes(rest.length) || (rule.legacy8Prefix && rest.length === 8) || (rule.keep0 && rest.length === rule.len[0] - 1 && !rest.startsWith('0'));
+    national = plausible ? rest : digits;
+  } else if (digits.startsWith(cc) && !rule && digits.length > cc.length + 6) {
+    national = digits.slice(cc.length);
+  } else {
+    national = digits;
   }
-  if (clean.startsWith('00')) {
-    return '+' + clean.slice(2);
+
+  if (!rule) {
+    // Numbering plan not verified: send exactly what the customer typed (SasPay adds the country code itself)
+    if (national.length < 6 || national.length > 12) return { phone: '', error: 'Numéro de téléphone invalide.' };
+    return { phone: international ? '+' + cc + national : national, error: null };
   }
-  if (prefixDigits && clean.startsWith(prefixDigits)) {
-    return '+' + clean;
+  if (!rule.keep0) {
+    while (national.startsWith('0') && !rule.len.includes(national.length)) national = national.slice(1);
+  } else if (national.length === rule.len[0] - 1 && !national.startsWith('0')) {
+    national = '0' + national; // leading 0 forgotten by the customer (e.g. 7 07 07 07 07 in Côte d'Ivoire)
   }
-  if (clean.startsWith('0') && prefixDigits) {
-    clean = clean.slice(1);
+  if (rule.legacy8Prefix && national.length === 8) national = rule.legacy8Prefix + national;
+  if (!rule.len.includes(national.length)) {
+    const label = country.name.replace(/\s*\S*$/u, '').trim();
+    return {
+      phone: '',
+      error: `Numéro invalide pour ${label} : ${rule.len.join(' ou ')} chiffres attendus après l'indicatif ${prefix} (exemple : ${prefix} ${rule.example}).` + (rule.hint ? ' ' + rule.hint : '')
+    };
   }
-  return prefix ? (prefix + clean) : clean;
+  return { phone: '+' + cc + national, error: null };
 }
 
-module.exports = { OFFICIAL_SASPAY_COUNTRIES, normalizePhoneNumber };
+/** Backward-compatible helper: normalized number (or the cleaned input when it cannot be validated). */
+function normalizePhoneNumber(phone, countryCode) {
+  const r = normalizeMobileNumber(phone, countryCode);
+  return r.phone || String(phone || '').replace(/[^\d+]/g, '');
+}
+
+module.exports = { OFFICIAL_SASPAY_COUNTRIES, PHONE_RULES, normalizeMobileNumber, normalizePhoneNumber };
