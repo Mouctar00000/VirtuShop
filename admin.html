@@ -1750,6 +1750,9 @@
     .purchase-access-switch input[type="checkbox"]:checked::before { transform: translateX(16px); }
     .purchase-access-switch input[type="checkbox"]:focus-visible { outline: 2px solid var(--primary-600, #2563eb); outline-offset: 2px; }
     .purchase-access-switch input[type="checkbox"]:disabled { opacity: 0.6; cursor: wait; }
+    #admin-fulfil-modal .fulfil-stock-check { width: 16px !important; height: 16px !important; min-height: 0 !important; flex: 0 0 auto; margin: 1px 0 0 0 !important; padding: 0 !important; }
+    #admin-fulfil-modal .fulfil-field-row input { margin: 0; }
+    @media (max-width: 640px) { #admin-fulfil-modal .fulfil-field-row { flex-wrap: wrap; } #admin-fulfil-modal .fulfil-field-row .fulfil-label { flex: 1 1 100% !important; } }
     @media (max-width: 640px) { #admin-global-purchase-flag .global-flag-text { display: none; } #admin-global-purchase-flag { padding: 6px 8px !important; } }
   </style>
 </head>
@@ -2008,6 +2011,8 @@
             </div>
             <span class="status-indicator-pill online" id="pending-orders-badge">0 en attente</span>
           </div>
+          <!-- Commandes à livrer manuellement (différée puis manuelle / manuelle par l'admin) -->
+          <div id="admin-fulfilment-banner" style="display: none; margin: 0 0 12px 0;"></div>
 
           <div style="overflow-x: auto;">
             <table class="admin-table">
@@ -2429,7 +2434,19 @@
           <select id="admin-prod-delivery" onchange="onDeliveryModeChange()">
             <option value="auto">⚡ Automatique — clé, lien ou fichier livré instantanément</option>
             <option value="manual">📲 Manuelle via WhatsApp — vous livrez après l'achat</option>
+            <option value="delayed">⏱️ Différée puis manuelle — délai d'attente, puis vous livrez</option>
+            <option value="admin_release">🛂 Manuelle par l'admin — vous livrez depuis le tableau de bord</option>
           </select>
+          <div id="admin-prod-delay-row" style="display: none; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+            <span style="font-size: 12px; color: var(--text-secondary);">Délai d'attente :</span>
+            <input type="number" id="admin-prod-delay-value" min="1" step="1" value="15" inputmode="numeric" aria-label="Durée du délai d'attente" style="width: 90px;">
+            <select id="admin-prod-delay-unit" aria-label="Unité du délai" style="width: auto;">
+              <option value="minutes">minute(s)</option>
+              <option value="hours">heure(s)</option>
+            </select>
+            <span style="font-size: 11px; color: var(--text-muted);">compté depuis la confirmation du paiement (1 min à 30 jours)</span>
+          </div>
+          <div id="admin-prod-fulfil-hint" style="display: none; font-size: 11px; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; padding: 6px 9px; margin-top: 5px; line-height: 1.4;"></div>
           <div id="admin-prod-delivery-hint" class="hidden" style="font-size: 11px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 7px; padding: 6px 9px; margin-top: 5px; line-height: 1.4;">
             Le client paie, la commande passe « En attente » et il voit un bouton WhatsApp avec un message pré-rempli (produit, référence, montant). Indiquez le stock disponible ci-dessus, puis livrez depuis Commandes › Examiner.
           </div>
@@ -2888,6 +2905,61 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ==================== LIVRER UNE COMMANDE (différée puis manuelle / manuelle par l'admin) ==================== -->
+  <div id="admin-fulfil-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="fulfil-title">
+    <div class="modal-window" style="max-width: 640px;">
+      <button type="button" class="modal-close-btn" onclick="closeFulfilModal()">✕</button>
+      <h2 class="modal-title" id="fulfil-title">📦 Livrer la commande</h2>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">Attribuez un élément de votre stock manuel ou saisissez les informations du produit. Le client n'y a accès qu'après votre confirmation.</p>
+      <div id="fulfil-order-summary"></div>
+      <div class="field" style="margin-bottom: 10px;">
+        <label>Stock manuel du produit</label>
+        <div id="fulfil-stock-list"></div>
+      </div>
+      <div class="field" style="margin-bottom: 8px;">
+        <label>Informations à livrer</label>
+        <datalist id="fulfil-label-presets">
+          <option value="Email"></option><option value="Mot de passe"></option><option value="Identifiant"></option>
+          <option value="Clé de licence"></option><option value="Code d'activation"></option><option value="Lien d'accès"></option><option value="Code 2FA"></option>
+        </datalist>
+        <div id="fulfil-fields"></div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addFulfilField('', '')" style="padding: 4px 10px; font-size: 11.5px;">+ Ajouter un champ</button>
+      </div>
+      <div class="field" style="margin-bottom: 8px;">
+        <label for="fulfil-instructions">Instructions pour le client (facultatif)</label>
+        <textarea id="fulfil-instructions" rows="2" oninput="updateFulfilPreview()" placeholder="Ex. : changez le mot de passe dès la première connexion."></textarea>
+      </div>
+      <div class="field" style="margin-bottom: 8px;">
+        <label for="fulfil-admin-note">Note privée (jamais visible par le client)</label>
+        <textarea id="fulfil-admin-note" rows="2" placeholder="Ex. : compte créé le 23/11, fournisseur X."></textarea>
+      </div>
+      <div style="margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px;">👁️ Aperçu — ce que verra le client</div>
+        <pre id="fulfil-preview" style="white-space: pre-wrap; word-break: break-word; margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px dashed #bfdbfe; background: #f8fafc; font-size: 12px; max-height: 180px; overflow: auto;"></pre>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;">
+        <button type="button" class="btn-secondary" id="fulfil-issue-btn" onclick="toggleFulfilIssue()">⚠️ Signaler un problème</button>
+        <button type="button" class="btn-secondary" onclick="closeFulfilModal()">Annuler</button>
+        <button type="button" class="btn-primary" id="fulfil-confirm-btn" onclick="confirmFulfilDelivery()" style="background: var(--emerald-600); border-color: var(--emerald-600);">✅ Confirmer la livraison</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== STOCK MANUEL D'UN PRODUIT ==================== -->
+  <div id="admin-manual-stock-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="manual-stock-title">
+    <div class="modal-window" style="max-width: 640px;">
+      <button type="button" class="modal-close-btn" onclick="closeManualStockModal()">✕</button>
+      <h2 class="modal-title" id="manual-stock-title">📦 Stock manuel</h2>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">Ces éléments ne sont <strong>jamais livrés automatiquement</strong> : vous choisissez vous-même lequel attribuer à une commande (Commandes › 📦 Livrer). Un élément attribué ne peut plus être donné à une autre commande.</p>
+      <div class="field" style="margin-bottom: 10px;">
+        <label for="manual-stock-add">Ajouter des éléments (un par ligne)</label>
+        <textarea id="manual-stock-add" rows="3" placeholder="compte1@gmail.com | MotDePasse1&#10;compte2@gmail.com | MotDePasse2"></textarea>
+        <button type="button" class="btn-primary btn-sm" onclick="addManualStockItems()" style="margin-top: 6px; padding: 5px 12px;">+ Ajouter au stock</button>
+      </div>
+      <div id="manual-stock-body"></div>
     </div>
   </div>
 
@@ -3548,7 +3620,7 @@
             <td>
               <div style="font-weight: 700; color: var(--text-primary);">${escapeHtml(p.name)}</div>
               <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.description || '')}</div>
-              ${isExternal ? `<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 1px 7px;" title="${escapeHtml(p.redirectUrl)}">🔗 Achat via lien externe · ${escapeHtml(externalHost)}</span>` : (p.deliveryMode === 'manual' ? '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 7px;">📲 Livraison WhatsApp</span>' : '')}
+              ${isExternal ? `<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 1px 7px;" title="${escapeHtml(p.redirectUrl)}">🔗 Achat via lien externe · ${escapeHtml(externalHost)}</span>` : (p.deliveryMode === 'manual' ? (renderFulfilmentBadge(p) || '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 1px 7px;">📲 Livraison WhatsApp</span>') : '')}
             </td>
             <td><span class="status-indicator-pill offline">${escapeHtml(p.category)}</span></td>
             <td>
@@ -3578,6 +3650,7 @@
                 <button type="button" class="btn-admin-add-key" style="height: 25px; padding: 0 8px; font-size: 10.5px; border-radius: 5px;" title="Ajouter une clé à ce produit" onclick="openAddKeyModal(${p.id})">
                   + Clé
                 </button>
+                ${!isExternal && p.deliveryMode === 'manual' ? `<button type="button" class="btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; white-space: nowrap;" onclick="openManualStockModal(${p.id})" title="Stock géré à la main : vous attribuez vous-même chaque élément à une commande">📦 Stock manuel</button>` : ''}
               </div>
             </td>
             <td>
@@ -4323,7 +4396,8 @@
     }
 
     function isManualDeliverySelected() {
-      return (document.getElementById('admin-prod-delivery') || {}).value === 'manual';
+      // WhatsApp, différée puis manuelle, manuelle par l'admin : stock déclaré, contenu livré par l'administrateur
+      return ['manual', 'delayed', 'admin_release'].indexOf((document.getElementById('admin-prod-delivery') || {}).value) !== -1;
     }
 
     function isRedirectPurchaseSelected() {
@@ -4489,6 +4563,7 @@
       updateDropzoneUI(null);
       setVaultType('text');
       setDeliveryModeField('auto');
+      setDeliveryTimingFields(null);
 
       document.getElementById('admin-prod-modal').classList.add('active');
     }
@@ -4585,6 +4660,7 @@
 
       // Même mode de livraison / d'achat que l'original (stock déclaré recopié)
       setDeliveryModeField(p.deliveryMode);
+      setDeliveryTimingFields(p);
       if (p.deliveryMode === 'manual' || p.purchaseMode === 'redirect') {
         document.getElementById('admin-prod-stock').value = p.stock || 0;
       }
@@ -4656,6 +4732,7 @@
       }
 
       setDeliveryModeField(p.deliveryMode);
+      setDeliveryTimingFields(p);
       if (p.deliveryMode === 'manual' || p.purchaseMode === 'redirect') {
         document.getElementById('admin-prod-stock').value = p.stock || 0;
       }
@@ -4688,9 +4765,11 @@
 
     function onDeliveryModeChange() {
       var sel = document.getElementById('admin-prod-delivery');
-      var isManual = Boolean(sel && sel.value === 'manual');
+      // Livraison manuelle : WhatsApp, différée puis manuelle, ou manuelle par l'admin (stock déclaré, contenu saisi par vous)
+      var isManual = Boolean(sel && sel.value !== 'auto');
       var hint = document.getElementById('admin-prod-delivery-hint');
-      if (hint) hint.classList.toggle('hidden', !isManual);
+      if (hint) hint.classList.toggle('hidden', !(sel && sel.value === 'manual'));
+      syncFulfilmentFields();
       var vaultBox = document.querySelector('#admin-prod-modal .admin-vault-box-compact');
       if (vaultBox) {
         vaultBox.style.opacity = isManual ? '0.45' : '';
@@ -4711,6 +4790,48 @@
       applyPurchaseModeUI();
     }
     window.onDeliveryModeChange = onDeliveryModeChange;
+
+    // ---------- Livraison différée puis manuelle / manuelle par l'admin (jamais de livraison automatique)
+    function syncFulfilmentFields() {
+      var v = (document.getElementById('admin-prod-delivery') || {}).value;
+      var row = document.getElementById('admin-prod-delay-row');
+      if (row) row.style.display = v === 'delayed' ? 'flex' : 'none';
+      var hint = document.getElementById('admin-prod-fulfil-hint');
+      if (!hint) return;
+      var txt = v === 'delayed'
+        ? 'Après le paiement, le client voit un compte à rebours. À la fin du délai, la commande apparaît dans Commandes « à livrer » : vous saisissez les identifiants (ou choisissez un élément du 📦 stock manuel) puis confirmez. Rien n\'est jamais livré automatiquement. Indiquez ci-dessus le stock en vente, et adaptez si besoin le texte « Livraison » de la fiche produit (il s\'affiche en priorité).'
+        : (v === 'admin_release'
+          ? 'Après le paiement, la commande apparaît dans Commandes « à livrer ». Vous saisissez les identifiants (ou choisissez un élément du 📦 stock manuel) puis confirmez. Indiquez ci-dessus le stock en vente, et adaptez si besoin le texte « Livraison » de la fiche produit (il s\'affiche en priorité).'
+          : '');
+      hint.textContent = txt;
+      hint.style.display = txt ? '' : 'none';
+    }
+    window.syncFulfilmentFields = syncFulfilmentFields;
+
+    function setDeliveryTimingFields(p) {
+      var sel = document.getElementById('admin-prod-delivery');
+      if (!sel) return;
+      if (p && p.deliveryMode === 'manual' && (p.deliveryTiming === 'delayed' || p.deliveryTiming === 'admin_release')) sel.value = p.deliveryTiming;
+      var minutes = p && Number.isInteger(p.deliveryDelayMinutes) && p.deliveryDelayMinutes > 0 ? p.deliveryDelayMinutes : 15;
+      var useHours = minutes >= 60 && minutes % 60 === 0;
+      document.getElementById('admin-prod-delay-value').value = useHours ? minutes / 60 : minutes;
+      document.getElementById('admin-prod-delay-unit').value = useHours ? 'hours' : 'minutes';
+      onDeliveryModeChange();
+    }
+
+    // { deliveryTiming, deliveryDelayMinutes } ou { error }
+    function readDeliveryTimingFields() {
+      var v = (document.getElementById('admin-prod-delivery') || {}).value;
+      if (v === 'admin_release') return { deliveryTiming: 'admin_release' };
+      if (v !== 'delayed') return { deliveryTiming: 'whatsapp' };
+      var raw = String((document.getElementById('admin-prod-delay-value') || {}).value || '').trim();
+      var unit = (document.getElementById('admin-prod-delay-unit') || {}).value === 'hours' ? 'hours' : 'minutes';
+      var n = Number(raw);
+      if (!raw || !Number.isInteger(n) || n < 1) return { error: "Délai d'attente invalide : indiquez un nombre entier supérieur ou égal à 1." };
+      var minutes = unit === 'hours' ? n * 60 : n;
+      if (minutes > 43200) return { error: "Délai d'attente trop long : 30 jours maximum." };
+      return { deliveryTiming: 'delayed', deliveryDelayMinutes: minutes };
+    }
 
     function setDeliveryModeField(mode) {
       var sel = document.getElementById('admin-prod-delivery');
@@ -4858,7 +4979,8 @@
       var price = parseFloat(document.getElementById('admin-prod-price').value) || 0;
       var desc = document.getElementById('admin-prod-desc').value.trim();
       var declaredStock = parseInt(document.getElementById('admin-prod-stock')?.value, 10) || 0;
-      var deliveryMode = (document.getElementById('admin-prod-delivery') || {}).value === 'manual' ? 'manual' : 'auto';
+      var deliverySelectValue = (document.getElementById('admin-prod-delivery') || {}).value;
+      var deliveryMode = (deliverySelectValue === 'manual' || deliverySelectValue === 'delayed' || deliverySelectValue === 'admin_release') ? 'manual' : 'auto';
       var purchaseMode = isRedirectPurchaseSelected() ? 'redirect' : 'site';
       var redirectInput = document.getElementById('admin-prod-redirect-url');
       var redirectUrl = normalizeAdminRedirectInput(redirectInput.value);
@@ -4866,6 +4988,13 @@
       if (purchaseMode === 'redirect' && !redirectUrl) {
         showToast('Indiquez le lien de redirection du bouton « Acheter » (ex. : https://wa.me/2250700000000).', 'error');
         redirectInput.focus();
+        return;
+      }
+      var deliveryTimingFields = (deliveryMode === 'manual' && purchaseMode === 'site') ? readDeliveryTimingFields() : null;
+      if (deliveryTimingFields && deliveryTimingFields.error) {
+        showToast(deliveryTimingFields.error, 'error');
+        var delayInput = document.getElementById('admin-prod-delay-value');
+        if (delayInput) delayInput.focus();
         return;
       }
       var compareRaw = (document.getElementById('admin-prod-compare').value || '').trim();
@@ -4974,6 +5103,8 @@
             price: price,
             stock: (deliveryMode === 'manual' || purchaseMode === 'redirect') ? Math.max(0, declaredStock) : (vaultType === 'file' ? Math.max(1, declaredStock) : undefined),
             deliveryMode: deliveryMode,
+            deliveryTiming: deliveryTimingFields ? deliveryTimingFields.deliveryTiming : undefined,
+            deliveryDelayMinutes: deliveryTimingFields ? deliveryTimingFields.deliveryDelayMinutes : undefined,
             purchaseMode: purchaseMode,
             redirectUrl: purchaseMode === 'redirect' ? redirectUrl : undefined, // achat sur le site : lien précédent conservé
             showStock: showStock,
@@ -5356,6 +5487,7 @@
 
     // ========== 3. TABLE DES COMMANDES & WORKFLOW VALIDATION / LIVRAISON ==========
     function renderOrdersTable(orders) {
+      renderFulfilmentBanner(orders);
       var tbody = document.getElementById('admin-orders-tbody');
       if (!tbody) return;
       var html = '';
@@ -5401,7 +5533,12 @@
               <span>🔑 Gérer & Clé</span>
               ${hasCustomKey ? '<span class="key-customized-dot" title="Clé personnalisée prête">●</span>' : ''}
             </button>
-            ${isPending ? `
+            ${isPending && isFulfilmentOrder(o) ? `
+              <button type="button" class="btn-order-quick-val" onclick="openFulfilModal('${safeOId}')" title="Saisir ou attribuer le produit, puis confirmer la livraison" style="background: #2563eb; border-color: #2563eb;">
+                📦 Livrer
+              </button>
+            ` : ''}
+            ${isPending && !isFulfilmentOrder(o) ? `
               <button type="button" class="btn-order-quick-val" onclick="validateAndDeliverOrder('${safeOId}')" title="Validation rapide avec clé standard">
                 ✓ Livrer
               </button>
@@ -5438,6 +5575,7 @@
             <td>
               <div style="font-weight: 700;">${escapeHtml(o.productName)}</div>
               <span class="status-indicator-pill offline" style="font-size: 10.5px; padding: 2px 6px;">Quantité : ${o.quantity || 1}</span>
+              ${renderOrderDeliveryInfo(o)}
             </td>
             <td class="col-center">
               <strong style="color: var(--primary-600); font-size: 14px;">$${(o.amount || 0).toFixed(2)}</strong>
@@ -5456,6 +5594,336 @@
 
       tbody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 24px; color: var(--text-muted);">Aucune commande enregistrée.</td></tr>';
     }
+
+    // ========== LIVRAISON DIFFÉRÉE PUIS MANUELLE / MANUELLE PAR L'ADMIN — le serveur contrôle toujours l'accès ==========
+    function formatDeliveryDelay(minutes) {
+      minutes = Number(minutes) || 0;
+      if (minutes >= 60 && minutes % 60 === 0) return (minutes / 60) + ' h';
+      if (minutes >= 60) return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
+      return minutes + ' min';
+    }
+    function fmtDeliveryDate(iso) {
+      return iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+    }
+    function renderFulfilmentBadge(p) {
+      if (p.deliveryTiming === 'delayed') return '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 1px 7px;">⏱️ Différée (' + escapeHtml(formatDeliveryDelay(p.deliveryDelayMinutes || 15)) + ') puis manuelle</span>';
+      if (p.deliveryTiming === 'admin_release') return '<span style="display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #6b21a8; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 999px; padding: 1px 7px;">🛂 Manuelle par l\'admin</span>';
+      return '';
+    }
+    function isFulfilmentOrder(o) {
+      return Boolean(o && o.delivery && (o.delivery.method === 'delayed' || o.delivery.method === 'admin_release'));
+    }
+    // 'waiting' | 'awaiting_delivery' | 'delivered' | 'cancelled' | null
+    function adminDeliveryPhase(o) {
+      var d = o && o.delivery;
+      if (!d) return null;
+      if (o.status === 'Annulé') return 'cancelled';
+      if (d.status === 'delivered' || o.status === 'Complété' || o.status === 'Livré') return 'delivered';
+      if (d.method === 'delayed' && Date.now() < Date.parse(d.eligibleAt)) return 'waiting';
+      return 'awaiting_delivery';
+    }
+    function ordersAwaitingFulfilment(orders) {
+      return (orders || []).filter(function(o) { return isFulfilmentOrder(o) && adminDeliveryPhase(o) === 'awaiting_delivery'; });
+    }
+    function renderFulfilmentBanner(orders) {
+      var el = document.getElementById('admin-fulfilment-banner');
+      if (!el) return;
+      var todo = ordersAwaitingFulfilment(orders);
+      var waiting = (orders || []).filter(function(o) { return isFulfilmentOrder(o) && adminDeliveryPhase(o) === 'waiting'; }).length;
+      if (!todo.length && !waiting) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      el.style.display = '';
+      el.innerHTML = '<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 12px; border: 1px solid ' + (todo.length ? '#bfdbfe' : 'var(--border-subtle, #e2e8f0)') + '; background: ' + (todo.length ? '#eff6ff' : '#f8fafc') + '; font-size: 12.5px; color: #1e3a8a;">' +
+        '<strong id="fulfilment-todo-count">📦 ' + todo.length + ' commande(s) à livrer manuellement</strong>' +
+        (waiting ? '<span style="color: var(--text-secondary);">· ' + waiting + ' en période d\'attente</span>' : '') +
+        (todo.length ? '<button type="button" class="btn-primary btn-sm" style="padding: 4px 10px; font-size: 11.5px;" onclick="openFulfilModal(\'' + escapeJsStr(todo[todo.length - 1].id) + '\')">Livrer la plus ancienne</button>' : '') +
+      '</div>';
+    }
+    function deliveryPhasePill(o) {
+      var d = o.delivery || {};
+      var phase = adminDeliveryPhase(o);
+      var pill = { waiting: ['pending', '⏳ Payée — période d\'attente'], awaiting_delivery: ['pending', d.method === 'delayed' ? '📦 Attente terminée — à livrer' : '📦 À livrer (attribution manuelle)'], delivered: ['online', '✓ Livrée'], cancelled: ['rejected', '✕ Annulée'] }[phase] || ['offline', '—'];
+      if (d.issue && phase === 'awaiting_delivery') pill = ['rejected', '⚠️ Problème de livraison'];
+      return pill;
+    }
+    function renderOrderDeliveryInfo(o) {
+      var d = o && o.delivery;
+      if (!d || !isFulfilmentOrder(o)) return '';
+      var phase = adminDeliveryPhase(o);
+      var pill = deliveryPhasePill(o);
+      var line = function(t) { return '<div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;">' + t + '</div>'; };
+      var html = '<div class="order-delivery-info" data-order-id="' + escapeHtml(String(o.id)) + '" data-phase="' + phase + '" style="margin-top: 4px;">';
+      html += '<span class="status-indicator-pill ' + pill[0] + '" style="font-size: 10.5px; padding: 2px 6px;">' + pill[1] + '</span>';
+      html += line((d.method === 'delayed' ? '⏱️ Différée (' + escapeHtml(formatDeliveryDelay(Math.round((d.delaySeconds || 0) / 60))) + ') puis manuelle' : '🛂 Manuelle par l\'admin'));
+      html += line('Paiement confirmé : ' + escapeHtml(fmtDeliveryDate(d.paymentConfirmedAt)));
+      if (d.method === 'delayed') html += line('Livrable dès : ' + escapeHtml(fmtDeliveryDate(d.eligibleAt)) + (phase === 'waiting' ? ' · <strong class="gv-admin-countdown" data-eligible-at="' + escapeHtml(d.eligibleAt) + '"></strong>' : ''));
+      if (phase === 'delivered' && d.deliveredAt) html += line('Livrée le ' + escapeHtml(fmtDeliveryDate(d.deliveredAt)) + (d.deliveredBy ? ' par ' + escapeHtml(d.deliveredBy) : ''));
+      if (d.issue) html += '<div style="font-size: 10.5px; color: #b91c1c; font-weight: 700; margin-top: 2px;">⚠️ Problème de livraison' + (d.issue.note ? ' : ' + escapeHtml(d.issue.note) : '') + '</div>';
+      if (o.adminNote) html += line('📝 Note privée : ' + escapeHtml(o.adminNote));
+      return html + '</div>';
+    }
+    // Compte à rebours d'affichage uniquement (le serveur refuse toute livraison avant la fin du délai)
+    setInterval(function() {
+      var expired = false;
+      document.querySelectorAll('.gv-admin-countdown[data-eligible-at]').forEach(function(el) {
+        var left = Math.round((Date.parse(el.getAttribute('data-eligible-at')) - Date.now()) / 1000);
+        if (left <= 0) { el.textContent = 'attente terminée'; el.removeAttribute('data-eligible-at'); expired = true; return; }
+        var h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+        el.textContent = 'reste ' + (h ? h + ' h ' : '') + (h || m ? m + ' min ' : '') + s + ' s';
+      });
+      if (expired && typeof renderOrdersTable === 'function') renderOrdersTable(DB.get('orders', []) || []);
+    }, 1000);
+
+    // ---------- Fenêtre « Livrer la commande »
+    var _fulfilOrderId = null;
+    var _fulfilStock = [];
+    async function openFulfilModal(orderId) {
+      var o = (DB.get('orders', []) || []).find(function(x) { return x.id === orderId; });
+      if (!o) return;
+      var phase = adminDeliveryPhase(o);
+      if (phase === 'waiting') {
+        showToast('La période d\'attente de cette commande n\'est pas terminée : vous pourrez la livrer à partir du ' + fmtDeliveryDate(o.delivery.eligibleAt) + '.', 'warning');
+        return;
+      }
+      _fulfilOrderId = orderId;
+      _fulfilStock = [];
+      document.getElementById('fulfil-order-summary').innerHTML =
+        '<div class="fulfil-summary-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 14px; font-size: 12px; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">' +
+          '<div><span style="color: var(--text-muted);">Commande</span><br><strong>' + escapeHtml(o.id) + '</strong></div>' +
+          '<div><span style="color: var(--text-muted);">Client</span><br><strong>' + escapeHtml(o.userName || 'Client') + '</strong><br><span style="font-size: 11px; color: var(--text-muted);">' + escapeHtml(o.userEmail || '') + '</span></div>' +
+          '<div><span style="color: var(--text-muted);">Produit</span><br><strong>' + escapeHtml(o.productName || '') + '</strong> × ' + (o.quantity || 1) + '</div>' +
+          '<div><span style="color: var(--text-muted);">Montant payé</span><br><strong>$' + Number(o.amount || 0).toFixed(2) + '</strong></div>' +
+          '<div><span style="color: var(--text-muted);">Paiement confirmé</span><br><strong>' + escapeHtml(fmtDeliveryDate(o.delivery && o.delivery.paymentConfirmedAt)) + '</strong></div>' +
+          '<div><span style="color: var(--text-muted);">Statut</span><br><span class="status-indicator-pill ' + deliveryPhasePill(o)[0] + '" style="font-size: 10.5px; padding: 2px 6px;">' + deliveryPhasePill(o)[1] + '</span>' + (o.delivery && o.delivery.issue && o.delivery.issue.note ? '<div style="font-size: 10.5px; color: #b91c1c;">' + escapeHtml(o.delivery.issue.note) + '</div>' : '') + '</div>' +
+        '</div>';
+      document.getElementById('fulfil-fields').innerHTML = '';
+      addFulfilField('Email', '');
+      addFulfilField('Mot de passe', '');
+      document.getElementById('fulfil-instructions').value = '';
+      document.getElementById('fulfil-admin-note').value = o.adminNote || '';
+      document.getElementById('fulfil-issue-btn').textContent = (o.delivery && o.delivery.issue) ? '✓ Lever le problème' : '⚠️ Signaler un problème';
+      document.getElementById('fulfil-stock-list').innerHTML = '<div style="font-size: 12px; color: var(--text-muted);">Chargement du stock manuel…</div>';
+      document.getElementById('admin-fulfil-modal').classList.add('active');
+      updateFulfilPreview();
+      try {
+        var data = await adminApi('/api/data/manual-stock?productId=' + encodeURIComponent(o.productId) + '&_t=' + Date.now(), { method: 'GET' });
+        _fulfilStock = (data.items || []).filter(function(it) { return it.status === 'available' || it.status === 'reserved'; });
+      } catch (e) { _fulfilStock = []; }
+      renderFulfilStockList(o);
+    }
+    window.openFulfilModal = openFulfilModal;
+
+    function renderFulfilStockList(o) {
+      var box = document.getElementById('fulfil-stock-list');
+      if (!box) return;
+      if (!_fulfilStock.length) {
+        box.innerHTML = '<div style="font-size: 12px; color: var(--text-muted);">Aucun élément disponible dans le stock manuel de ce produit. Saisissez les informations ci-dessous.</div>';
+        return;
+      }
+      var max = Math.max(1, parseInt(o.quantity, 10) || 1);
+      box.innerHTML = '<div style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 4px;">Cochez l\'élément à attribuer (' + max + ' max.) ou laissez vide pour saisir de nouvelles informations :</div>' +
+        '<div style="max-height: 160px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: 8px;">' +
+        _fulfilStock.map(function(it) {
+          return '<label style="display: flex; gap: 8px; align-items: flex-start; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; cursor: pointer;">' +
+            '<input type="checkbox" class="fulfil-stock-check" value="' + escapeHtml(it.id) + '" onchange="onFulfilStockCheck(' + max + ')" style="margin-top: 2px;">' +
+            '<span style="flex: 1; word-break: break-all; font-family: ui-monospace, monospace;">' + escapeHtml(it.content) + '</span>' +
+            (it.status === 'reserved' ? '<span class="status-indicator-pill pending" style="font-size: 10px; padding: 1px 6px;">réservé</span>' : '') +
+          '</label>';
+        }).join('') + '</div>';
+    }
+    function onFulfilStockCheck(max) {
+      var checked = document.querySelectorAll('.fulfil-stock-check:checked');
+      if (checked.length > max) { checked[checked.length - 1].checked = false; showToast('Cette commande porte sur ' + max + ' unité(s).', 'warning'); }
+      updateFulfilPreview();
+    }
+    window.onFulfilStockCheck = onFulfilStockCheck;
+
+    function addFulfilField(label, value) {
+      var wrap = document.getElementById('fulfil-fields');
+      var row = document.createElement('div');
+      row.className = 'fulfil-field-row';
+      row.style.cssText = 'display: flex; gap: 6px; margin-bottom: 6px; align-items: center;';
+      row.innerHTML = '<input type="text" class="fulfil-label" list="fulfil-label-presets" placeholder="Champ (ex. Email)" style="flex: 0 0 34%; min-width: 0;">' +
+        '<input type="text" class="fulfil-value" placeholder="Valeur" autocomplete="off" style="flex: 1; min-width: 0;">' +
+        '<button type="button" class="btn-secondary btn-sm" title="Retirer ce champ" style="padding: 4px 8px;">✕</button>';
+      row.querySelector('.fulfil-label').value = label || '';
+      row.querySelector('.fulfil-value').value = value || '';
+      row.querySelectorAll('input').forEach(function(i) { i.addEventListener('input', updateFulfilPreview); });
+      row.querySelector('button').addEventListener('click', function() { row.remove(); updateFulfilPreview(); });
+      wrap.appendChild(row);
+      updateFulfilPreview();
+    }
+    window.addFulfilField = addFulfilField;
+
+    // Contenu saisi (champs + instructions) — le serveur y ajoute en tête les éléments de stock cochés
+    function composeFulfilExtra() {
+      var lines = [];
+      document.querySelectorAll('#fulfil-fields .fulfil-field-row').forEach(function(r) {
+        var l = r.querySelector('.fulfil-label').value.trim();
+        var v = r.querySelector('.fulfil-value').value.trim();
+        if (v) lines.push(l ? l + ' : ' + v : v);
+      });
+      var instr = document.getElementById('fulfil-instructions').value.trim();
+      if (instr) { if (lines.length) lines.push(''); lines.push(instr); }
+      return lines.join('\n');
+    }
+    function selectedFulfilStockIds() {
+      return Array.prototype.map.call(document.querySelectorAll('.fulfil-stock-check:checked'), function(c) { return c.value; });
+    }
+    function composeFulfilPreview() {
+      var ids = selectedFulfilStockIds();
+      var items = _fulfilStock.filter(function(it) { return ids.indexOf(it.id) !== -1; }).map(function(it) { return it.content; });
+      var extra = composeFulfilExtra();
+      return items.join('\n') + (items.length && extra ? '\n\n' : '') + extra;
+    }
+    function updateFulfilPreview() {
+      var pre = document.getElementById('fulfil-preview');
+      if (!pre) return;
+      var txt = composeFulfilPreview();
+      pre.textContent = txt || 'Aucune information saisie pour le moment.';
+      pre.style.color = txt ? 'var(--text-primary)' : 'var(--text-muted)';
+    }
+    window.updateFulfilPreview = updateFulfilPreview;
+
+    function closeFulfilModal() {
+      var m = document.getElementById('admin-fulfil-modal');
+      if (m) m.classList.remove('active');
+      _fulfilOrderId = null;
+    }
+    window.closeFulfilModal = closeFulfilModal;
+
+    async function confirmFulfilDelivery() {
+      var o = (DB.get('orders', []) || []).find(function(x) { return x.id === _fulfilOrderId; });
+      if (!o) return;
+      var preview = composeFulfilPreview();
+      if (!preview) { showToast('Saisissez les informations du produit ou cochez un élément du stock manuel.', 'error'); return; }
+      if (!window.confirm('Confirmer la livraison de la commande ' + o.id + ' à ' + (o.userName || o.userEmail || 'ce client') + ' ?\n\nLe client verra immédiatement ces informations :\n\n' + preview.slice(0, 600))) return;
+      var btn = document.getElementById('fulfil-confirm-btn');
+      if (btn) btn.disabled = true;
+      var data = await sendOrderAction(o.id, {
+        action: 'deliver',
+        vaultContent: { type: 'text', content: composeFulfilExtra() },
+        stockItemIds: selectedFulfilStockIds(),
+        adminNote: document.getElementById('fulfil-admin-note').value
+      });
+      if (btn) btn.disabled = false;
+      if (data) { closeFulfilModal(); showToast('Produit livré : le client y a maintenant accès dans « Mes commandes ».', 'success'); }
+    }
+    window.confirmFulfilDelivery = confirmFulfilDelivery;
+
+    async function toggleFulfilIssue() {
+      var o = (DB.get('orders', []) || []).find(function(x) { return x.id === _fulfilOrderId; });
+      if (!o) return;
+      var hasIssue = Boolean(o.delivery && o.delivery.issue);
+      var note = '';
+      if (!hasIssue) {
+        note = window.prompt('Décrivez le problème de livraison (visible uniquement par les administrateurs) :', '');
+        if (note === null) return;
+      }
+      var data = await sendOrderAction(o.id, { action: 'delivery_issue', issue: !hasIssue, note: note });
+      if (data) { closeFulfilModal(); showToast(hasIssue ? 'Problème levé.' : 'Problème de livraison signalé sur la commande.', 'success'); }
+    }
+    window.toggleFulfilIssue = toggleFulfilIssue;
+
+    // ---------- Stock manuel d'un produit (jamais distribué automatiquement)
+    var _manualStockProductId = null;
+    async function openManualStockModal(productId) {
+      _manualStockProductId = productId;
+      document.getElementById('manual-stock-add').value = '';
+      document.getElementById('manual-stock-body').innerHTML = '<div style="font-size: 12px; color: var(--text-muted);">Chargement…</div>';
+      document.getElementById('admin-manual-stock-modal').classList.add('active');
+      await loadManualStock();
+    }
+    window.openManualStockModal = openManualStockModal;
+    function closeManualStockModal() {
+      document.getElementById('admin-manual-stock-modal').classList.remove('active');
+      _manualStockProductId = null;
+    }
+    window.closeManualStockModal = closeManualStockModal;
+    async function loadManualStock() {
+      try {
+        var data = await adminApi('/api/data/manual-stock?productId=' + encodeURIComponent(_manualStockProductId) + '&_t=' + Date.now(), { method: 'GET' });
+        renderManualStock(data);
+      } catch (err) { showToast(err.message || 'Stock manuel indisponible.', 'error'); }
+    }
+    var _manualStockItems = [];
+    function renderManualStock(data) {
+      _manualStockItems = data.items || [];
+      var c = data.counts || {};
+      document.getElementById('manual-stock-title').textContent = '📦 Stock manuel — ' + ((data.product && data.product.name) || '');
+      var orders = DB.get('orders', []) || [];
+      var statusLabel = function(it) {
+        if (it.status === 'assigned') {
+          var ord = orders.find(function(x) { return x.id === it.orderId; });
+          var delivered = ord && (ord.status === 'Complété' || ord.status === 'Livré');
+          return '<span class="status-indicator-pill ' + (delivered ? 'online' : 'pending') + '" style="font-size: 10px; padding: 1px 6px;">' + (delivered ? 'Livré' : 'Attribué') + '</span><div style="font-size: 10.5px; color: var(--text-muted);">' + escapeHtml(it.orderId || '') + '</div>';
+        }
+        return '<span class="status-indicator-pill ' + (it.status === 'reserved' ? 'pending' : 'online') + '" style="font-size: 10px; padding: 1px 6px;">' + (it.status === 'reserved' ? 'Réservé' : 'Disponible') + '</span>';
+      };
+      var rows = (data.items || []).slice().reverse().map(function(it) {
+        var locked = it.status === 'assigned';
+        return '<tr>' +
+          '<td style="word-break: break-all; font-family: ui-monospace, monospace; font-size: 11.5px;">' + escapeHtml(it.content) + (it.note ? '<div style="font-size: 10.5px; color: var(--text-muted); font-family: inherit;">' + escapeHtml(it.note) + '</div>' : '') + '</td>' +
+          '<td>' + statusLabel(it) + '</td>' +
+          '<td style="white-space: nowrap;">' + (locked ? '<span style="font-size: 11px; color: var(--text-muted);">🔒</span>' :
+            '<button type="button" class="btn-secondary btn-sm" style="padding: 3px 7px; font-size: 11px;" onclick="editManualStockItem(\'' + escapeJsStr(it.id) + '\')" title="Modifier">✏️</button> ' +
+            '<button type="button" class="btn-secondary btn-sm" style="padding: 3px 7px; font-size: 11px;" onclick="setManualStockStatus(\'' + escapeJsStr(it.id) + '\', \'' + (it.status === 'reserved' ? 'available' : 'reserved') + '\')" title="' + (it.status === 'reserved' ? 'Remettre disponible' : 'Mettre de côté (réservé)') + '">' + (it.status === 'reserved' ? '↩' : '⏸') + '</button> ' +
+            '<button type="button" class="btn-secondary btn-sm" style="padding: 3px 7px; font-size: 11px; color: #dc2626;" onclick="deleteManualStockItem(\'' + escapeJsStr(it.id) + '\')" title="Supprimer">🗑️</button>') + '</td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('manual-stock-body').innerHTML =
+        '<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;">' +
+          '<span class="status-indicator-pill online" id="manual-stock-available">Disponibles : ' + (c.available || 0) + '</span>' +
+          '<span class="status-indicator-pill pending">Réservés : ' + (c.reserved || 0) + '</span>' +
+          '<span class="status-indicator-pill offline">Attribués : ' + (c.assigned || 0) + '</span>' +
+          '<span class="status-indicator-pill offline" title="Quantité proposée à la vente sur la boutique">En vente : ' + ((data.product && data.product.stock) || 0) + '</span>' +
+          ((c.available || 0) !== ((data.product && data.product.stock) || 0) ? '<button type="button" class="btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="alignManualStockForSale(' + (c.available || 0) + ')">Mettre « en vente » à ' + (c.available || 0) + '</button>' : '') +
+        '</div>' +
+        (rows ? '<div style="max-height: 300px; overflow: auto;"><table class="admin-table"><thead><tr><th>Élément</th><th>Statut</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+              : '<div style="font-size: 12px; color: var(--text-muted);">Aucun élément pour le moment.</div>');
+    }
+    async function manualStockCall(payload, okMsg) {
+      try {
+        var data = await adminApi('/api/data/manual-stock', { method: 'POST', body: JSON.stringify(Object.assign({ productId: _manualStockProductId }, payload)) });
+        renderManualStock(data);
+        if (okMsg) showToast(okMsg, 'success');
+        return data;
+      } catch (err) { showToast(err.message || 'Action refusée.', 'error'); return null; }
+    }
+    async function addManualStockItems() {
+      var txt = document.getElementById('manual-stock-add').value;
+      if (!txt.trim()) { showToast('Saisissez au moins un élément (un par ligne).', 'error'); return; }
+      var data = await manualStockCall({ action: 'add', items: txt });
+      if (data) { document.getElementById('manual-stock-add').value = ''; showToast(data.added + ' élément(s) ajouté(s) au stock manuel (aucun n\'est livré automatiquement).', 'success'); }
+    }
+    window.addManualStockItems = addManualStockItems;
+    async function editManualStockItem(itemId) {
+      var it = _manualStockItems.find(function(x) { return x.id === itemId; });
+      var v = window.prompt('Nouveau contenu de l\'élément :', it ? it.content : '');
+      if (v === null) return;
+      await manualStockCall({ action: 'update', itemId: itemId, content: v }, 'Élément modifié.');
+    }
+    window.editManualStockItem = editManualStockItem;
+    async function setManualStockStatus(itemId, status) {
+      await manualStockCall({ action: 'update', itemId: itemId, status: status }, status === 'reserved' ? 'Élément mis de côté (réservé).' : 'Élément de nouveau disponible.');
+    }
+    window.setManualStockStatus = setManualStockStatus;
+    async function deleteManualStockItem(itemId) {
+      if (!window.confirm('Supprimer définitivement cet élément du stock manuel ?')) return;
+      await manualStockCall({ action: 'delete', itemId: itemId }, 'Élément supprimé.');
+    }
+    window.deleteManualStockItem = deleteManualStockItem;
+    async function alignManualStockForSale(n) {
+      var p = (DB.get('products', []) || []).find(function(x) { return Number(x.id) === Number(_manualStockProductId); });
+      if (!p || !window.confirm('Proposer ' + n + ' unité(s) à la vente sur la boutique pour « ' + p.name + ' » ?')) return;
+      try {
+        var data = await adminApi('/api/data/products', { method: 'POST', body: JSON.stringify({ id: p.id, name: p.name, stock: n }) });
+        if (Array.isArray(data.products)) DB.set('products', data.products);
+        renderProductsTable(DB.get('products', []) || []);
+        await loadManualStock();
+        showToast('Stock en vente mis à jour : ' + n + '.', 'success');
+      } catch (err) { showToast(err.message || 'Mise à jour impossible.', 'error'); }
+    }
+    window.alignManualStockForSale = alignManualStockForSale;
 
     function changeOrderStatusInline(orderId, newStatus) {
       var orders = DB.get('orders', []);

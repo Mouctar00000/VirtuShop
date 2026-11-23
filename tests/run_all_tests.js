@@ -24,6 +24,7 @@ const suites = [
   { name: 'API end-to-end (Edge Config store, mocked API)', file: 'tests/api.e2e.test.js', env: { TEST_STORE: 'edge-config' } },
   { name: 'Mobile Money (SasPay double, documented API)', file: 'tests/saspay.e2e.test.js' },
   { name: 'Purchase suspension per customer', file: 'tests/purchase-suspension.e2e.test.js' },
+  { name: 'Configurable delivery & manual stock', file: 'tests/delivery-modes.e2e.test.js' },
   { name: 'Legacy Edge Config migration', file: 'tests/edge-config.migration.test.js' },
   { name: 'Postgres store guarantees', file: 'tests/postgres.store.test.js', pg: true },
   { name: 'Edge Config -> Postgres migration', file: 'tests/postgres.migration.test.js', pg: true },

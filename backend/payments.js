@@ -517,7 +517,7 @@ class PaymentService {
       const u = t ? db.getUserById(t.userId) : null;
       const intent = t && t.metadata && t.metadata.purchase;
       const order = intent && intent.orderId ? db.getOrderById(intent.orderId) : null;
-      return { t: publicTx(t), balance: u ? u.balance : null, intent: intent ? { ...intent } : null, order: order ? JSON.parse(JSON.stringify(order)) : null };
+      return { t: publicTx(t), balance: u ? u.balance : null, intent: intent ? { ...intent } : null, order: order ? db.customerOrderView(order) : null };
     });
     if (snap.intent && !snap.intent.orderId && !snap.intent.error && attempt === 0) {
       await this._completePurchaseIntent(txId);

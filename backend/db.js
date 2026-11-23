@@ -39,6 +39,14 @@ const KNOWN_PUBLIC_HASHES = new Set([
 const LEGACY_ADMIN_EMAILS = new Set(['admin@virtushop.com', 'admin@admin.com']);
 
 const ORDER_STATUS = { PENDING: 'En attente', DONE: 'Complété', DELIVERED: 'Livré', CANCELLED: 'Annulé' };
+// Manually fulfilled products (deliveryMode 'manual') can use a fulfilment variant instead of the WhatsApp flow:
+//  - 'delayed'       : waiting period after payment, then the administrator delivers (never automatic)
+//  - 'admin_release' : the administrator delivers from the dashboard (no waiting period)
+// Absent / other value = existing WhatsApp delivery (unchanged). Automatic products are always instant (unchanged).
+const FULFILMENT_TIMINGS = ['delayed', 'admin_release'];
+const DEFAULT_DELIVERY_DELAY_MINUTES = 15;
+const MAX_DELIVERY_DELAY_MINUTES = 30 * 24 * 60; // 30 days
+const MANUAL_STOCK_STATUSES = ['available', 'reserved'];
 const MAX_MONEY = 100000;
 
 const DEFAULT_PAYMENT_METHODS = [
@@ -818,6 +826,9 @@ class Database {
         image: p.image || null,
         published: true,
         deliveryMode: p.deliveryMode,
+        // Fulfilment variant shown on the product sheet (no stock or delivery content is ever exposed)
+        deliveryTiming: this.deliveryTimingOf(p),
+        deliveryDelayMinutes: this.deliveryTimingOf(p) === 'delayed' ? (p.deliveryDelayMinutes || DEFAULT_DELIVERY_DELAY_MINUTES) : null,
         compareAtPrice: typeof p.compareAtPrice === 'number' && p.compareAtPrice > p.price ? p.compareAtPrice : null,
         features: Array.isArray(p.features) ? p.features : [],
         benefits: Array.isArray(p.benefits) ? p.benefits : [],
@@ -900,6 +911,8 @@ class Database {
     if (prod.benefits !== undefined) sheet.benefits = cleanList(prod.benefits);
     if (prod.notices !== undefined) sheet.notices = cleanList(prod.notices);
     if (prod.deliveryInfo !== undefined) sheet.deliveryInfo = cleanText(prod.deliveryInfo, 1000);
+    // Fulfilment variant of manually delivered products (validated before any change; only fields sent are changed)
+    const fulfilment = this._parseDeliveryTiming(prod, target);
     // Promotion: "compare-at" price shown struck through; the customer always pays `price`
     let compareAtPrice;
     if (prod.compareAtPrice !== undefined) {
@@ -975,6 +988,7 @@ class Database {
       p.updated_at = now;
     }
 
+    if (fulfilment) Object.assign(p, fulfilment);
     const v = this._vaultFor(p.id, incomingType);
     if (incomingType) v.type = incomingType;
     if (incomingType === 'link' && incomingContent && !isSafeHttpUrl(String(incomingContent).trim())) {
@@ -1294,6 +1308,8 @@ class Database {
     u.updated_at = nowIso();
 
     const isManual = Boolean(alloc.manualDelivery);
+    // Delivery conditions frozen on the order at payment time (later product changes never affect this order)
+    const delivery = this._deliverySnapshot(prod, isManual);
     let vaultContent = null;
     if (alloc.fileDelivery) vaultContent = alloc.fileDelivery;
     else if (!isManual) {
@@ -1317,6 +1333,7 @@ class Database {
       method: cleanText(paymentLabel, 60) || 'Solde GetVirtu',
       deliveryMode: isManual ? 'manual' : 'auto',
       status: isManual ? ORDER_STATUS.PENDING : ORDER_STATUS.DONE,
+      delivery,
       vaultContent,
       idempotencyKey: idem || null,
       refunded: false
@@ -1341,10 +1358,24 @@ class Database {
   }
 
   /** Admin: deliver a pending order (manual delivery) with the content entered in the dashboard. */
-  deliverOrder(orderId, { content, type = 'text', fileName, deliveryFile } = {}) {
+  deliverOrder(orderId, { content, type = 'text', fileName, deliveryFile, stockItemIds, adminNote, adminName } = {}) {
     const o = this.getOrderById(orderId);
     if (!o) throw httpError(404, 'Commande introuvable.');
     if (o.status === ORDER_STATUS.CANCELLED) throw httpError(409, 'Une commande annulée (et remboursée) ne peut pas être livrée.');
+    // Delayed fulfilment: nothing can be delivered before the end of the waiting period (server clock)
+    const d0 = o.delivery;
+    if (d0 && d0.method === 'delayed' && d0.status !== 'delivered' && Date.now() < Date.parse(d0.eligibleAt)) {
+      const mins = Math.ceil((Date.parse(d0.eligibleAt) - Date.now()) / 60000);
+      throw httpError(409, "La période d'attente de cette commande n'est pas terminée (encore environ " + mins + ' min). Vous pourrez la livrer ensuite.', 'DELIVERY_WAITING');
+    }
+    // Items of the manual stock chosen by the administrator (never picked automatically)
+    const pickedItems = this._pickManualStockItems(o, stockItemIds);
+    if (pickedItems.length) {
+      const extra = cleanText(content, 20000);
+      content = pickedItems.map(it => it.content).join('\n') + (extra ? '\n\n' + extra : '');
+      type = 'text';
+      deliveryFile = null;
+    }
     const kind = ['text', 'link', 'file'].includes(type) ? type : 'text';
     let vc;
     if (deliveryFile) vc = { type: 'file', blobId: deliveryFile.blobId, fileName: deliveryFile.fileName };
@@ -1372,6 +1403,18 @@ class Database {
     o.vaultContent = vc;
     o.status = ORDER_STATUS.DONE;
     o.validatedAt = o.validatedAt || nowIso();
+    if (adminNote !== undefined) o.adminNote = cleanText(adminNote, 2000);
+    if (pickedItems.length) {
+      const at = nowIso();
+      pickedItems.forEach(it => { it.status = 'assigned'; it.orderId = o.id; it.userId = o.userId; it.assignedAt = at; it.updatedAt = at; });
+    }
+    if (o.delivery && o.delivery.status !== 'delivered') {
+      o.delivery.status = 'delivered';
+      o.delivery.deliveredAt = nowIso();
+      o.delivery.deliveredBy = cleanText(adminName, 80) || 'Administrateur';
+    }
+    if (o.delivery && pickedItems.length) o.delivery.stockItemIds = Array.from(new Set([...(o.delivery.stockItemIds || []), ...pickedItems.map(it => it.id)]));
+    if (o.delivery && o.delivery.issue) o.delivery.issue = null;
     o.updatedAt = nowIso();
     this.persist();
     return o;
@@ -1452,6 +1495,178 @@ class Database {
     }
     this.persist();
     return { success: true, deletedOrder: { id: o.id } };
+  }
+
+  // ============================================================ CONFIGURABLE DELIVERY & MANUAL STOCK
+  /** Fulfilment variant of a product: 'delayed' | 'admin_release' | null (WhatsApp flow / automatic product). */
+  deliveryTimingOf(p) {
+    return p && p.deliveryMode === 'manual' && FULFILMENT_TIMINGS.includes(p.deliveryTiming) ? p.deliveryTiming : null;
+  }
+
+  _parseDeliveryTiming(prod, target) {
+    if (prod.deliveryTiming === undefined && prod.deliveryDelayMinutes === undefined) return null;
+    const raw = prod.deliveryTiming !== undefined ? String(prod.deliveryTiming || '') : String((target && target.deliveryTiming) || '');
+    const timing = FULFILMENT_TIMINGS.includes(raw) ? raw : null;
+    if (raw && !timing && !['whatsapp', 'instant'].includes(raw)) throw httpError(400, 'Mode de livraison invalide.');
+    const out = { deliveryTiming: timing };
+    if (timing === 'delayed') {
+      const given = prod.deliveryDelayMinutes;
+      const val = given !== undefined && given !== null && given !== '' ? given : ((target && target.deliveryDelayMinutes) || DEFAULT_DELIVERY_DELAY_MINUTES);
+      const min = Number(val);
+      if (!Number.isInteger(min) || min < 1 || min > MAX_DELIVERY_DELAY_MINUTES) {
+        throw httpError(400, "Délai d'attente invalide : nombre entier de minutes, de 1 minute à 30 jours.");
+      }
+      out.deliveryDelayMinutes = min;
+    }
+    return out;
+  }
+
+  /** Delivery conditions applicable to a purchase confirmed now (stored on the order). */
+  _deliverySnapshot(prod, isManual) {
+    const now = nowIso();
+    if (!isManual) return { method: 'instant', status: 'delivered', paymentConfirmedAt: now, deliveredAt: now };
+    const timing = this.deliveryTimingOf(prod);
+    if (timing === 'delayed') {
+      const minutes = Number.isInteger(prod.deliveryDelayMinutes) && prod.deliveryDelayMinutes >= 1 && prod.deliveryDelayMinutes <= MAX_DELIVERY_DELAY_MINUTES
+        ? prod.deliveryDelayMinutes : DEFAULT_DELIVERY_DELAY_MINUTES;
+      return { method: 'delayed', status: 'pending', delaySeconds: minutes * 60, paymentConfirmedAt: now, eligibleAt: new Date(Date.parse(now) + minutes * 60000).toISOString() };
+    }
+    if (timing === 'admin_release') return { method: 'admin_release', status: 'pending', paymentConfirmedAt: now };
+    return { method: 'whatsapp', status: 'pending', paymentConfirmedAt: now };
+  }
+
+  /** Delivery phase of an order: 'waiting' | 'awaiting_delivery' | 'delivered' | 'cancelled' | null (no record). */
+  deliveryPhaseOf(o) {
+    const d = o && o.delivery;
+    if (!d) return null;
+    if (o.status === ORDER_STATUS.CANCELLED) return 'cancelled';
+    if (d.status === 'delivered' || o.status === ORDER_STATUS.DONE || o.status === ORDER_STATUS.DELIVERED) return 'delivered';
+    if (d.method === 'delayed' && Date.now() < Date.parse(d.eligibleAt)) return 'waiting';
+    return 'awaiting_delivery';
+  }
+
+  /** May the customer see the delivered content of this order? Decided on the server only. */
+  isOrderContentReleased(o) {
+    if (!o) return false;
+    const d = o.delivery;
+    if (!d || !FULFILMENT_TIMINGS.includes(d.method)) return true; // instant / WhatsApp / older orders: unchanged
+    return (o.status === ORDER_STATUS.DONE || o.status === ORDER_STATUS.DELIVERED) && d.status === 'delivered'
+      && (d.method !== 'delayed' || Date.now() >= Date.parse(d.eligibleAt));
+  }
+
+  /** Copy of an order as its customer may see it (no admin note, no stock references, content only once delivered). */
+  customerOrderView(o) {
+    if (!o) return o;
+    const released = this.isOrderContentReleased(o);
+    const copy = JSON.parse(JSON.stringify(o));
+    delete copy.adminNote;
+    if (copy.delivery) {
+      const phase = this.deliveryPhaseOf(o);
+      delete copy.delivery.deliveredBy;
+      delete copy.delivery.stockItemIds;
+      delete copy.delivery.issue;
+      copy.delivery.phase = phase;
+      if (copy.delivery.method === 'delayed' && phase === 'waiting') {
+        copy.delivery.serverNow = nowIso();
+        copy.delivery.remainingSeconds = Math.max(0, Math.ceil((Date.parse(copy.delivery.eligibleAt) - Date.now()) / 1000));
+      }
+    }
+    if (!released) { copy.vaultContent = null; copy.contentLocked = true; }
+    return copy;
+  }
+
+  /** Administrator: flag (or clear) a delivery issue on an order. The customer keeps seeing "being processed". */
+  setOrderDeliveryIssue(orderId, { issue = true, note = '', adminName = 'Administrateur' } = {}) {
+    const o = this.getOrderById(orderId);
+    if (!o) throw httpError(404, 'Commande introuvable.');
+    if (!o.delivery) o.delivery = { method: o.deliveryMode === 'manual' ? 'whatsapp' : 'instant', status: o.status === ORDER_STATUS.PENDING ? 'pending' : 'delivered' };
+    o.delivery.issue = issue ? { note: cleanText(note, 500), at: nowIso(), by: cleanText(adminName, 80) || 'Administrateur' } : null;
+    o.updatedAt = nowIso();
+    this.persist();
+    return o;
+  }
+
+  // ---- manual stock: entries the administrator assigns to orders by hand (never distributed automatically)
+  _manualStockFor(productId) {
+    if (!this.data.manual_stock || typeof this.data.manual_stock !== 'object' || Array.isArray(this.data.manual_stock)) this.data.manual_stock = {};
+    const k = String(productId);
+    if (!Array.isArray(this.data.manual_stock[k])) this.data.manual_stock[k] = [];
+    return this.data.manual_stock[k];
+  }
+
+  _manualStockCounts(items) {
+    const c = { available: 0, reserved: 0, assigned: 0, total: items.length };
+    items.forEach(it => { if (c[it.status] !== undefined) c[it.status]++; });
+    return c;
+  }
+
+  getManualStock(productId) {
+    const p = this.getProductById(productId);
+    if (!p) throw httpError(404, 'Produit introuvable.');
+    const items = this._manualStockFor(p.id);
+    return { product: { id: p.id, name: p.name, stock: p.stock }, items, counts: this._manualStockCounts(items) };
+  }
+
+  addManualStockItems(productId, raw, { note } = {}) {
+    const p = this.getProductById(productId);
+    if (!p) throw httpError(404, 'Produit introuvable.');
+    const lines = String(raw || '').split(/\r?\n/).map(s => cleanText(s, 2000)).filter(Boolean);
+    if (!lines.length) throw httpError(400, 'Ajoutez au moins un élément (un par ligne).');
+    if (lines.length > 1000) throw httpError(400, '1000 éléments maximum par ajout.');
+    const items = this._manualStockFor(p.id);
+    const now = nowIso();
+    const added = lines.map(content => {
+      const it = { id: randomId('MS-', 6), content, status: 'available', orderId: null, note: cleanText(note, 300) || '', createdAt: now, updatedAt: now };
+      items.push(it);
+      return it;
+    });
+    this.persist();
+    return { added: added.length, ...this.getManualStock(p.id) };
+  }
+
+  updateManualStockItem(productId, itemId, { content, status, note } = {}) {
+    const items = this._manualStockFor(productId);
+    const it = items.find(x => x && x.id === itemId);
+    if (!it) throw httpError(404, 'Élément de stock introuvable.');
+    if (it.status === 'assigned' || it.orderId) throw httpError(409, 'Cet élément est déjà attribué à une commande : il ne peut plus être modifié.');
+    if (content !== undefined) {
+      const c = cleanText(content, 2000);
+      if (!c) throw httpError(400, "Le contenu de l'élément ne peut pas être vide.");
+      it.content = c;
+    }
+    if (status !== undefined) {
+      if (!MANUAL_STOCK_STATUSES.includes(status)) throw httpError(400, 'Statut invalide (disponible ou réservé).');
+      it.status = status;
+    }
+    if (note !== undefined) it.note = cleanText(note, 300);
+    it.updatedAt = nowIso();
+    this.persist();
+    return { item: it, ...this.getManualStock(productId) };
+  }
+
+  deleteManualStockItem(productId, itemId) {
+    const items = this._manualStockFor(productId);
+    const idx = items.findIndex(x => x && x.id === itemId);
+    if (idx < 0) throw httpError(404, 'Élément de stock introuvable.');
+    if (items[idx].status === 'assigned' || items[idx].orderId) throw httpError(409, 'Cet élément est attribué à une commande : il ne peut pas être supprimé.');
+    items.splice(idx, 1);
+    this.persist();
+    return this.getManualStock(productId);
+  }
+
+  /** Validates the stock items chosen for an order: same product, not assigned elsewhere, no duplicates. */
+  _pickManualStockItems(o, stockItemIds) {
+    if (stockItemIds === undefined || stockItemIds === null || stockItemIds === '') return [];
+    const ids = Array.from(new Set((Array.isArray(stockItemIds) ? stockItemIds : [stockItemIds]).map(x => String(x))));
+    if (!ids.length) return [];
+    if (ids.length > 100) throw httpError(400, "Trop d'éléments sélectionnés.");
+    const items = this._manualStockFor(o.productId);
+    return ids.map(id => {
+      const it = items.find(x => x && x.id === id);
+      if (!it) throw httpError(404, "Élément de stock introuvable pour ce produit (il a peut-être été supprimé).");
+      if (it.orderId && it.orderId !== o.id) throw httpError(409, "L'élément « " + it.content.slice(0, 40) + ' » est déjà attribué à la commande ' + it.orderId + '.', 'STOCK_ITEM_TAKEN');
+      return it;
+    });
   }
 
   // ============================================================ TRANSACTIONS
@@ -1831,6 +2046,7 @@ class Database {
     this.data.users = keptAdmins;
     this.data.products = [];
     this.data.vault = {};
+    if (this.data.manual_stock) this.data.manual_stock = {};
     this.data.orders = [];
     this.data.transactions = [];
     this.data.tickets = [];

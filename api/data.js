@@ -103,6 +103,7 @@ module.exports = async function handler(req, res) {
         const o = db.getOrderById(orderId);
         if (!o || (auth.user.role !== 'admin' && String(o.userId) !== String(auth.user.id))) throw httpError(404, 'Commande introuvable.');
         if (!(o.status === 'Complété' || o.status === 'Livré') || !o.vaultContent || !o.vaultContent.blobId) throw httpError(404, 'Aucun fichier à télécharger pour cette commande.');
+        if (auth.user.role !== 'admin' && !db.isOrderContentReleased(o)) throw httpError(404, 'Aucun fichier à télécharger pour cette commande.');
         return { blobId: o.vaultContent.blobId, fileName: o.vaultContent.fileName || 'livraison.bin' };
       });
       const blob = await db.getBlob(ref.blobId);
@@ -232,7 +233,7 @@ module.exports = async function handler(req, res) {
       if (method === 'GET') {
         const out = await db.read(() => {
           const auth = requireUser(req);
-          const orders = auth.user.role === 'admin' ? db.getOrders() : db.getOrders().filter(o => String(o.userId) === String(auth.user.id));
+          const orders = auth.user.role === 'admin' ? db.getOrders() : db.getOrders().filter(o => String(o.userId) === String(auth.user.id)).map(o => db.customerOrderView(o));
           return { orders };
         });
         return res.status(200).json(out);
@@ -253,7 +254,7 @@ module.exports = async function handler(req, res) {
           const bought = db.getProductById(r.order && r.order.productId);
           const hideStock = Boolean(bought && bought.showStock === false);
           return {
-            success: true, order: r.order, newBalance: r.newBalance,
+            success: true, order: db.customerOrderView(r.order), newBalance: r.newBalance,
             remainingStock: hideStock ? null : r.remainingStock,
             productAvailable: bought ? db.isProductAvailable(bought) : undefined,
             duplicate: Boolean(r.duplicate)
@@ -281,7 +282,9 @@ module.exports = async function handler(req, res) {
           } else if (action === 'deliver' || action === 'update_content') {
             const o = db.getOrderById(orderId);
             if (!o) throw httpError(404, 'Commande introuvable.');
-            result = { order: db.deliverOrder(orderId, { content: vc.content !== undefined ? vc.content : body.content, type: vc.type || body.type, fileName: vc.fileName || body.fileName, deliveryFile }) };
+            result = { order: db.deliverOrder(orderId, { content: vc.content !== undefined ? vc.content : body.content, type: vc.type || body.type, fileName: vc.fileName || body.fileName, deliveryFile, stockItemIds: body.stockItemIds, adminNote: body.adminNote, adminName }) };
+          } else if (action === 'delivery_issue') {
+            result = { order: db.setOrderDeliveryIssue(orderId, { issue: body.issue !== false, note: body.note, adminName }) };
           } else if (action === 'set_pending') {
             const o = db.getOrderById(orderId);
             if (!o) throw httpError(404, 'Commande introuvable.');
@@ -302,6 +305,28 @@ module.exports = async function handler(req, res) {
           return { success: true, ...r, orders: db.getOrders() };
         });
         return res.status(200).json(out);
+      }
+    }
+
+    // ------------------------------------------------------------------ manual stock (administrator only)
+    if (resource === 'manual-stock') {
+      if (method === 'GET') {
+        return res.status(200).json(await db.read(() => {
+          requireAdmin(req);
+          return { success: true, ...db.getManualStock(parseInt(queryParam(req, 'productId'), 10)) };
+        }));
+      }
+      if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
+        return res.status(200).json(await db.tx(() => {
+          requireAdmin(req);
+          const pid = parseInt(body.productId !== undefined ? body.productId : queryParam(req, 'productId'), 10);
+          if (!pid) throw httpError(400, 'ID produit valide requis.');
+          const action = method === 'DELETE' ? 'delete' : (body.action || 'add');
+          if (action === 'add') return { success: true, ...db.addManualStockItems(pid, body.items, { note: body.note }) };
+          if (action === 'update') return { success: true, ...db.updateManualStockItem(pid, String(body.itemId || ''), { content: body.content, status: body.status, note: body.note }) };
+          if (action === 'delete') return { success: true, ...db.deleteManualStockItem(pid, String(body.itemId || queryParam(req, 'itemId') || '')) };
+          throw httpError(400, 'Action de stock inconnue.');
+        }));
       }
     }
 

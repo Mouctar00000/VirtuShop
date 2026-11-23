@@ -1031,6 +1031,10 @@ function openProductDetails(prodId) {
   var promo = productPromo(prod);
   var deliveryText = String(prod.deliveryInfo || '').trim() || (buy.external
     ? 'L\'achat se finalise directement avec le vendeur via ' + buy.target + ' : cliquez sur « Acheter » pour le contacter, il vous indique le paiement et la livraison.'
+    : prod.deliveryTiming === 'delayed'
+    ? 'Après le paiement, votre commande est préparée : votre produit vous est livré dans « Mes commandes » après un délai d\'environ ' + formatDelayMinutesText(prod.deliveryDelayMinutes) + '.'
+    : prod.deliveryTiming === 'admin_release'
+    ? 'Après le paiement, notre équipe prépare votre commande : votre produit vous est livré dans « Mes commandes ».'
     : prod.deliveryMode === 'manual'
     ? 'Après le paiement, la commande passe « En attente » et nous vous contactons sur WhatsApp pour la livraison.'
     : 'Livraison automatique dans « Mes commandes » dès la confirmation du paiement.');
@@ -1432,6 +1436,155 @@ function renderWhatsAppDeliveryBox(order) {
   `;
 }
 
+// ---------- Livraison différée puis manuelle / manuelle par l'équipe : le contenu n'est envoyé par le serveur
+// qu'après la livraison confirmée par l'administrateur. Le compte à rebours n'est qu'un affichage (horloge serveur).
+function isFulfilmentOrder(order) {
+  return Boolean(order && order.delivery && (order.delivery.method === 'delayed' || order.delivery.method === 'admin_release'));
+}
+
+function isFulfilmentPending(order) {
+  return isFulfilmentOrder(order) && order.status === 'En attente' && !order.vaultContent;
+}
+
+function formatDelayMinutesText(minutes) {
+  minutes = Number(minutes) || 15;
+  if (minutes >= 60 && minutes % 60 === 0) return (minutes / 60) + ' heure' + (minutes >= 120 ? 's' : '');
+  if (minutes >= 60) return Math.floor(minutes / 60) + ' h ' + (minutes % 60) + ' min';
+  return minutes + ' minute' + (minutes > 1 ? 's' : '');
+}
+
+var _gvServerClockSkew = 0;
+function formatDeliveryRemaining(seconds) {
+  seconds = Math.max(0, Math.round(seconds));
+  var h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+  if (h) return h + ' h ' + (m < 10 ? '0' : '') + m + ' min ' + (s < 10 ? '0' : '') + s + ' s';
+  if (m) return m + ' min ' + (s < 10 ? '0' : '') + s + ' s';
+  return s + ' s';
+}
+
+function deliverySecondsLeft(eligibleAt) {
+  return (Date.parse(eligibleAt) - (Date.now() + _gvServerClockSkew)) / 1000;
+}
+
+function renderFulfilmentBox(order) {
+  var d = order.delivery || {};
+  var fmt = function(iso) { return iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'; };
+  var details = '<div style="display: grid; gap: 2px; margin-top: 8px; font-size: 11.5px;">' +
+    '<div>Commande : <strong>' + escapeHtml(order.id) + '</strong></div>' +
+    '<div>Paiement : <strong>✅ confirmé le ' + escapeHtml(fmt(d.paymentConfirmedAt)) + '</strong></div>';
+  if (d.method === 'delayed') {
+    var left = deliverySecondsLeft(d.eligibleAt);
+    if (left > 0) {
+      return `
+        <div class="held-delivery-box" data-order-id="${escapeHtml(order.id)}" data-phase="waiting" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-sm, 10px); padding: 12px; font-size: 12.5px; color: #1e3a8a; line-height: 1.5;">
+          ✅ <strong>Paiement confirmé.</strong> Votre commande est en préparation. Votre produit pourra vous être livré dans environ
+          <strong class="gv-delivery-countdown" data-eligible-at="${escapeHtml(d.eligibleAt || '')}" aria-live="polite">${formatDeliveryRemaining(left)}</strong>.
+          ${details}
+            <div>Statut de livraison : <strong>⏳ Période d'attente</strong></div>
+            <div>Livraison possible à partir du : <strong>${escapeHtml(fmt(d.eligibleAt))}</strong></div>
+          </div>
+          <div style="font-size: 11px; color: #475569; margin-top: 6px;">Vous pouvez fermer cette page : le délai continue sur nos serveurs.</div>
+        </div>
+      `;
+    }
+    return `
+      <div class="held-delivery-box" data-order-id="${escapeHtml(order.id)}" data-phase="processing" style="background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-sm, 10px); padding: 12px; font-size: 12.5px; color: #92400e; line-height: 1.5;">
+        ⏳ <strong>Votre période d'attente est terminée.</strong> Votre commande est maintenant en cours de traitement pour la livraison. Merci de revenir dans quelques instants.
+        ${details}
+          <div>Statut de livraison : <strong>📦 En cours de livraison</strong></div>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="held-delivery-box" data-order-id="${escapeHtml(order.id)}" data-phase="processing" style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: var(--radius-sm, 10px); padding: 12px; font-size: 12.5px; color: #581c87; line-height: 1.5;">
+      ✅ <strong>Paiement confirmé.</strong> Votre commande est en cours de préparation par notre équipe. Vous pourrez accéder à votre produit dès que la livraison sera effectuée.
+      ${details}
+        <div>Statut de livraison : <strong>🛂 En préparation</strong></div>
+      </div>
+    </div>
+  `;
+}
+
+// Résultat d'achat d'une commande livrée manuellement par l'équipe (contenu encore verrouillé par le serveur)
+function renderFulfilmentPurchaseResult(prod, order, userBalAfter) {
+  var container = document.getElementById('pay-dynamic-content');
+  if (container) {
+    container.innerHTML = `
+      <div class="purchase-success-box" id="held-purchase-result" data-order-id="${escapeHtml(order.id)}">
+        <div class="success-icon-badge" style="background: var(--emerald-500); color: white;">✓</div>
+        <h3 style="font-size: 19px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Paiement confirmé ✅</h3>
+        <div style="margin-bottom: 16px; text-align: left;">${renderFulfilmentBox(order)}</div>
+        <div class="order-recap-mini">
+          <div><span>N° Commande :</span> <strong>${escapeHtml(order.id)}</strong></div>
+          <div><span>Article :</span> <strong>${escapeHtml((prod && prod.name) || order.productName || 'Produit')} (x${order.quantity || 1})</strong></div>
+          <div><span>Montant payé :</span> <strong style="color: var(--primary-600);">$${Number(order.amount || 0).toFixed(2)}</strong></div>
+          <div><span>Nouveau solde :</span> <strong style="color: var(--emerald-600);">$${Number(userBalAfter || 0).toFixed(2)}</strong></div>
+          <div><span>Règlement :</span> <strong>${escapeHtml(order.method || 'Solde GetVirtu')}</strong></div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn-secondary" style="flex: 1;" onclick="closePayModal()">Continuer mes achats</button>
+          <button type="button" class="btn-primary" style="flex: 1;" onclick="closePayModal(); openOrdersModal();">📦 Mes commandes</button>
+        </div>
+      </div>
+    `;
+  }
+  showToast('Paiement confirmé : votre commande est en préparation. Retrouvez-la dans « Mes commandes ».', 'success');
+  updateNavbar();
+  if (typeof syncProductsFromServer === 'function') syncProductsFromServer();
+  renderConnectedCatalog();
+  renderLandingCatalog();
+}
+
+// État à jour des commandes auprès du serveur (seule source du contenu livré)
+var _gvHeldRefreshAt = 0;
+async function refreshFulfilmentOrders(force) {
+  if (!force && Date.now() - _gvHeldRefreshAt < 4000) return;
+  _gvHeldRefreshAt = Date.now();
+  var s = DB.get('session');
+  if (!s || !s.token) return;
+  var t0 = Date.now();
+  await syncUserOrdersFromServer(s.token);
+  var mid = (t0 + Date.now()) / 2;
+  var orders = DB.get('orders', []) || [];
+  var latest = 0;
+  orders.forEach(function(o) { if (o && o.delivery && o.delivery.serverNow) latest = Math.max(latest, Date.parse(o.delivery.serverNow) || 0); });
+  if (latest && latest >= t0 - 60000) _gvServerClockSkew = latest - mid;
+  var modalOrders = document.getElementById('modal-orders');
+  if (modalOrders && modalOrders.classList.contains('active')) renderOrdersListInModal();
+  var held = document.getElementById('held-purchase-result');
+  if (held) {
+    var o = orders.find(function(x) { return x && x.id === held.getAttribute('data-order-id'); });
+    if (o && o.vaultContent && !isFulfilmentPending(o)) {
+      deliverCompletedOrder({ id: o.productId, name: o.productName }, o.amount, o.quantity || 1, o.contactInfo || '', o.method, getUserBalance(), o);
+    } else if (o && isFulfilmentPending(o)) {
+      var box = held.querySelector('.held-delivery-box');
+      if (box) box.outerHTML = renderFulfilmentBox(o);
+    }
+  }
+}
+
+setInterval(function() {
+  var ended = false;
+  document.querySelectorAll('.gv-delivery-countdown[data-eligible-at]').forEach(function(el) {
+    var left = deliverySecondsLeft(el.getAttribute('data-eligible-at'));
+    if (left > 0) el.textContent = formatDeliveryRemaining(left);
+    else ended = true;
+  });
+  if (ended) {
+    // Fin de l'attente : nouvel affichage « en cours de livraison » (aucun contenu côté navigateur)
+    document.querySelectorAll('.held-delivery-box[data-phase="waiting"]').forEach(function(box) {
+      var o = (DB.get('orders', []) || []).find(function(x) { return x && x.id === box.getAttribute('data-order-id'); });
+      if (o) box.outerHTML = renderFulfilmentBox(o);
+    });
+    refreshFulfilmentOrders(false);
+  }
+}, 1000);
+// Tant qu'une commande en préparation est affichée : vérification régulière de sa livraison par l'équipe
+setInterval(function() {
+  if (document.querySelector('.held-delivery-box')) refreshFulfilmentOrders(true);
+}, 30000);
+
 // Paiement confirmé mais commande pas encore visible côté serveur : jamais de clé « inventée » dans le navigateur
 function showPurchaseProcessingNotice(prod, message) {
   var container = document.getElementById('pay-dynamic-content');
@@ -1476,6 +1629,12 @@ function deliverCompletedOrder(prod, total, qty, contactVal, paymentMethodName, 
   var orders = (DB.get('orders', []) || []).filter(function(o) { return o && o.id !== newOrder.id; });
   orders.unshift(newOrder);
   DB.set('orders', orders);
+
+  // Livraison différée puis manuelle / manuelle par l'équipe : paiement confirmé, produit livré plus tard par l'équipe
+  if (isFulfilmentPending(newOrder)) {
+    renderFulfilmentPurchaseResult(prod, newOrder, userBalAfter);
+    return;
+  }
 
   var manualPending = isManualDeliveryPending(newOrder) || !newOrder.vaultContent;
 
@@ -3871,7 +4030,9 @@ function renderOrdersListInModal() {
           </div>
         </div>
 
-        ${isPending && o.deliveryMode === 'manual' ? renderWhatsAppDeliveryBox(o) : ''}
+        ${isPending && isFulfilmentOrder(o) ? renderFulfilmentBox(o) : ''}
+
+        ${isPending && o.deliveryMode === 'manual' && !isFulfilmentOrder(o) ? renderWhatsAppDeliveryBox(o) : ''}
 
         ${isPending && o.deliveryMode !== 'manual' ? `
           <div style="background: #fffbeb; border: 1px dashed #fde68a; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #b45309; line-height: 1.45;">
@@ -3884,6 +4045,12 @@ function renderOrdersListInModal() {
           <div style="background: #fff1f2; border: 1px dashed #fecdd3; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #e11d48; line-height: 1.45;">
             ✕ <strong>Commande annulée par l'administrateur</strong><br>
             Cette commande a été annulée.${o.refunded ? ' Votre solde a été recrédité de $' + Number(o.amount || 0).toFixed(2) + '.' : ''}
+          </div>
+        ` : ''}
+
+        ${isValidated && o.vaultContent && isFulfilmentOrder(o) ? `
+          <div class="fulfilment-delivered-note" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-sm, 10px); padding: 9px 12px; font-size: 12.5px; color: #166534; margin-bottom: 8px;">
+            ✅ <strong>Votre produit a été livré avec succès.</strong>${o.delivery && o.delivery.deliveredAt ? ' Le ' + new Date(o.delivery.deliveredAt).toLocaleString('fr-FR') + '.' : ''}
           </div>
         ` : ''}
 
