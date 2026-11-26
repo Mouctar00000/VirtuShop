@@ -544,7 +544,7 @@ class PaymentService {
         if (!user) throw httpError(404, 'Compte client introuvable.');
         const r = db.purchaseWithBalance(user, {
           productId: intent.productId, quantity: intent.quantity, contactInfo: intent.contactInfo,
-          idempotencyKey: 'momo-' + t.id, paymentLabel: 'Mobile Money'
+          idempotencyKey: 'momo-' + t.id, paymentLabel: 'Mobile Money', paymentTransactionId: t.id
         });
         db.updateTransaction(t.id, { metadata: { ...t.metadata, purchase: { ...intent, orderId: r.order.id, completedAt: new Date().toISOString() } } });
         return r.order.id;
@@ -884,18 +884,22 @@ class PaymentService {
   }
 
   /** Administrator approval/rejection of a pending deposit (manual or stuck automatic one). */
-  async verifyAndCompleteTransaction({ transactionId, failureReason = null, isApproval = true, adminName }) {
+  async verifyAndCompleteTransaction({ transactionId, failureReason = null, isApproval = true, adminName, adminUser = null, ip = null }) {
     const r = await db.tx(() => {
       const t = db.getTransactionById(transactionId);
       if (!t) throw httpError(404, 'Transaction introuvable.');
       if (t.status === 'completed') return { success: true, alreadyProcessed: true, transaction: publicTx(t) };
       if (!['deposit'].includes(t.type)) throw httpError(400, 'Seules les recharges en attente peuvent être validées.');
+      const who = `${t.userName || 'Client'} (${t.userEmail || t.userId})`;
       if (!isApproval) {
         const updated = db.updateTransaction(t.id, { status: 'failed', failureReason: cleanText(failureReason, 300) || 'Paiement rejeté lors de la vérification.', completedAt: new Date().toISOString(), adminResponsible: adminName });
+        db.audit(adminUser, 'deposit.rejected', { targetType: 'transaction', targetId: t.id, ip, summary: `Recharge ${t.id} de ${who} rejetée (${Number(t.amount).toFixed(2)} $, ${t.paymentMethod || t.provider}) — aucun crédit`, details: { amount: t.amount, provider: t.provider, previousStatus: t.status, reason: updated.failureReason } });
         return { success: true, transaction: publicTx(updated) };
       }
+      const wasPendingAtProvider = t.provider === 'saspay';
       const c = db.creditDeposit(t.id, {});
       db.updateTransaction(t.id, { adminResponsible: adminName, notes: t.notes || `Validée manuellement par ${adminName}` });
+      db.audit(adminUser, 'deposit.approved_manually', { targetType: 'transaction', targetId: t.id, ip, summary: `Recharge ${t.id} de ${who} approuvée manuellement : +${Number(t.amount).toFixed(2)} $ (solde ${Number(c.transaction.balanceBefore).toFixed(2)} → ${Number(c.newBalance).toFixed(2)} $)` + (wasPendingAtProvider ? ' — paiement Mobile Money NON confirmé par SasPay au moment de l’approbation' : ''), details: { amount: t.amount, provider: t.provider, providerTxId: t.providerTxId || null, balanceBefore: c.transaction.balanceBefore, balanceAfter: c.newBalance } });
       return { success: true, transaction: publicTx(c.transaction), newBalance: c.newBalance, _hasIntent: Boolean(t.metadata && t.metadata.purchase) };
     });
     // A Mobile Money payment approved by hand still places the order it was made for

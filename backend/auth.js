@@ -147,6 +147,7 @@ class AuthService {
     if (!user) return null;
     if ((user.session_version || 0) !== (data.ver || 0)) return null;
     if (db.isSessionRevoked(data.sid)) return null;
+    if (db.isAccountSuspended(user)) return null; // suspended by an administrator: no access at all
     return {
       user,
       session: { token, sid: data.sid, userId: user.id, email: user.email, name: user.name, role: user.role, createdAt: data.iat, expiresAt: data.exp, mustChangePassword: Boolean(user.must_change_password) }
@@ -227,6 +228,8 @@ class AuthService {
       throw httpError(401, 'Identifiant ou mot de passe incorrect.');
     }
     this.resetRateLimit(key);
+    // Checked only after a correct password: the suspension is never revealed to someone guessing passwords
+    if (db.isAccountSuspended(user)) throw httpError(403, 'Ce compte est suspendu. Contactez le support (WhatsApp ou formulaire de contact) pour en savoir plus.', 'ACCOUNT_SUSPENDED');
     return user;
   }
 
@@ -295,6 +298,9 @@ class AuthService {
     const candidate = db.getUserByGoogleId(googleId) || db.getUserByEmail(googleEmail);
     if (candidate && candidate.role === 'admin') {
       throw httpError(403, "La connexion Google n'est pas disponible pour ce compte.");
+    }
+    if (candidate && db.isAccountSuspended(candidate)) {
+      throw httpError(403, 'Ce compte est suspendu. Contactez le support (WhatsApp ou formulaire de contact) pour en savoir plus.', 'ACCOUNT_SUSPENDED');
     }
     let user = db.getUserByGoogleId(googleId);
     if (user) return { user: this.sanitizeUser(user), session: this.createSession(user), isNew: false, linked: false };
@@ -386,7 +392,8 @@ class AuthService {
   sanitizeUser(user) {
     if (!user) return null;
     // Purchase-suspension fields are administrator-only information: never sent to the customer
-    const { password_hash, session_version, google_id, purchasesSuspended, purchasesSuspendedAt, purchasesSuspensionUpdatedAt, purchasesSuspensionUpdatedBy, ...safe } = user;
+    const { password_hash, session_version, google_id, purchasesSuspended, purchasesSuspendedAt, purchasesSuspensionUpdatedAt, purchasesSuspensionUpdatedBy,
+      accountSuspended, accountSuspendedAt, accountSuspensionReason, accountSuspensionUpdatedAt, accountSuspensionUpdatedBy, ...safe } = user;
     safe.mustChangePassword = Boolean(user.must_change_password);
     safe.hasPassword = Boolean(password_hash);
     return safe;

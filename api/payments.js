@@ -9,7 +9,7 @@
 const crypto = require('crypto');
 const paymentService = require('../backend/payments');
 const db = require('../backend/db');
-const { httpError, apiHeaders, parseBody, queryParam, pathParts, currentAuth, requireUser, requireAdmin, sendError } = require('../backend/http');
+const { httpError, apiHeaders, parseBody, queryParam, pathParts, clientIp, currentAuth, requireUser, requireAdmin, sendError } = require('../backend/http');
 
 const CRON_MIN_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -164,12 +164,14 @@ module.exports = async function handler(req, res) {
 
     // Administrator approval / rejection of a pending deposit
     if (action === 'verify') {
-      const admin = await db.read(() => { const a = requireAdmin(req); return { name: a.user.name || 'Administrateur' }; });
+      const admin = await db.read(() => { const a = requireAdmin(req); return { id: a.user.id, name: a.user.name || 'Administrateur', email: a.user.email }; });
       const r = await paymentService.verifyAndCompleteTransaction({
         transactionId: body.transactionId,
         failureReason: body.failureReason,
         isApproval: body.isApproval !== false,
-        adminName: admin.name
+        adminName: admin.name,
+        adminUser: admin,
+        ip: clientIp(req)
       });
       return res.status(200).json(r);
     }

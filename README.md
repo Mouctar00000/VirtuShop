@@ -95,11 +95,45 @@ On the Edge Config fallback, the downloaded file is the only backup.
 - Uploads: real PNG/JPEG/WebP/GIF only (magic-number check, no SVG), size limits, stored outside the main document.
 - Strict security headers (CSP without `unsafe-eval`, HSTS, frame and MIME protections); private paths are never served.
 
+## Administration (2026-11-26 additions)
+
+- **Delivery**: a product's delay (e.g. 15 minutes) is the *maximum* expected delivery time, never a lock — the
+  administrator can deliver at any moment; the customer sees the content as soon as it is delivered. Past the delay
+  an undelivered order is flagged **en retard** (never hidden). Every order keeps a timeline (`order.history`:
+  creation, waiting period, delivery / early delivery, corrections, issues, notes, cancellation).
+- **Activity log** (Admin › Journal): every administrator change (products, prices, keys, stock, orders, deliveries,
+  balances, top-ups, payment methods, settings, suspensions, deletions, logins) is recorded with who / when / what,
+  in the same transaction as the change. Postgres table `getvirtu.audit_log` is append-only (UPDATE / DELETE /
+  TRUNCATE refused by triggers); deletions keep a full copy of the deleted record in the log.
+- **Financial integrity**: confirmed ledger entries cannot be deleted (balance corrections go through a traced
+  adjustment); a pending payment must be verified or rejected first; only a cancelled (refunded) order can be
+  deleted; a customer account cannot be deleted while a balance or a pending delivery is owed (suspend it instead).
+- **Customers**: account suspension (login blocked, every session closed, data kept), profile edit (name, e-mail),
+  customer sheet with orders and transactions.
+- **Statistics** (`GET /api/data/stats?from=YYYY-MM-DD&to=YYYY-MM-DD&tz=<getTimezoneOffset>`): computed from the
+  records only — gross / net sales, refunds, money actually collected (confirmed top-ups), pending and failed payments
+  (never counted as collected), administrator credits, profit when a product purchase cost (`costPrice`, admin-only)
+  is known, visits / unique / new visitors, best and least sellers, out-of-stock products, hourly / daily / monthly
+  series in the administrator's local time.
+- **Catalogue**: out-of-stock products always come after the available ones (stable order, same on every device)
+  and climb back automatically when restocked.
+- **Slow connections**: skeleton placeholders, request timeouts, automatic retries, offline banner and reconnection
+  on the storefront and in the dashboard (which also refreshes itself every 30 s and announces new orders).
+
+### Rollback point and recovery
+
+The first time a new version starts on Postgres, a copy of the whole shop state is stored in `getvirtu.backups`
+(`reason = 'pre_upgrade_<version>'`, the 5 most recent versions are kept). Code rollback: redeploy the previous Git
+tag (e.g. `backup/avant-audit-complet-20261126`). Data rollback (only if ever needed, after a fresh JSON export from
+Admin › Système): `UPDATE getvirtu.state SET data = (SELECT data FROM getvirtu.backups WHERE reason = 'pre_upgrade_<version>') WHERE id = 1;`
+— this discards every change made since that version started, so it is a last resort.
+
 ## Development
 
 ```bash
 npm install
 cp .env.example .env        # local values only
+npm run demo                # demo shop with fictitious data in a temp folder (prints the admin password)
 npm start                   # http://localhost:3000  (admin: /admin)
 npm test                    # API end-to-end (file store + mocked Edge Config), migration, static checks
 TEST_DATABASE_URL=postgres://user:pass@localhost:5432/disposable_db npm test   # + Postgres suites

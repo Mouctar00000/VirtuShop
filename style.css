@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+/* Polices Plus Jakarta Sans / Space Grotesk : chargées par index.html et admin.html sans bloquer le premier affichage. */
 
 /* ==========================================================================
    GETVIRTU (getvirtu.shop) - WINDOWS 11 & IOS 18 CLEAN WHITE & BLUE DESIGN SYSTEM
@@ -6418,3 +6418,27 @@ a.btn-buy-product:hover {
 a.showcase-buy-btn { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
 a.showcase-buy-btn:hover, a.showcase-buy-btn:focus, a.showcase-buy-btn:visited { color: #ffffff; text-decoration: none; }
 .pd-external-note { margin: 7px 0 0; font-size: 11.5px; line-height: 1.4; text-align: center; color: var(--text-muted); }
+
+/* ==================== CHARGEMENT LENT : SQUELETTES ANIMÉS, ERREURS ET RECONNEXION (26/11/2026) ==================== */
+@keyframes gvSkelShimmer { 0% { background-position: -460px 0; } 100% { background-position: 460px 0; } }
+.gv-skel { display: block; border-radius: 8px; background: linear-gradient(90deg, #eef2f7 25%, #e2e8f0 37%, #eef2f7 63%); background-size: 920px 100%; animation: gvSkelShimmer 1.3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .gv-skel { animation: none; } }
+.gv-sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.product-card.gv-skel-card { pointer-events: none; box-shadow: none; }
+.product-card.gv-skel-card:hover { transform: none; box-shadow: none; }
+.gv-skel-card .gv-skel-media { width: 100%; min-height: 150px; border-radius: 0; }
+.gv-skel-line { height: 12px; margin-top: 10px; }
+.gv-skel-line:first-child { margin-top: 0; }
+.gv-skel-title { height: 16px; }
+.gv-skel-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px; }
+.gv-skel-pill { width: 90px; height: 14px; border-radius: 999px; }
+.gv-skel-btn { width: 110px; height: 34px; border-radius: 10px; }
+.gv-skel-showcase { display: flex; align-items: center; gap: 12px; pointer-events: none; }
+.gv-skel-thumb { width: 44px; height: 44px; border-radius: 10px; flex: 0 0 auto; }
+.gv-skel-cat { display: inline-block; width: 90px; height: 32px; border-radius: 999px; margin: 0 8px 8px 0; vertical-align: middle; }
+.gv-skel-order { border: 1px solid var(--border-subtle); border-radius: var(--radius-md, 12px); padding: 14px; margin-bottom: 10px; background: #ffffff; }
+.gv-load-error { text-align: center; padding: 36px 20px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; background: #ffffff; border: 1px dashed var(--border-subtle); border-radius: var(--radius-lg, 16px); }
+.gv-load-error-compact { padding: 18px 14px; border-radius: 12px; }
+.gv-net-banner { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 99990; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); background: #0f172a; color: #ffffff; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+.gv-net-banner button { flex: 0 0 auto; background: #2563eb; color: #ffffff; border: none; border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+@media (max-width: 640px) { .gv-net-banner { left: 12px; right: 12px; transform: none; max-width: none; font-size: 12.5px; } }

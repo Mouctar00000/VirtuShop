@@ -86,13 +86,31 @@ module.exports = async function handler(req, res) {
 
     if (action === 'login') {
       const ip = clientIp(req);
-      const user = await db.read(() => {
-        const u = authService.checkCredentials({ identifier: body.identifier, email: body.email, password: body.password, ip });
-        return JSON.parse(JSON.stringify(u));
-      });
+      let user;
+      try {
+        user = await db.read(() => {
+          const u = authService.checkCredentials({ identifier: body.identifier, email: body.email, password: body.password, ip });
+          return JSON.parse(JSON.stringify(u));
+        });
+      } catch (err) {
+        // Failed attempts on an administrator identifier are kept in the activity log (security trail)
+        if (err && err.status === 401) {
+          const adminId = await db.read(() => {
+            const target = db.getUserByIdentifier(String(body.identifier || body.email || ''));
+            return target && target.role === 'admin' ? target.id : null;
+          }).catch(() => null);
+          if (adminId) {
+            await db.tx(() => db.audit(null, 'admin.login_failed', { targetType: 'admin', targetId: adminId, ip, summary: 'Tentative de connexion administrateur refusée (mot de passe incorrect)' })).catch(() => {});
+          }
+        }
+        throw err;
+      }
       let fresh = user;
       if (authService.needsRehash(user)) {
         fresh = await db.tx(() => db.updateUser(user.id, { password_hash: authService.hashPassword(body.password) })) || user;
+      }
+      if (fresh.role === 'admin') {
+        await db.tx(() => db.audit(fresh, 'admin.login', { targetType: 'admin', targetId: fresh.id, ip, summary: 'Connexion administrateur réussie' })).catch(() => {});
       }
       return res.status(200).json({ success: true, user: authService.sanitizeUser(fresh), session: authService.createSession(fresh) });
     }
@@ -112,7 +130,9 @@ module.exports = async function handler(req, res) {
     if (action === 'change-password') {
       const session = await db.tx(() => {
         const auth = requireUser(req);
-        return authService.changePassword(auth.user, body);
+        const s = authService.changePassword(auth.user, body);
+        if (auth.user.role === 'admin') db.audit(auth.user, 'admin.password_changed', { targetType: 'admin', targetId: auth.user.id, ip: clientIp(req), summary: 'Mot de passe administrateur modifié (les autres sessions sont déconnectées)' });
+        return s;
       });
       return res.status(200).json({ success: true, message: 'Mot de passe modifié avec succès.', session });
     }

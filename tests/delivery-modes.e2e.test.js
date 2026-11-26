@@ -169,13 +169,36 @@ test('3-5. delayed 15 min: order paid, waiting period from payment time, nothing
   ctx.delayed2hOrder = r2.body.order.id;
 });
 
-test('6. the administrator cannot deliver before the end of the waiting period (server clock)', async () => {
-  const r = await put('/api/data/orders', { id: ctx.delayedOrder, action: 'deliver', vaultContent: { type: 'text', content: 'SECRET-EARLY' } }, ctx.admin);
-  assert.equal(r.status, 409, JSON.stringify(r.body));
-  assert.equal(r.body.code, 'DELIVERY_WAITING');
-  const o = await myOrder(ctx.ana, ctx.delayedOrder);
-  assert.equal(o.vaultContent, null);
-  assert.doesNotMatch(JSON.stringify(o), SECRET_RE);
+test('6. the 15-minute delay never blocks the administrator: an early delivery is visible to the customer at once', async () => {
+  // Owner requirement (2026-11-26): the waiting period is a maximum expected delivery time, never a lock.
+  const r = await buy(ctx.bob, ctx.delayedId);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const id = r.body.order.id;
+  assert.equal(r.body.order.delivery.phase, 'waiting');
+  assert.equal(r.body.order.vaultContent, null, 'nothing before the delivery');
+  const d = await put('/api/data/orders', { id, action: 'deliver', vaultContent: { type: 'text', content: 'SECRET-EARLY' } }, ctx.admin);
+  assert.equal(d.status, 200, JSON.stringify(d.body));
+  assert.equal(d.body.order.delivery.deliveredEarly, true, 'early delivery recorded');
+  const o = await myOrder(ctx.bob, id);
+  assert.equal(o.status, 'Complété');
+  assert.equal(o.delivery.phase, 'delivered');
+  assert.equal(o.vaultContent.content, 'SECRET-EARLY', 'customer sees it immediately, before the 15 minutes');
+  assert.equal(o.contentLocked, undefined);
+  assert.equal(o.history, undefined, 'timeline is administrator-only');
+  const adminView = (await get('/api/data/orders', ctx.admin)).body.orders.find(x => x.id === id);
+  assert.deepEqual(adminView.history.map(e => e.type), ['created', 'awaiting_delivery', 'delivered_early']);
+  const log = (await get('/api/data/audit?targetType=order&targetId=' + id, ctx.admin)).body;
+  assert.ok(log.entries.some(e => e.action === 'order.delivered_early' && e.actorId), JSON.stringify(log));
+  // the key can be replaced afterwards (correction), and the timeline shows it
+  const fix = await put('/api/data/orders', { id, action: 'deliver', vaultContent: { type: 'text', content: 'SECRET-EARLY-FIXED' } }, ctx.admin);
+  assert.equal(fix.status, 200, JSON.stringify(fix.body));
+  assert.equal((await myOrder(ctx.bob, id)).vaultContent.content, 'SECRET-EARLY-FIXED');
+  assert.equal(fix.body.order.history[fix.body.order.history.length - 1].type, 'content_updated');
+  // the other order still in its waiting period is untouched
+  const w = await myOrder(ctx.ana, ctx.delayedOrder);
+  assert.equal(w.delivery.phase, 'waiting');
+  assert.equal(w.vaultContent, null);
+  assert.doesNotMatch(JSON.stringify(w), SECRET_RE);
 });
 
 test('7-8. refresh and logout/login never restart the timer', async () => {

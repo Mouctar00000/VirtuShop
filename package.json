@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "demo": "node scripts/demo-local.js",
     "test": "node tests/run_all_tests.js",
     "test:browser": "node tests/browser.e2e.js",
     "hash-password": "node scripts/hash-password.js",

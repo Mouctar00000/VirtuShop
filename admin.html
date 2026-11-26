@@ -12,9 +12,14 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="alternate icon" type="image/x-icon" href="/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.svg">
+  <!-- Polices chargées sans bloquer le premier affichage (connexions lentes) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="style.css?v=v202611231639_1f4d9f">
   <script src="security.js?v=v202611231639_1f4d9f"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
+  <!-- Graphiques : chargés en arrière-plan (async) — l'administration s'affiche immédiatement même sur connexion lente -->
+  <script async id="gv-chartjs" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous" onload="this.setAttribute('data-loaded','1')" onerror="this.setAttribute('data-failed','1')"></script>
 
   <style>
     /* ==================== DESIGN SYSTÈME ADMIN WINDOWS 11 & IOS 18 ==================== */
@@ -1919,6 +1924,10 @@
             <span>🛡️</span>
             <span>Système</span>
           </button>
+          <button type="button" class="admin-nav-tab-btn" id="tab-nav-audit" onclick="switchAdminTab('audit')">
+            <span>📜</span>
+            <span>Journal</span>
+          </button>
         </nav>
       </div>
 
@@ -2124,65 +2133,35 @@
       <!-- TAB 6 : STATISTIQUES & CHIFFRE D'AFFAIRES                                 -->
       <!-- ========================================================================= -->
       <section id="tab-content-stats" class="admin-tab-pane hidden">
-        <div class="admin-period-bar">
-          <div>
-            <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">Tableau de Bord des Ventes & Visites</h2>
-            <p style="color: var(--text-secondary); font-size: 12.5px; margin: 0;">Performances en direct, commandes réelles et traçabilité des visiteurs.</p>
+        <!-- Statistiques calculées par le serveur à partir des enregistrements réels (aucune estimation) -->
+        <div class="admin-section gvx-stats-toolbar">
+          <div class="gvx-stats-head">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">📈 Statistiques réelles</h2>
+              <p class="gvx-muted" id="gvx-stats-range-label">Période : —</p>
+            </div>
+            <div class="gvx-stats-actions">
+              <button type="button" class="btn-secondary btn-sm" onclick="gvxLoadStats(true)" title="Recalculer maintenant">↻ Actualiser</button>
+              <button type="button" class="btn-secondary btn-sm" onclick="confirmResetStats()" style="color: #dc2626; border-color: #fecaca;" title="Remettre à zéro les compteurs et l'historique des visiteurs">🔄 Reset visites</button>
+            </div>
           </div>
-          <div class="admin-period-tabs">
-            <button type="button" class="admin-period-tab" id="tab-period-day" onclick="changePeriod('day')">Jour</button>
-            <button type="button" class="admin-period-tab active" id="tab-period-week" onclick="changePeriod('week')">Semaine</button>
-            <button type="button" class="admin-period-tab" id="tab-period-month" onclick="changePeriod('month')">Mois</button>
-            <button type="button" class="admin-period-tab" id="tab-period-year" onclick="changePeriod('year')">Année</button>
-            <button type="button" class="admin-period-tab" id="tab-period-all" onclick="changePeriod('all')">Tout</button>
-            <button type="button" class="admin-period-tab" onclick="confirmResetStats()" style="color: #dc2626; border-color: #fecaca; margin-left: 6px; font-weight: 700;" title="Remettre à zéro les compteurs et l'historique des visiteurs">🔄 Reset Visites</button>
+          <div class="gvx-period-row">
+            <div class="admin-period-tabs gvx-presets" role="group" aria-label="Période">
+              <button type="button" class="admin-period-tab" data-preset="today" onclick="gvxSetPreset('today')">Aujourd'hui</button>
+              <button type="button" class="admin-period-tab" data-preset="7d" onclick="gvxSetPreset('7d')">7 jours</button>
+              <button type="button" class="admin-period-tab active" data-preset="30d" onclick="gvxSetPreset('30d')">30 jours</button>
+              <button type="button" class="admin-period-tab" data-preset="month" onclick="gvxSetPreset('month')">Ce mois</button>
+              <button type="button" class="admin-period-tab" data-preset="12m" onclick="gvxSetPreset('12m')">12 mois</button>
+              <button type="button" class="admin-period-tab" data-preset="all" onclick="gvxSetPreset('all')">Tout</button>
+            </div>
+            <form class="gvx-range-form" onsubmit="gvxApplyCustomRange(event)">
+              <label>Du <input type="date" id="gvx-stats-from" required></label>
+              <label>au <input type="date" id="gvx-stats-to" required></label>
+              <button type="submit" class="btn-primary btn-sm">Appliquer</button>
+            </form>
           </div>
         </div>
-
-        <div class="admin-stats-grid">
-          <div class="admin-stat-card">
-            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Chiffre d'Affaires</span>
-            <div class="admin-stat-val" id="stat-revenue">0.00 $</div>
-          </div>
-          <div class="admin-stat-card">
-            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Articles Vendus (Unités)</span>
-            <div class="admin-stat-val" id="stat-units-sold" style="color: var(--emerald-600);">0</div>
-          </div>
-          <div class="admin-stat-card">
-            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Commandes Traitées</span>
-            <div class="admin-stat-val" id="stat-orders-count" style="color: var(--cyan-600);">0</div>
-          </div>
-          <div class="admin-stat-card">
-            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Panier Moyen</span>
-            <div class="admin-stat-val" id="stat-avg-cart">0.00 $</div>
-          </div>
-          <div class="admin-stat-card">
-            <span class="text-muted" style="font-size: 12px; font-weight: 600;">Nombre de Visiteurs</span>
-            <div class="admin-stat-val" id="stat-visitors-count" style="color: var(--primary-600);">0</div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="stat-visitors-sub">0 unique</div>
-          </div>
-        </div>
-
-        <div class="charts-grid">
-          <div class="chart-card">
-            <div class="chart-title">
-              <span>📈 Évolution du Chiffre d'Affaires ($)</span>
-              <span id="chart-period-indicator-rev" style="font-size: 11.5px; color: var(--primary-600); font-weight: 600;">Par Jour</span>
-            </div>
-            <div style="position: relative; height: 230px;">
-              <canvas id="chartRevenue"></canvas>
-            </div>
-          </div>
-
-          <div class="chart-card">
-            <div class="chart-title">
-              <span>📦 Volume des Produits Vendus</span>
-              <span id="chart-period-indicator-vol" style="font-size: 11.5px; color: var(--emerald-600); font-weight: 600;">Unités</span>
-            </div>
-            <div style="position: relative; height: 230px;">
-              <canvas id="chartVolume"></canvas>
-            </div>
-          </div>
+        <div id="gvx-stats-body" aria-live="polite"></div>
       </section>
 
       <!-- ========================================================================= -->
@@ -2213,6 +2192,42 @@
               <tbody id="admin-tickets-tbody"></tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- ========================================================================= -->
+      <!-- TAB 9 : JOURNAL D'ACTIVITÉ ADMINISTRATEUR (lecture seule, non modifiable) -->
+      <!-- ========================================================================= -->
+      <section id="tab-content-audit" class="admin-tab-pane hidden">
+        <div class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 2px 0;">📜 Journal d'activité des administrateurs</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Chaque modification importante : qui, quand, quoi et sur quel élément. Ce journal ne peut être ni modifié ni effacé depuis le site.</p>
+            </div>
+            <button type="button" class="btn-secondary btn-sm" onclick="gvxLoadAudit(true)">↻ Actualiser</button>
+          </div>
+          <form class="gvx-toolbar" onsubmit="event.preventDefault(); gvxLoadAudit(true);" role="search">
+            <input type="search" id="gvx-audit-q" placeholder="Rechercher : produit, commande, client, e-mail…" aria-label="Rechercher dans le journal">
+            <select id="gvx-audit-type" aria-label="Catégorie" onchange="gvxLoadAudit(true)">
+              <option value="">Toutes les catégories</option>
+              <option value="product">Produits, clés et stock</option>
+              <option value="order">Commandes et livraisons</option>
+              <option value="customer">Clients et soldes</option>
+              <option value="transaction">Paiements et recharges</option>
+              <option value="payment_method">Moyens de paiement</option>
+              <option value="settings">Réglages et suspensions globales</option>
+              <option value="admin">Connexions administrateur</option>
+              <option value="store">Sauvegardes et réinitialisations</option>
+              <option value="ticket">Support</option>
+            </select>
+            <input type="date" id="gvx-audit-from" aria-label="Du" onchange="gvxLoadAudit(true)">
+            <input type="date" id="gvx-audit-to" aria-label="Au" onchange="gvxLoadAudit(true)">
+            <button type="submit" class="btn-primary btn-sm">Rechercher</button>
+            <span class="gvx-count" id="gvx-audit-count"></span>
+          </form>
+          <div id="gvx-audit-list" class="gvx-audit-list"></div>
+          <div class="gvx-more" id="gvx-audit-more"></div>
         </div>
       </section>
 
@@ -2402,6 +2417,10 @@
             <label for="admin-prod-stock" style="white-space: nowrap;">Stock disponible <span id="admin-prod-stock-hint" style="font-size: 10px; font-weight: normal; color: var(--primary-600);">(Auto coffre-fort)</span></label>
             <input type="number" min="0" id="admin-prod-stock" readonly style="background: #f1f5f9; cursor: not-allowed; font-weight: 700;" placeholder="0">
           </div>
+        </div>
+        <div class="field" style="margin-bottom: 6px;">
+          <label for="admin-prod-cost">Coût d'achat unitaire ($) <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">(facultatif, jamais affiché aux clients — sert au calcul du bénéfice)</span></label>
+          <input type="number" step="0.01" min="0" id="admin-prod-cost" placeholder="Vide = non renseigné">
         </div>
 
         <!-- Mode d'achat : achat sur le site (stock réel) ou bouton « Acheter » vers un lien externe -->
@@ -2761,6 +2780,9 @@
         </div>
       </div>
 
+      <!-- Paiement, historique complet et note privée (administrateurs uniquement) -->
+      <div id="review-order-extra" class="gvx-order-extra"></div>
+
       <form id="admin-order-review-form" onsubmit="saveAndValidateOrderFromModal(event)">
         <input type="hidden" id="review-order-id">
         <input type="hidden" id="review-product-id">
@@ -2802,9 +2824,6 @@
 
           <!-- Boutons d'aide rapides -->
           <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-            <button type="button" class="btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; background: #ffffff;" onclick="generateKeyForModal()">
-              🎲 Générer clé (VRT-XXXX-...)
-            </button>
             <button type="button" class="btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; background: #ffffff;" onclick="loadProductDefaultKeyForModal()">
               🔄 Réinitialiser clé par défaut
             </button>
@@ -4526,6 +4545,8 @@
       p = p || {};
       var lines = function(a) { return Array.isArray(a) ? a.join('\n') : ''; };
       document.getElementById('admin-prod-compare').value = (typeof p.compareAtPrice === 'number' && p.compareAtPrice > 0) ? p.compareAtPrice : '';
+      var costEl = document.getElementById('admin-prod-cost');
+      if (costEl) costEl.value = typeof p.costPrice === 'number' ? p.costPrice : '';
       document.getElementById('admin-prod-features').value = lines(p.features);
       document.getElementById('admin-prod-benefits').value = lines(p.benefits);
       document.getElementById('admin-prod-notices').value = lines(p.notices);
@@ -5110,6 +5131,7 @@
             showStock: showStock,
             description: desc,
             compareAtPrice: compareAtPrice,
+            costPrice: (function() { var el = document.getElementById('admin-prod-cost'); var raw = el ? String(el.value || '').trim() : ''; return raw === '' ? null : raw; })(),
             features: sheetFields.features,
             benefits: sheetFields.benefits,
             notices: sheetFields.notices,
@@ -5625,23 +5647,35 @@
     function ordersAwaitingFulfilment(orders) {
       return (orders || []).filter(function(o) { return isFulfilmentOrder(o) && adminDeliveryPhase(o) === 'awaiting_delivery'; });
     }
+    // Commande différée dont le délai prévu est dépassé sans livraison : signalée « en retard » (jamais masquée)
+    function isOrderOverdue(o) {
+      return Boolean(o && o.delivery && o.delivery.method === 'delayed' && adminDeliveryPhase(o) === 'awaiting_delivery');
+    }
+    function overdueMinutes(o) {
+      return Math.max(0, Math.floor((Date.now() - Date.parse(o.delivery.eligibleAt)) / 60000));
+    }
     function renderFulfilmentBanner(orders) {
       var el = document.getElementById('admin-fulfilment-banner');
       if (!el) return;
-      var todo = ordersAwaitingFulfilment(orders);
-      var waiting = (orders || []).filter(function(o) { return isFulfilmentOrder(o) && adminDeliveryPhase(o) === 'waiting'; }).length;
-      if (!todo.length && !waiting) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      // Toutes les commandes payées à livrer à la main — y compris celles encore dans leur délai : l'administrateur peut livrer à tout moment
+      var all = (orders || []).filter(function(o) { var ph = adminDeliveryPhase(o); return isFulfilmentOrder(o) && (ph === 'awaiting_delivery' || ph === 'waiting'); });
+      var overdue = all.filter(isOrderOverdue).length;
+      var waiting = all.filter(function(o) { return adminDeliveryPhase(o) === 'waiting'; }).length;
+      if (!all.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      var oldest = all.slice().sort(function(a, b) { return Date.parse(a.date || 0) - Date.parse(b.date || 0); })[0];
       el.style.display = '';
-      el.innerHTML = '<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 12px; border: 1px solid ' + (todo.length ? '#bfdbfe' : 'var(--border-subtle, #e2e8f0)') + '; background: ' + (todo.length ? '#eff6ff' : '#f8fafc') + '; font-size: 12.5px; color: #1e3a8a;">' +
-        '<strong id="fulfilment-todo-count">📦 ' + todo.length + ' commande(s) à livrer manuellement</strong>' +
-        (waiting ? '<span style="color: var(--text-secondary);">· ' + waiting + ' en période d\'attente</span>' : '') +
-        (todo.length ? '<button type="button" class="btn-primary btn-sm" style="padding: 4px 10px; font-size: 11.5px;" onclick="openFulfilModal(\'' + escapeJsStr(todo[todo.length - 1].id) + '\')">Livrer la plus ancienne</button>' : '') +
+      el.innerHTML = '<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 12px; border: 1px solid ' + (overdue ? '#fecaca' : '#bfdbfe') + '; background: ' + (overdue ? '#fff1f2' : '#eff6ff') + '; font-size: 12.5px; color: ' + (overdue ? '#991b1b' : '#1e3a8a') + ';">' +
+        '<strong id="fulfilment-todo-count">📦 ' + all.length + ' commande(s) à livrer manuellement</strong>' +
+        (overdue ? '<span style="font-weight: 700;">· ⚠️ ' + overdue + ' en retard (délai dépassé)</span>' : '') +
+        (waiting ? '<span style="color: var(--text-secondary);">· ' + waiting + ' dans le délai prévu (livrables dès maintenant)</span>' : '') +
+        '<button type="button" class="btn-primary btn-sm" style="padding: 4px 10px; font-size: 11.5px;" onclick="openFulfilModal(\'' + escapeJsStr(oldest.id) + '\')">Livrer la plus ancienne</button>' +
       '</div>';
     }
     function deliveryPhasePill(o) {
       var d = o.delivery || {};
       var phase = adminDeliveryPhase(o);
-      var pill = { waiting: ['pending', '⏳ Payée — période d\'attente'], awaiting_delivery: ['pending', d.method === 'delayed' ? '📦 Attente terminée — à livrer' : '📦 À livrer (attribution manuelle)'], delivered: ['online', '✓ Livrée'], cancelled: ['rejected', '✕ Annulée'] }[phase] || ['offline', '—'];
+      var pill = { waiting: ['pending', '⏳ Payée — dans le délai (livrable maintenant)'], awaiting_delivery: ['pending', d.method === 'delayed' ? '📦 À livrer' : '📦 À livrer (attribution manuelle)'], delivered: ['online', d.deliveredEarly ? '✓ Livrée (en avance)' : '✓ Livrée'], cancelled: ['rejected', '✕ Annulée'] }[phase] || ['offline', '—'];
+      if (isOrderOverdue(o)) pill = ['rejected', '⚠️ En retard de ' + formatDeliveryDelay(overdueMinutes(o)) + ' — à livrer'];
       if (d.issue && phase === 'awaiting_delivery') pill = ['rejected', '⚠️ Problème de livraison'];
       return pill;
     }
@@ -5655,18 +5689,19 @@
       html += '<span class="status-indicator-pill ' + pill[0] + '" style="font-size: 10.5px; padding: 2px 6px;">' + pill[1] + '</span>';
       html += line((d.method === 'delayed' ? '⏱️ Différée (' + escapeHtml(formatDeliveryDelay(Math.round((d.delaySeconds || 0) / 60))) + ') puis manuelle' : '🛂 Manuelle par l\'admin'));
       html += line('Paiement confirmé : ' + escapeHtml(fmtDeliveryDate(d.paymentConfirmedAt)));
-      if (d.method === 'delayed') html += line('Livrable dès : ' + escapeHtml(fmtDeliveryDate(d.eligibleAt)) + (phase === 'waiting' ? ' · <strong class="gv-admin-countdown" data-eligible-at="' + escapeHtml(d.eligibleAt) + '"></strong>' : ''));
-      if (phase === 'delivered' && d.deliveredAt) html += line('Livrée le ' + escapeHtml(fmtDeliveryDate(d.deliveredAt)) + (d.deliveredBy ? ' par ' + escapeHtml(d.deliveredBy) : ''));
+      if (d.method === 'delayed') html += line('Livraison prévue au plus tard : ' + escapeHtml(fmtDeliveryDate(d.eligibleAt)) + (phase === 'waiting' ? ' · <strong class="gv-admin-countdown" data-eligible-at="' + escapeHtml(d.eligibleAt) + '"></strong>' : ''));
+      if (phase === 'delivered' && d.deliveredAt) html += line('Livrée le ' + escapeHtml(fmtDeliveryDate(d.deliveredAt)) + (d.deliveredBy ? ' par ' + escapeHtml(d.deliveredBy) : '') + (d.deliveredEarly ? ' · avant la fin du délai' : '') + (d.deliveredLateBySeconds ? ' · ' + escapeHtml(formatDeliveryDelay(Math.round(d.deliveredLateBySeconds / 60))) + ' après le délai' : ''));
       if (d.issue) html += '<div style="font-size: 10.5px; color: #b91c1c; font-weight: 700; margin-top: 2px;">⚠️ Problème de livraison' + (d.issue.note ? ' : ' + escapeHtml(d.issue.note) : '') + '</div>';
       if (o.adminNote) html += line('📝 Note privée : ' + escapeHtml(o.adminNote));
       return html + '</div>';
     }
-    // Compte à rebours d'affichage uniquement (le serveur refuse toute livraison avant la fin du délai)
+    // Compte à rebours d'affichage : le délai est un maximum prévu, l'administrateur peut livrer à tout moment.
+    // À l'échéance sans livraison, la commande passe « en retard » (elle reste visible et signalée).
     setInterval(function() {
       var expired = false;
       document.querySelectorAll('.gv-admin-countdown[data-eligible-at]').forEach(function(el) {
         var left = Math.round((Date.parse(el.getAttribute('data-eligible-at')) - Date.now()) / 1000);
-        if (left <= 0) { el.textContent = 'attente terminée'; el.removeAttribute('data-eligible-at'); expired = true; return; }
+        if (left <= 0) { el.textContent = 'délai dépassé'; el.removeAttribute('data-eligible-at'); expired = true; return; }
         var h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
         el.textContent = 'reste ' + (h ? h + ' h ' : '') + (h || m ? m + ' min ' : '') + s + ' s';
       });
@@ -5680,10 +5715,6 @@
       var o = (DB.get('orders', []) || []).find(function(x) { return x.id === orderId; });
       if (!o) return;
       var phase = adminDeliveryPhase(o);
-      if (phase === 'waiting') {
-        showToast('La période d\'attente de cette commande n\'est pas terminée : vous pourrez la livrer à partir du ' + fmtDeliveryDate(o.delivery.eligibleAt) + '.', 'warning');
-        return;
-      }
       _fulfilOrderId = orderId;
       _fulfilStock = [];
       document.getElementById('fulfil-order-summary').innerHTML =
@@ -5695,6 +5726,11 @@
           '<div><span style="color: var(--text-muted);">Paiement confirmé</span><br><strong>' + escapeHtml(fmtDeliveryDate(o.delivery && o.delivery.paymentConfirmedAt)) + '</strong></div>' +
           '<div><span style="color: var(--text-muted);">Statut</span><br><span class="status-indicator-pill ' + deliveryPhasePill(o)[0] + '" style="font-size: 10.5px; padding: 2px 6px;">' + deliveryPhasePill(o)[1] + '</span>' + (o.delivery && o.delivery.issue && o.delivery.issue.note ? '<div style="font-size: 10.5px; color: #b91c1c;">' + escapeHtml(o.delivery.issue.note) + '</div>' : '') + '</div>' +
         '</div>';
+      if (phase === 'waiting') {
+        document.getElementById('fulfil-order-summary').innerHTML += '<div class="gvx-note gvx-note-info">⏱️ <strong>Livraison anticipée possible.</strong> Cette commande est encore dans son délai prévu (au plus tard le ' + escapeHtml(fmtDeliveryDate(o.delivery.eligibleAt)) + '). Vous pouvez la livrer dès maintenant : le client y aura accès immédiatement.</div>';
+      } else if (isOrderOverdue(o)) {
+        document.getElementById('fulfil-order-summary').innerHTML += '<div class="gvx-note gvx-note-danger">⚠️ <strong>Commande en retard</strong> de ' + escapeHtml(formatDeliveryDelay(overdueMinutes(o))) + ' par rapport au délai prévu (' + escapeHtml(fmtDeliveryDate(o.delivery.eligibleAt)) + ').</div>';
+      }
       document.getElementById('fulfil-fields').innerHTML = '';
       addFulfilField('Email', '');
       addFulfilField('Mot de passe', '');
@@ -6016,6 +6052,8 @@
         if (statusDeliveredRadio) statusDeliveredRadio.checked = true;
       }
 
+      // Paiement lié, historique horodaté de la commande et note privée
+      if (typeof gvxRenderOrderExtra === 'function') gvxRenderOrderExtra(o);
       document.getElementById('admin-order-review-modal').classList.add('active');
     }
 
@@ -6058,24 +6096,7 @@
       reader.readAsDataURL(file);
     }
 
-    function generateKeyForModal() {
-      var qty = parseInt(document.getElementById('review-order-qty').textContent, 10) || 1;
-      function makeKey() {
-        var part = function() { return Math.random().toString(36).substring(2, 6).toUpperCase(); };
-        return 'VRT-' + part() + '-' + part() + '-' + part();
-      }
-      if (qty > 1) {
-        var keys = [];
-        for (var i = 1; i <= qty; i++) {
-          keys.push(`Clé ${i} : ` + makeKey());
-        }
-        document.getElementById('review-vault-content-text').value = keys.join('\n');
-      } else {
-        document.getElementById('review-vault-content-text').value = makeKey();
-      }
-      setOrderVaultType('text');
-      showToast('Nouvelle clé générée !', 'info');
-    }
+    // (Le générateur de clés aléatoires « VRT-XXXX » a été retiré : seule une vraie clé saisie ou tirée du stock est livrée.)
 
     function loadProductDefaultKeyForModal() {
       var pId = parseInt(document.getElementById('review-product-id').value, 10);
@@ -6227,13 +6248,14 @@
         var isAdmin = u.role === 'admin';
         html += `
           <tr>
-            <td><strong>${escapeHtml(u.name)}</strong></td>
+            <td><strong>${escapeHtml(u.name)}</strong>${u.accountSuspended ? '<div style="margin-top: 3px;"><span class="gvx-pill bad" title="' + escapeHtml('Connexion bloquée' + (u.accountSuspensionReason ? ' — ' + u.accountSuspensionReason : '')) + '">⛔ Compte suspendu</span></div>' : ''}</td>
             <td><span style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(u.email)}</span></td>
             <td><span class="status-indicator-pill ${isAdmin ? 'online' : 'offline'}">${isAdmin ? 'Administrateur' : 'Client'}</span></td>
             <td><strong style="color: var(--primary-600); font-size: 15px;">$${bal.toFixed(2)}</strong></td>
             <td>${renderPurchaseAccessCell(u, isAdmin)}</td>
             <td>
               <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                ${!isAdmin ? `<button type="button" class="btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px;" onclick="gvxOpenCustomer('${escapeJsStr(u.id)}')" title="Profil, historique des commandes et des transactions, suspension du compte">👁️ Fiche client</button>` : ''}
                 <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 10)" title="Offrir +10 $ gratuitement à ce client" style="font-weight: 600;">🎁 +10 $</button>
                 <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 20)" title="Offrir +20 $ gratuitement à ce client" style="font-weight: 600;">🎁 +20 $</button>
                 <button type="button" class="btn-secondary btn-sm" onclick="quickGiftUser('${escapeJsStr(u.id)}', 50)" title="Offrir +50 $ gratuitement à ce client" style="font-weight: 600;">🎁 +50 $</button>
@@ -7289,6 +7311,7 @@
 
             DB.set('visitor_logs', []);
             renderDashboard();
+            if (typeof gvxLoadStats === 'function') gvxLoadStats(true);
             showToast('Statistiques et visites remises à zéro avec succès.', 'success');
           } catch (err) {
             console.error('[resetVisitorStats Error]', err);
@@ -7946,12 +7969,17 @@
       var token = s ? (s.token || '') : '';
       var headers = token ? { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' } : { 'Cache-Control': 'no-cache' };
       var ts = Date.now();
-      var fetchOpts = { headers: headers, cache: 'no-store' };
+      var netFailures = 0;
+      var attempted = 0;
 
+      // Délai maximal par requête : une connexion lente ou coupée ne laisse jamais le tableau de bord bloqué
       var fetchJsonSafe = function(url) {
-        return fetch(url, fetchOpts).then(function(r) {
+        attempted++;
+        var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, 20000) : null;
+        return fetch(url, { headers: headers, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined }).then(function(r) {
           return r.ok ? r.json() : null;
-        }).catch(function() { return null; });
+        }).catch(function() { netFailures++; return null; }).finally(function() { if (timer) clearTimeout(timer); });
       };
 
       // Les routes réservées à l'admin ne sont appelées qu'avec un jeton (évite des 401/403 inutiles sur l'écran de connexion)
@@ -7959,7 +7987,7 @@
 
       var results = await Promise.allSettled([
         adminOnly('/api/auth/me?_t=' + ts),
-        adminOnly('/api/data/stats?period=' + encodeURIComponent(currentPeriod || 'week') + '&_t=' + ts),
+        Promise.resolve(null), // statistiques : chargées par l'onglet Statistiques (période choisie, calcul serveur)
         fetchJsonSafe('/api/data/products?includeVault=1&_t=' + ts),
         fetchJsonSafe('/api/data/methods?_t=' + ts),
         adminOnly('/api/data/orders?_t=' + ts),
@@ -8031,11 +8059,8 @@
           if (uData.transactions.length === 0) {
             DB.set('recharges', []);
           } else {
-            var localRecharges = DB.get('recharges', []) || [];
+            // Liste reconstruite UNIQUEMENT depuis le serveur : une recharge supprimée ailleurs ne reste jamais affichée
             var rechargeMap = {};
-            localRecharges.forEach(function(r) {
-              if (r && r.id) rechargeMap[r.id] = r;
-            });
             var usersLookup = Array.isArray(uData.users) ? uData.users : (DB.get('users', []) || []);
             uData.transactions.forEach(function(tx) {
               if (!tx || !tx.id) return;
@@ -8064,6 +8089,11 @@
                     failureReason: tx.failureReason || '',
                     orderInfo: tx.metadata && tx.metadata.purchase ? tx.metadata.purchase : null,
                     network: tx.metadata && tx.metadata.networkName ? tx.metadata.networkName : '',
+                    address: tx.metadata && tx.metadata.phone ? tx.metadata.phone : '',
+                    mismatch: tx.metadata && tx.metadata.amountMismatch ? tx.metadata.amountMismatch : null,
+                    providerTxId: tx.providerTxId || '',
+                    completedAt: tx.completedAt || null,
+                    adminResponsible: tx.adminResponsible || '',
                     date: tx.createdAt || new Date().toISOString()
                   };
                 }
@@ -8093,6 +8123,8 @@
         DB.set('tickets', tData.tickets);
       }
 
+      // État de la synchronisation (squelettes de chargement, bandeau « connexion perdue », nouvelles commandes)
+      window._gvxSyncState = { done: Boolean(token), ok: attempted === 0 || netFailures < attempted, failures: netFailures, attempted: attempted, at: Date.now() };
       renderDashboard();
 
       // 8. Statistiques serveur appliquées en dernier pour conserver les KPIs exacts de la période
@@ -8211,6 +8243,982 @@
         if (hTab && tabInfo[hTab]) switchAdminTab(hTab);
       });
     });
+  </script>
+
+  <!-- ==================== AJOUTS 26/11/2026 : contrôle complet sur mobile et ordinateur ==================== -->
+  <style>
+    .gvx-muted { color: var(--text-secondary); font-size: 12.5px; margin: 0; }
+    .gvx-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+    .gvx-toolbar input[type="search"], .gvx-toolbar select, .gvx-toolbar input[type="date"] { height: 38px; padding: 6px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; font-size: 13px; background: #ffffff; min-width: 0; color: var(--text-primary); }
+    .gvx-toolbar input[type="search"] { flex: 1 1 240px; }
+    .gvx-toolbar .gvx-count { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+    .gvx-more { display: flex; justify-content: center; padding: 12px 0 0; }
+    .gvx-more:empty { display: none; }
+    .gvx-empty { text-align: center; padding: 22px !important; color: var(--text-muted); }
+    .gvx-error { padding: 16px; border-radius: 12px; border: 1px solid #fecaca; background: #fff1f2; color: #991b1b; font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .gvx-note { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; }
+    .gvx-note-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; }
+    .gvx-note-danger { background: #fff1f2; border: 1px solid #fecaca; color: #991b1b; }
+    @keyframes gvxShimmer { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+    .gvx-skel { display: block; height: 14px; border-radius: 8px; background: linear-gradient(90deg, #eef2f7 25%, #e2e8f0 37%, #eef2f7 63%); background-size: 840px 100%; animation: gvxShimmer 1.3s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .gvx-skel { animation: none; } }
+    .gvx-skel-row td { padding: 14px !important; }
+    .gvx-refreshing { opacity: 0.6; transition: opacity 0.2s ease; }
+    .gvx-net-banner { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 99990; background: #0f172a; color: #ffffff; border-radius: 12px; padding: 10px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); max-width: calc(100vw - 24px); }
+    .gvx-net-banner button { background: #2563eb; color: #ffffff; border: none; border-radius: 8px; padding: 6px 10px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .gvx-pill { display: inline-block; font-size: 10.5px; font-weight: 800; border-radius: 999px; padding: 1px 8px; border: 1px solid transparent; white-space: nowrap; }
+    .gvx-pill.ok { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .gvx-pill.warn { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+    .gvx-pill.bad { background: #fff1f2; color: #b91c1c; border-color: #fecaca; }
+    .gvx-pill.info { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+    .gvx-pill.muted { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+    /* statistiques */
+    .gvx-stats-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+    .gvx-stats-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .gvx-period-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+    .gvx-range-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--text-secondary); }
+    .gvx-range-form label { display: inline-flex; gap: 6px; align-items: center; margin: 0; font-weight: 600; }
+    .gvx-range-form input[type="date"] { height: 34px; padding: 4px 8px; border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 13px; width: auto; }
+    .gvx-kpi-group { margin-bottom: 18px; }
+    .gvx-kpi-group h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 8px; font-weight: 800; }
+    .gvx-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+    .gvx-kpi { background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow-card); min-width: 0; }
+    .gvx-kpi .k-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+    .gvx-kpi .k-val { font-size: 22px; font-weight: 800; color: var(--text-primary); margin-top: 4px; font-variant-numeric: tabular-nums; word-break: break-word; }
+    .gvx-kpi .k-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+    .gvx-kpi.good .k-val { color: var(--emerald-600, #059669); }
+    .gvx-kpi.warn .k-val { color: #b45309; }
+    .gvx-kpi.bad .k-val { color: #dc2626; }
+    .gvx-kpi.info .k-val { color: var(--primary-600, #2563eb); }
+    .gvx-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+    .gvx-chart { background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; min-width: 0; }
+    .gvx-chart h4, .gvx-list h4 { margin: 0 0 8px; font-size: 13.5px; color: var(--text-primary); }
+    .gvx-chart .c-box { position: relative; height: 240px; }
+    .gvx-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 14px; }
+    .gvx-list { background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+    .gvx-list ol, .gvx-list ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.75; }
+    .gvx-list li small { color: var(--text-muted); }
+    .gvx-defs { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; border-top: 1px dashed var(--border-subtle); padding-top: 10px; }
+    /* fiche commande : paiement, historique */
+    .gvx-order-extra { margin-bottom: 14px; }
+    .gvx-box { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; background: #f8fafc; margin-bottom: 10px; }
+    .gvx-box h5 { margin: 0 0 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
+    .gvx-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; font-size: 12px; }
+    .gvx-kv div span { color: var(--text-muted); display: block; font-size: 10.5px; text-transform: uppercase; font-weight: 700; }
+    .gvx-timeline { list-style: none; margin: 0; padding: 0 0 0 2px; border-left: 2px solid #e2e8f0; }
+    .gvx-timeline li { position: relative; padding: 0 0 10px 14px; font-size: 12px; line-height: 1.45; color: var(--text-primary); }
+    .gvx-timeline li::before { content: ''; position: absolute; left: -7px; top: 3px; width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; }
+    .gvx-timeline li.t-ok::before { background: #059669; }
+    .gvx-timeline li.t-warn::before { background: #d97706; }
+    .gvx-timeline li.t-bad::before { background: #dc2626; }
+    .gvx-timeline li.t-info::before { background: #2563eb; }
+    .gvx-timeline .t-when { color: var(--text-muted); font-size: 11px; }
+    /* journal */
+    .gvx-audit-list { display: flex; flex-direction: column; gap: 8px; }
+    .gvx-audit-item { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; background: #ffffff; }
+    .gvx-audit-top { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 11.5px; color: var(--text-muted); }
+    .gvx-audit-action { font-weight: 800; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .gvx-audit-action.a-danger { background: #fff1f2; color: #b91c1c; border-color: #fecaca; }
+    .gvx-audit-action.a-money { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+    .gvx-audit-summary { font-size: 13px; color: var(--text-primary); margin-top: 4px; line-height: 1.45; word-break: break-word; }
+    .gvx-audit-item details { margin-top: 6px; font-size: 12px; }
+    .gvx-audit-item pre { max-height: 260px; overflow: auto; background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; }
+    /* fiche client */
+    #gvx-customer-modal .modal-window { max-width: 780px; width: 96%; max-height: 92vh; overflow-y: auto; }
+    .gvx-cust-head { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; align-items: flex-start; margin-bottom: 10px; padding-right: 28px; }
+    .gvx-cust-balance { font-size: 26px; font-weight: 800; color: var(--primary-600); font-variant-numeric: tabular-nums; }
+    .gvx-actions-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+    .gvx-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 8px; }
+    .gvx-tabs button { border: 1px solid var(--border-subtle); background: #ffffff; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--text-secondary); }
+    .gvx-tabs button.active { background: #eff6ff; color: var(--primary-600); border-color: #bfdbfe; }
+    .gvx-mini-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .gvx-mini-table th, .gvx-mini-table td { padding: 7px 8px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: top; }
+    .gvx-mini-table th { color: var(--text-muted); font-weight: 700; font-size: 10.5px; text-transform: uppercase; }
+    .gvx-form-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+    .gvx-form-row label { font-size: 11.5px; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 3px; }
+    @media (max-width: 860px) { .gvx-charts { grid-template-columns: 1fr; } }
+    /* ===== téléphone : les tableaux deviennent des cartes lisibles, toutes les actions restent accessibles ===== */
+    @media (max-width: 768px) {
+      #admin-dashboard-container .container { padding-left: 12px !important; padding-right: 12px !important; }
+      .admin-header { padding: 10px 12px; gap: 8px; }
+      .admin-header-actions { gap: 6px; }
+      .admin-user-email, .shop-btn-text, .admin-logout-text, .reset-website-btn-text { display: none !important; }
+      .admin-hero-desc { display: none; }
+      .admin-section { padding: 14px; }
+      .admin-tab-pane .admin-section > div[style*="overflow-x"] { overflow: visible !important; }
+      #admin-dashboard-container table.admin-table, #admin-dashboard-container table.admin-table tbody { display: block; width: 100%; }
+      #admin-dashboard-container table.admin-table thead { display: none; }
+      #admin-dashboard-container table.admin-table tr { display: block; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 4px 12px; margin: 0 0 10px; background: #ffffff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+      #admin-dashboard-container table.admin-table tr:hover { background: #ffffff; }
+      /* libellé à gauche, contenu de la cellule empilé à droite (lisible même avec plusieurs lignes) */
+      #admin-dashboard-container table.admin-table td { display: block; position: relative; padding: 9px 0 9px 35% !important; min-height: 34px; border-bottom: 1px dashed #eef2f7; text-align: left !important; width: auto !important; max-width: none !important; min-width: 0; white-space: normal !important; word-break: break-word; }
+      #admin-dashboard-container table.admin-table td:last-child { border-bottom: 0; }
+      #admin-dashboard-container table.admin-table td::before { content: attr(data-label); position: absolute; left: 0; top: 10px; width: 32%; text-align: left; font-size: 10px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
+      #admin-dashboard-container table.admin-table td:not([data-label]), #admin-dashboard-container table.admin-table td[data-label=""] { padding-left: 0 !important; }
+      #admin-dashboard-container table.admin-table td:not([data-label])::before, #admin-dashboard-container table.admin-table td[data-label=""]::before { display: none; }
+      #admin-dashboard-container table.admin-table td > * { max-width: 100%; min-width: 0; }
+      #admin-dashboard-container table.admin-table td[colspan] { padding-left: 0 !important; text-align: center !important; }
+      #admin-dashboard-container table.admin-table td[colspan]::before { display: none; }
+      #admin-dashboard-container table.admin-table td.gvx-actions-cell { padding-left: 0 !important; }
+      #admin-dashboard-container table.admin-table td.gvx-actions-cell::before { position: static; display: block; width: auto; margin-bottom: 6px; }
+      #admin-dashboard-container table.admin-table td.gvx-actions-cell > div { display: flex !important; flex-wrap: wrap; gap: 6px !important; justify-content: flex-start !important; }
+      #admin-dashboard-container .order-status-selector-wrap, #admin-dashboard-container .purchase-access-cell, #admin-dashboard-container .product-purchase-cell { align-items: flex-start !important; }
+      /* en-tête plus compact : le contenu utile apparaît sans défiler */
+      .admin-breadcrumb { display: none !important; }
+      .admin-hero-hub { padding: 12px 10px 10px !important; margin-bottom: 12px !important; }
+      .admin-hero-title { font-size: 17px !important; margin-bottom: 6px !important; }
+      .admin-hero-quick-actions button { min-height: 38px; }
+      .admin-tab-pane .admin-section-header { margin-bottom: 12px; padding-bottom: 10px; }
+      .admin-tab-pane .admin-section-header h2 { font-size: 15.5px !important; }
+      .admin-tab-pane .admin-section-header > div > p { display: none; }
+      #admin-dashboard-container table.admin-table td.gvx-actions-cell button, #admin-dashboard-container table.admin-table td.gvx-actions-cell a { min-height: 38px; }
+      #admin-dashboard-container .order-action-group { flex-wrap: wrap; justify-content: flex-start; }
+      .gvx-toolbar input[type="search"] { flex-basis: 100%; }
+      .gvx-toolbar select, .gvx-toolbar input[type="date"] { flex: 1 1 44%; }
+      .gvx-toolbar .gvx-count { margin-left: 0; flex-basis: 100%; }
+      .gvx-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .gvx-kpi { padding: 10px 12px; }
+      .gvx-kpi .k-val { font-size: 18px; }
+      .gvx-chart .c-box { height: 210px; }
+      .gvx-form-row { grid-template-columns: 1fr; }
+      .gvx-mini-table thead { display: none; }
+      .gvx-mini-table tr { display: block; border-bottom: 1px solid #eef2f7; padding: 6px 0; }
+      .gvx-mini-table td { display: block; border: 0; padding: 2px 0; }
+      .gvx-presets { width: 100%; }
+    }
+    @media (max-width: 380px) { .gvx-kpis { grid-template-columns: 1fr; } }
+  </style>
+
+  <script>
+    /* ==========================================================================================================
+     * GetVirtu — administration : contrôle complet sur ordinateur ET téléphone (ajouts du 26/11/2026)
+     *  - cartes lisibles sur mobile, recherche / filtres / pagination des listes,
+     *  - squelettes de chargement, délais réseau, bandeau « connexion perdue », actualisation automatique
+     *    avec alerte des nouvelles commandes,
+     *  - statistiques réelles calculées par le serveur sur la période choisie, journal d'activité,
+     *  - fiche client complète (profil, suspension du compte, commandes, transactions),
+     *  - fiche commande : paiement lié, historique horodaté, note privée.
+     * ========================================================================================================== */
+    (function () {
+      'use strict';
+      var $ = function (id) { return document.getElementById(id); };
+      var esc = function (s) { return escapeHtml(s); };
+      var money = function (n) { return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2) + ' $'; };
+      var num = function (n) { return (Number(n) || 0).toLocaleString('fr-FR'); };
+      var dt = function (iso) {
+        if (!iso) return '—';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      };
+      var ymdLocal = function (d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+      var BASE_TITLE = document.title;
+      var PAGE = { orders: 30, users: 40, recharges: 30, products: 60 };
+
+      // ---------------------------------------------------------------- réseau : jeton admin + délai maximal
+      async function api(url, options, timeoutMs) {
+        options = options || {};
+        var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 20000) : null;
+        try {
+          var headers = Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminAuthToken() }, options.headers || {});
+          var res = await fetch(url, Object.assign({}, options, { headers: headers, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined }));
+          var data = await res.json().catch(function () { return {}; });
+          if (!res.ok) {
+            var e = new Error((data && data.error) || ('Erreur serveur (' + res.status + ')'));
+            e.status = res.status;
+            e.code = data && data.code;
+            throw e;
+          }
+          return data;
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw new Error('Le serveur ne répond pas (délai dépassé). Vérifiez votre connexion puis réessayez.');
+          if (err && !err.status && err instanceof TypeError) throw new Error('Connexion au serveur impossible. Vérifiez votre connexion internet puis réessayez.');
+          throw err;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+      window.gvxApi = api;
+
+      function syncState() { return window._gvxSyncState || { done: false, ok: true }; }
+      function skeletonRows(cols, n) {
+        var h = '';
+        for (var i = 0; i < (n || 4); i++) {
+          h += '<tr class="gvx-skel-row" aria-hidden="true"><td colspan="' + cols + '"><span class="gvx-skel" style="width:' + (55 + (i * 13) % 40) + '%"></span><span class="gvx-skel" style="width:' + (30 + (i * 17) % 45) + '%;margin-top:8px;height:11px"></span></td></tr>';
+        }
+        return h;
+      }
+      function errorRow(cols) {
+        return '<tr><td colspan="' + cols + '" class="gvx-empty">⚠️ Données indisponibles : connexion au serveur impossible. <button type="button" class="btn-primary btn-sm" onclick="syncAdminDataFromServer()">Réessayer</button></td></tr>';
+      }
+      // Avant la première synchronisation : squelettes (jamais une liste vide présentée comme définitive)
+      function placeholderIfLoading(tbodyId, cols, list) {
+        var st = syncState();
+        if (list.length) return false;
+        var tbody = $(tbodyId);
+        if (!tbody) return true;
+        if (!st.done) { tbody.innerHTML = skeletonRows(cols); return true; }
+        if (st.ok === false) { tbody.innerHTML = errorRow(cols); return true; }
+        return false;
+      }
+
+      // ---------------------------------------------------------------- barres d'outils (recherche, filtres)
+      var F = {
+        products: { q: '', status: 'all', limit: PAGE.products },
+        orders: { q: '', status: 'all', product: '', from: '', to: '', limit: PAGE.orders },
+        users: { q: '', status: 'all', limit: PAGE.users },
+        recharges: { q: '', status: 'all', limit: PAGE.recharges }
+      };
+      var TOOLBARS = {
+        products: '<input type="search" data-f="q" placeholder="Rechercher un produit ou une catégorie…" aria-label="Rechercher un produit">' +
+          '<select data-f="status" aria-label="Filtrer les produits"><option value="all">Tous les produits</option><option value="available">Disponibles</option><option value="oos">En rupture de stock</option><option value="hidden">Masqués (hors ligne)</option><option value="suspended">Achats suspendus</option><option value="manual">Livraison manuelle / différée</option></select>',
+        orders: '<input type="search" data-f="q" placeholder="N° de commande, client, e-mail, produit…" aria-label="Rechercher une commande">' +
+          '<select data-f="status" aria-label="Statut"><option value="all">Tous les statuts</option><option value="todo">À livrer (en attente)</option><option value="overdue">En retard</option><option value="delivered">Livrées</option><option value="cancelled">Annulées</option></select>' +
+          '<select data-f="product" aria-label="Produit" id="gvx-orders-product"><option value="">Tous les produits</option></select>' +
+          '<input type="date" data-f="from" aria-label="Commandes à partir du"><input type="date" data-f="to" aria-label="Commandes jusqu\'au">',
+        users: '<input type="search" data-f="q" placeholder="Nom, e-mail ou identifiant du client…" aria-label="Rechercher un client">' +
+          '<select data-f="status" aria-label="Filtrer les clients"><option value="all">Tous les comptes</option><option value="balance">Avec un solde</option><option value="account">Comptes suspendus</option><option value="purchases">Achats suspendus</option><option value="admins">Administrateurs</option></select>',
+        recharges: '<input type="search" data-f="q" placeholder="Référence, client, e-mail, numéro, moyen…" aria-label="Rechercher une recharge">' +
+          '<select data-f="status" aria-label="Statut"><option value="all">Tous les statuts</option><option value="pending">En attente</option><option value="approved">Approuvées (créditées)</option><option value="rejected">Rejetées / échouées</option><option value="mismatch">Montant à vérifier</option></select>'
+      };
+      function installToolbar(kind) {
+        var section = $('tab-content-' + kind);
+        var table = section && section.querySelector('table.admin-table');
+        if (!table || section.querySelector('.gvx-toolbar[data-kind="' + kind + '"]')) return;
+        var wrap = table.parentElement;
+        var bar = document.createElement('div');
+        bar.className = 'gvx-toolbar';
+        bar.setAttribute('role', 'search');
+        bar.setAttribute('data-kind', kind);
+        bar.innerHTML = TOOLBARS[kind] + '<button type="button" class="btn-secondary btn-sm" data-reset="1">Effacer</button><span class="gvx-count" id="gvx-' + kind + '-count"></span>';
+        wrap.parentElement.insertBefore(bar, wrap);
+        var more = document.createElement('div');
+        more.className = 'gvx-more';
+        more.id = 'gvx-' + kind + '-more';
+        wrap.parentElement.insertBefore(more, wrap.nextSibling);
+        var timer = null;
+        bar.addEventListener('input', function (e) {
+          var k = e.target.getAttribute('data-f');
+          if (!k) return;
+          F[kind][k] = e.target.value;
+          F[kind].limit = PAGE[kind];
+          clearTimeout(timer);
+          timer = setTimeout(function () { rerender(kind); }, e.target.type === 'search' ? 200 : 0);
+        });
+        bar.addEventListener('click', function (e) {
+          if (e.target && e.target.getAttribute('data-reset')) window.gvxResetFilters(kind);
+        });
+      }
+      window.gvxResetFilters = function (kind) {
+        var bar = document.querySelector('.gvx-toolbar[data-kind="' + kind + '"]');
+        Object.keys(F[kind]).forEach(function (k) { if (k !== 'limit') F[kind][k] = k === 'status' ? 'all' : ''; });
+        F[kind].limit = PAGE[kind];
+        if (bar) bar.querySelectorAll('[data-f]').forEach(function (el) { el.value = el.getAttribute('data-f') === 'status' ? 'all' : ''; });
+        rerender(kind);
+      };
+      window.gvxSetFilter = function (kind, values) {
+        Object.keys(values || {}).forEach(function (k) { F[kind][k] = values[k]; });
+        F[kind].limit = PAGE[kind];
+        var bar = document.querySelector('.gvx-toolbar[data-kind="' + kind + '"]');
+        if (bar) bar.querySelectorAll('[data-f]').forEach(function (el) { var k = el.getAttribute('data-f'); if (values && values[k] !== undefined) el.value = values[k]; });
+        rerender(kind);
+      };
+      function rerender(kind) {
+        if (kind === 'orders') window.renderOrdersTable(DB.get('orders', []) || []);
+        else if (kind === 'products') window.renderProductsTable(DB.get('products', []) || []);
+        else if (kind === 'users') window.renderUsersTable(DB.get('users', []) || []);
+        else if (kind === 'recharges') window.renderRechargesTable(DB.get('recharges', []) || []);
+      }
+      function updateCount(kind, shown, matched, total) {
+        var el = $('gvx-' + kind + '-count');
+        if (el) el.textContent = matched === total ? (total + ' au total') : (matched + ' sur ' + total) + (shown < matched ? ' · ' + shown + ' affichés' : '');
+        var more = $('gvx-' + kind + '-more');
+        if (more) more.innerHTML = shown < matched ? '<button type="button" class="btn-secondary btn-sm" onclick="gvxShowMore(\'' + kind + '\')">Afficher plus (' + (matched - shown) + ' restant' + (matched - shown > 1 ? 's' : '') + ')</button>' : '';
+      }
+      window.gvxShowMore = function (kind) { F[kind].limit += PAGE[kind]; rerender(kind); };
+      function noMatchRow(kind, cols) {
+        return '<tr><td colspan="' + cols + '" class="gvx-empty">Aucun résultat pour ces filtres. <button type="button" class="btn-secondary btn-sm" onclick="gvxResetFilters(\'' + kind + '\')">Effacer les filtres</button></td></tr>';
+      }
+
+      // ---- produits
+      function productAvailability(p, vault) {
+        var v = vault[p.id];
+        var isExternal = p.purchaseMode === 'redirect' && Boolean(p.redirectUrl);
+        var declared = isExternal || p.deliveryMode === 'manual' || (v && v.type === 'file' && !(Array.isArray(v.keys) && v.keys.length));
+        var avail = (!declared && v && Array.isArray(v.keys)) ? v.keys.filter(function (k) { return !k.used; }).length : (parseInt(p.stock, 10) || 0);
+        return { external: isExternal, avail: avail, oos: !isExternal && avail <= 0 };
+      }
+      var origProducts = window.renderProductsTable;
+      window.renderProductsTable = renderProductsTable = function (prods) {
+        var all = Array.isArray(prods) ? prods.filter(Boolean) : [];
+        if (placeholderIfLoading('admin-products-tbody', 9, all)) { updateCount('products', 0, 0, 0); return; }
+        var f = F.products, q = String(f.q || '').trim().toLowerCase();
+        var vault = DB.get('vault', {}) || {};
+        var list = all.filter(function (p) {
+          var a = productAvailability(p, vault);
+          if (f.status === 'available' && a.oos) return false;
+          if (f.status === 'oos' && !(a.oos && p.published)) return false;
+          if (f.status === 'hidden' && p.published) return false;
+          if (f.status === 'suspended' && p.purchasesSuspended !== true) return false;
+          if (f.status === 'manual' && p.deliveryMode !== 'manual') return false;
+          if (q && (String(p.name || '') + ' ' + String(p.category || '') + ' ' + String(p.id)).toLowerCase().indexOf(q) === -1) return false;
+          return true;
+        });
+        var shown = list.slice(0, f.limit);
+        origProducts(shown);
+        if (!shown.length && all.length) $('admin-products-tbody').innerHTML = noMatchRow('products', 9);
+        updateCount('products', shown.length, list.length, all.length);
+        labelTables();
+      };
+
+      // ---- commandes
+      function refreshProductSelect() {
+        var sel = $('gvx-orders-product');
+        if (!sel) return;
+        var prods = (DB.get('products', []) || []).filter(Boolean);
+        var key = prods.map(function (p) { return p.id + ':' + p.name; }).join('|');
+        if (sel.getAttribute('data-key') === key) return;
+        var cur = sel.value;
+        sel.innerHTML = '<option value="">Tous les produits</option>' + prods.map(function (p) { return '<option value="' + esc(String(p.id)) + '">' + esc(p.name) + '</option>'; }).join('');
+        sel.value = cur;
+        sel.setAttribute('data-key', key);
+      }
+      function filterOrders(all) {
+        var f = F.orders, q = String(f.q || '').trim().toLowerCase();
+        var fromT = f.from ? Date.parse(f.from + 'T00:00:00') : null;
+        var toT = f.to ? Date.parse(f.to + 'T23:59:59.999') : null;
+        return all.filter(function (o) {
+          if (f.status === 'todo' && o.status !== 'En attente') return false;
+          if (f.status === 'overdue' && !(typeof isOrderOverdue === 'function' && isOrderOverdue(o))) return false;
+          if (f.status === 'delivered' && !(o.status === 'Complété' || o.status === 'Livré')) return false;
+          if (f.status === 'cancelled' && o.status !== 'Annulé') return false;
+          if (f.product && String(o.productId) !== String(f.product)) return false;
+          var t = Date.parse(o.date || '');
+          if (fromT && !(t >= fromT)) return false;
+          if (toT && !(t <= toT)) return false;
+          if (q && [o.id, o.userName, o.userEmail, o.productName, o.contactInfo, o.method].join(' ').toLowerCase().indexOf(q) === -1) return false;
+          return true;
+        });
+      }
+      var origOrders = window.renderOrdersTable;
+      window.renderOrdersTable = renderOrdersTable = function (orders) {
+        var all = Array.isArray(orders) ? orders.filter(Boolean) : [];
+        if (placeholderIfLoading('admin-orders-tbody', 8, all)) { renderFulfilmentBanner([]); updateCount('orders', 0, 0, 0); return; }
+        refreshProductSelect();
+        var list = filterOrders(all);
+        var shown = list.slice(0, F.orders.limit);
+        origOrders(shown);
+        renderFulfilmentBanner(all); // le bandeau compte toujours toutes les commandes à livrer
+        if (!shown.length && all.length) $('admin-orders-tbody').innerHTML = noMatchRow('orders', 8);
+        updateCount('orders', shown.length, list.length, all.length);
+        labelTables();
+      };
+
+      // ---- clients
+      var origUsers = window.renderUsersTable;
+      window.renderUsersTable = renderUsersTable = function (users) {
+        var all = Array.isArray(users) ? users.filter(Boolean) : [];
+        if (placeholderIfLoading('admin-users-tbody', 6, all)) { renderGlobalPurchaseControl(); updateCount('users', 0, 0, 0); return; }
+        var f = F.users, q = String(f.q || '').trim().toLowerCase();
+        var list = all.filter(function (u) {
+          if (f.status === 'balance' && !((Number(u.balance) || 0) > 0)) return false;
+          if (f.status === 'account' && !u.accountSuspended) return false;
+          if (f.status === 'purchases' && !u.purchasesSuspended) return false;
+          if (f.status === 'admins' && u.role !== 'admin') return false;
+          if (q && [u.name, u.email, u.username, u.id].join(' ').toLowerCase().indexOf(q) === -1) return false;
+          return true;
+        });
+        var shown = list.slice(0, F.users.limit);
+        origUsers(shown);
+        if (!shown.length && all.length) $('admin-users-tbody').innerHTML = noMatchRow('users', 6);
+        updateCount('users', shown.length, list.length, all.length);
+        labelTables();
+        if (custState.userId && $('gvx-customer-modal') && $('gvx-customer-modal').classList.contains('active')) renderCustomer();
+      };
+
+      // ---- recharges
+      var origRecharges = window.renderRechargesTable;
+      window.renderRechargesTable = renderRechargesTable = function (recharges) {
+        var all = Array.isArray(recharges) ? recharges.filter(Boolean) : [];
+        if (placeholderIfLoading('admin-recharges-tbody', 8, all)) { updateCount('recharges', 0, 0, 0); return; }
+        var f = F.recharges, q = String(f.q || '').trim().toLowerCase();
+        var list = all.filter(function (r) {
+          if (f.status === 'pending' && r.status !== 'En attente') return false;
+          if (f.status === 'approved' && r.status !== 'Approuvé') return false;
+          if (f.status === 'rejected' && r.status !== 'Rejeté') return false;
+          if (f.status === 'mismatch' && !r.mismatch) return false;
+          if (q && [r.id, r.userName, r.userEmail, r.methodName, r.network, r.address, r.providerTxId].join(' ').toLowerCase().indexOf(q) === -1) return false;
+          return true;
+        });
+        var shown = list.slice(0, F.recharges.limit);
+        origRecharges(shown);
+        var tbody = $('admin-recharges-tbody');
+        if (!shown.length && all.length && tbody) tbody.innerHTML = noMatchRow('recharges', 8);
+        // Dates de confirmation et alertes de montant, sans modifier le rendu existant
+        if (tbody) shown.forEach(function (r, i) {
+          var tr = tbody.children[i];
+          if (!tr || !tr.children || tr.children.length < 7) return;
+          var extra = '';
+          if (r.completedAt && r.status === 'Approuvé') extra += '<div style="font-size: 10.5px; color: var(--text-muted); margin-top: 3px;">Crédité le ' + esc(dt(r.completedAt)) + (r.adminResponsible ? ' (par ' + esc(r.adminResponsible) + ')' : '') + '</div>';
+          if (r.mismatch) extra += '<div style="font-size: 10.5px; color: #b91c1c; font-weight: 700; margin-top: 3px;">⚠️ Montant payé différent : attendu ' + esc(String(r.mismatch.expected)) + ', reçu ' + esc(String(r.mismatch.paid)) + ' ' + esc(r.mismatch.currency || '') + ' — vérifiez dans SasPay avant toute décision</div>';
+          if (extra) tr.children[6].insertAdjacentHTML('beforeend', extra);
+        });
+        updateCount('recharges', shown.length, list.length, all.length);
+        labelTables();
+      };
+
+      // ---------------------------------------------------------------- tableaux → cartes sur téléphone
+      function labelTables(root) {
+        (root || document).querySelectorAll('#admin-dashboard-container table.admin-table').forEach(function (table) {
+          var heads = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.textContent.replace(/\s+/g, ' ').trim(); });
+          table.querySelectorAll('tbody > tr').forEach(function (tr) {
+            var cells = tr.children;
+            if (cells.length === 1 && cells[0].hasAttribute('colspan')) return;
+            for (var i = 0; i < cells.length; i++) {
+              if (!cells[i].hasAttribute('data-label')) cells[i].setAttribute('data-label', heads[i] || '');
+              if (i === cells.length - 1 && /action|validation/i.test(heads[i] || '')) cells[i].classList.add('gvx-actions-cell');
+            }
+          });
+        });
+      }
+      var labelQueued = false;
+      new MutationObserver(function () {
+        if (labelQueued) return;
+        labelQueued = true;
+        setTimeout(function () { labelQueued = false; labelTables(); }, 0);
+      }).observe(document.body, { childList: true, subtree: true });
+
+      // ---------------------------------------------------------------- actualisation automatique & connexion
+      var known = null;
+      function showNetBanner(show, text) {
+        var el = $('gvx-net-banner');
+        if (!show) { if (el) el.remove(); return; }
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'gvx-net-banner';
+          el.className = 'gvx-net-banner';
+          el.setAttribute('role', 'status');
+          document.body.appendChild(el);
+        }
+        el.innerHTML = '<span>' + esc(text) + '</span><button type="button" onclick="syncAdminDataFromServer()">Réessayer</button>';
+      }
+      function afterSync() {
+        var st = syncState();
+        if (!getAdminAuthToken()) return;
+        if (st.ok === false) showNetBanner(true, navigator.onLine === false ? 'Vous êtes hors ligne : les données affichées peuvent être anciennes.' : 'Connexion au serveur perdue : nouvelle tentative automatique dans 30 s.');
+        else showNetBanner(false);
+        var orders = DB.get('orders', []) || [];
+        var recharges = DB.get('recharges', []) || [];
+        var pending = orders.filter(function (o) { return o && o.status === 'En attente'; });
+        var late = pending.filter(function (o) { return typeof isOrderOverdue === 'function' && isOrderOverdue(o); });
+        document.title = (pending.length ? '(' + pending.length + ') ' : '') + BASE_TITLE;
+        if (st.ok !== false) {
+          if (known) {
+            var fresh = orders.filter(function (o) { return o && !known.orders[o.id]; });
+            var freshDeposits = recharges.filter(function (r) { return r && !known.recharges[r.id] && r.status === 'En attente'; });
+            if (fresh.length) showToast('🛒 ' + fresh.length + ' nouvelle(s) commande(s) : ' + fresh.slice(0, 3).map(function (o) { return o.productName + ' (' + (o.userName || o.userEmail || 'client') + ')'; }).join(', '), 'success');
+            else if (freshDeposits.length) showToast('💳 ' + freshDeposits.length + ' nouvelle(s) recharge(s) en attente.', 'info');
+            if (late.length && late.length > known.late) showToast('⚠️ ' + late.length + ' commande(s) en retard de livraison : ouvrez l\'onglet Commandes.', 'warning');
+          }
+          known = { orders: {}, recharges: {}, late: late.length };
+          orders.forEach(function (o) { if (o) known.orders[o.id] = 1; });
+          recharges.forEach(function (r) { if (r) known.recharges[r.id] = 1; });
+        }
+        if (typeof activeAdminTab !== 'undefined' && activeAdminTab === 'stats') gvxLoadStats(false);
+      }
+      var origSync = window.syncAdminDataFromServer;
+      var inflight = null;
+      window.syncAdminDataFromServer = syncAdminDataFromServer = function () {
+        if (inflight) return inflight;
+        inflight = Promise.resolve().then(function () { return origSync(); }).catch(function (e) {
+          window._gvxSyncState = { done: Boolean(getAdminAuthToken()), ok: false, at: Date.now() };
+          console.error('[admin sync]', e);
+        }).then(function () { afterSync(); }).finally(function () { inflight = null; });
+        return inflight;
+      };
+      setInterval(function () {
+        if (document.hidden || !getAdminAuthToken()) return;
+        var dash = $('admin-dashboard-container');
+        if (!dash || dash.classList.contains('hidden')) return;
+        syncAdminDataFromServer();
+      }, 30000);
+      document.addEventListener('visibilitychange', function () {
+        var st = syncState();
+        if (!document.hidden && getAdminAuthToken() && (!st.at || Date.now() - st.at > 15000)) syncAdminDataFromServer();
+      });
+      window.addEventListener('online', function () { if (getAdminAuthToken()) syncAdminDataFromServer(); });
+      window.addEventListener('offline', function () { if (getAdminAuthToken()) showNetBanner(true, 'Vous êtes hors ligne : les données affichées peuvent être anciennes.'); });
+
+      // ---------------------------------------------------------------- onglets : Statistiques & Journal
+      tabInfo.audit = {
+        crumb: "Journal d'activité",
+        title: "📜 Journal d'activité",
+        desc: "Historique non modifiable de toutes les actions des administrateurs (produits, prix, stocks, commandes, soldes, paiements, réglages).",
+        actionHtml: '<span class="admin-kpi-chip">Lecture seule</span>'
+      };
+      tabInfo.stats.desc = "Chiffres calculés par le serveur à partir des commandes, paiements et visites réels, sur la période de votre choix.";
+      var origSwitch = window.switchAdminTab;
+      window.switchAdminTab = switchAdminTab = function (tabName) {
+        origSwitch(tabName);
+        if (tabName === 'stats') gvxLoadStats(false);
+        if (tabName === 'audit') gvxLoadAudit(false);
+      };
+
+      // ---------------------------------------------------------------- statistiques (serveur)
+      var stats = { preset: '30d', from: null, to: null, seq: 0, data: null, loadedAt: 0, charts: {} };
+      function presetRange(p) {
+        var now = new Date();
+        var to = ymdLocal(now);
+        var d = new Date(now.getTime());
+        if (p === 'today') return { from: to, to: to };
+        if (p === '7d') { d.setDate(d.getDate() - 6); return { from: ymdLocal(d), to: to }; }
+        if (p === 'month') return { from: to.slice(0, 8) + '01', to: to };
+        if (p === '12m') { d.setDate(1); d.setMonth(d.getMonth() - 11); return { from: ymdLocal(d), to: to }; }
+        if (p === 'all') return { from: 'all', to: to };
+        d.setDate(d.getDate() - 29);
+        return { from: ymdLocal(d), to: to };
+      }
+      function syncPresetUI() {
+        document.querySelectorAll('.gvx-presets .admin-period-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-preset') === stats.preset); });
+        if ($('gvx-stats-from') && stats.from && stats.from !== 'all') $('gvx-stats-from').value = stats.from;
+        if ($('gvx-stats-to') && stats.to) $('gvx-stats-to').value = stats.to;
+      }
+      window.gvxSetPreset = function (p) {
+        stats.preset = p;
+        var r = presetRange(p);
+        stats.from = r.from;
+        stats.to = r.to;
+        syncPresetUI();
+        gvxLoadStats(true);
+      };
+      window.gvxApplyCustomRange = function (e) {
+        if (e) e.preventDefault();
+        var f = $('gvx-stats-from').value, t = $('gvx-stats-to').value;
+        if (!f || !t) { showToast('Choisissez une date de début et une date de fin.', 'warning'); return; }
+        if (f > t) { showToast('La date de début doit précéder la date de fin.', 'error'); return; }
+        stats.preset = 'custom';
+        stats.from = f;
+        stats.to = t;
+        syncPresetUI();
+        gvxLoadStats(true);
+      };
+      function statsSkeleton() {
+        var cards = '';
+        for (var i = 0; i < 8; i++) cards += '<div class="gvx-kpi" aria-hidden="true"><span class="gvx-skel" style="width:60%"></span><span class="gvx-skel" style="width:45%;height:22px;margin-top:10px"></span><span class="gvx-skel" style="width:80%;height:10px;margin-top:8px"></span></div>';
+        return '<div class="gvx-kpi-group"><div class="gvx-kpis">' + cards + '</div></div><div class="gvx-charts"><div class="gvx-chart"><span class="gvx-skel" style="height:220px"></span></div><div class="gvx-chart"><span class="gvx-skel" style="height:220px"></span></div></div>';
+      }
+      async function gvxLoadStats(force) {
+        var body = $('gvx-stats-body');
+        if (!body || !getAdminAuthToken()) return;
+        if (!stats.from) { var r = presetRange(stats.preset); stats.from = r.from; stats.to = r.to; syncPresetUI(); }
+        if (!force && stats.data && Date.now() - stats.loadedAt < 60000) { if (!body.innerHTML) renderStats(stats.data); return; }
+        var seq = ++stats.seq;
+        if (!stats.data || force === 'reset') body.innerHTML = statsSkeleton();
+        else body.classList.add('gvx-refreshing');
+        try {
+          var d = await api('/api/data/stats?from=' + encodeURIComponent(stats.from) + '&to=' + encodeURIComponent(stats.to) + '&tz=' + new Date().getTimezoneOffset() + '&_t=' + Date.now(), { method: 'GET' }, 25000);
+          if (seq !== stats.seq) return; // une période plus récente a été demandée entre-temps
+          stats.data = d;
+          stats.loadedAt = Date.now();
+          renderStats(d);
+        } catch (err) {
+          if (seq !== stats.seq) return;
+          body.innerHTML = '<div class="gvx-error">⚠️ ' + esc(err.message || 'Statistiques indisponibles.') + ' <button type="button" class="btn-primary btn-sm" onclick="gvxLoadStats(true)">Réessayer</button></div>';
+        } finally {
+          if (seq === stats.seq) body.classList.remove('gvx-refreshing');
+        }
+      }
+      window.gvxLoadStats = gvxLoadStats;
+      // Ancien point d'entrée (réinitialisation des visites, synchronisation) : recharge les vraies statistiques
+      window.updateStatsDisplay = function () { stats.loadedAt = 0; if (typeof activeAdminTab !== 'undefined' && activeAdminTab === 'stats') gvxLoadStats(true); };
+
+      function kpi(label, val, sub, cls) {
+        return '<div class="gvx-kpi ' + (cls || '') + '"><div class="k-label">' + esc(label) + '</div><div class="k-val">' + esc(val) + '</div>' + (sub ? '<div class="k-sub">' + sub + '</div>' : '') + '</div>';
+      }
+      function group(title, cards) { return '<section class="gvx-kpi-group"><h3>' + esc(title) + '</h3><div class="gvx-kpis">' + cards.join('') + '</div></section>'; }
+      function renderStats(d) {
+        var body = $('gvx-stats-body');
+        if (!body || !d) return;
+        var rg = d.range || {};
+        var fmtDay = function (ymd) { var p = String(ymd || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ymd; };
+        var label = $('gvx-stats-range-label');
+        if (label) label.textContent = 'Période : du ' + fmtDay(rg.from) + ' au ' + fmtDay(rg.to) + ' (' + num(rg.days) + ' jour' + (rg.days > 1 ? 's' : '') + ') · calculé le ' + dt(d.generatedAt);
+        var s = d.sales || {}, c = d.collected || {}, o = d.orders || {}, pp = d.pendingPayments || {}, fp = d.failedPayments || {}, rf = d.refunds || {}, aa = d.adminAdjustments || {}, pr = d.profit || {}, cu = d.customers || {}, v = d.visitors || {}, pd = d.products || {};
+        var html = '';
+        html += group('À traiter maintenant', [
+          kpi('Commandes à livrer', num(d.pendingNow), d.overdueNow ? '⚠️ ' + esc(num(d.overdueNow)) + ' en retard (délai dépassé)' : 'Aucune en retard', d.overdueNow ? 'bad' : (d.pendingNow ? 'warn' : 'good')),
+          kpi('Paiements en attente', num(pp.allPendingNow), 'Mobile Money non confirmés ou preuves à vérifier (toutes dates)', pp.allPendingNow ? 'warn' : ''),
+          kpi('Produits en rupture', num(pd.outOfStockCount), esc(num(pd.published)) + ' produit(s) en ligne · ' + esc(num(pd.hidden)) + ' masqué(s)', pd.outOfStockCount ? 'bad' : 'good')
+        ]);
+        html += group('Ventes de la période', [
+          kpi('Ventes nettes', money(s.net), 'Brut ' + esc(money(s.gross)) + ' − annulées ' + esc(money(s.cancelled)), 'info'),
+          kpi('Commandes', num(o.total), esc(num(o.delivered)) + ' livrée(s) · ' + esc(num(o.pending)) + ' en attente · ' + esc(num(o.cancelled)) + ' annulée(s)'),
+          kpi('Articles vendus', num(s.units), 'Hors commandes annulées'),
+          kpi('Panier moyen', money(s.avgOrder), 'Par commande non annulée'),
+          pr.available
+            ? kpi('Bénéfice estimé', money(pr.amount), 'Sur ' + esc(num(pr.ordersWithCost)) + '/' + esc(num(pr.ordersTotal)) + ' commande(s) dont le coût d\'achat est renseigné', pr.amount >= 0 ? 'good' : 'bad')
+            : kpi('Bénéfice', '—', 'Renseignez le « coût d\'achat » dans la fiche des produits pour le calculer')
+        ]);
+        html += group('Argent reçu et paiements', [
+          kpi('Encaissements confirmés', money(c.total), esc(num(c.count)) + ' paiement(s) · Mobile Money ' + esc(money(c.mobileMoney)) + ' · manuel ' + esc(money(c.manual)) + (c.approvedByAdmin ? ' · dont ' + esc(num(c.approvedByAdmin)) + ' validé(s) à la main' : ''), 'good'),
+          kpi('Recharges de solde', money(c.walletTopUps), 'Achats directs par Mobile Money : ' + esc(money(c.forDirectPurchase))),
+          kpi('Paiements en attente', money(pp.total), esc(num(pp.count)) + ' créé(s) sur la période — jamais comptés comme encaissés', pp.count ? 'warn' : ''),
+          kpi('Paiements échoués / annulés', money(fp.total), esc(num(fp.count)) + ' paiement(s)', fp.count ? 'bad' : ''),
+          kpi('Remboursements', money(rf.total), esc(num(rf.count)) + ' remboursement(s) sur les soldes clients'),
+          kpi('Crédits offerts (admin)', money(aa.credits), esc(num(aa.creditsCount)) + ' don(s) / crédit(s) manuel(s) · débits manuels ' + esc(money(aa.debits)))
+        ]);
+        html += group('Clients et visites', [
+          kpi('Visites', v.available === false ? '—' : num(v.totalVisits), v.available === false ? 'Statistiques de visites momentanément indisponibles' : 'Dont ' + esc(num(v.newVisitors)) + ' premières visites', 'info'),
+          kpi('Visiteurs uniques', v.available === false ? '—' : num(v.uniqueVisitors), 'Navigateurs distincts sur la période'),
+          kpi('Clients inscrits', num(cu.total), '+' + esc(num(cu.newInPeriod)) + ' sur la période · ' + esc(num(cu.suspended)) + ' compte(s) suspendu(s)'),
+          kpi('Soldes clients', money(cu.walletsTotal), esc(num(cu.withBalance)) + ' client(s) avec un solde (montant dû en produits)')
+        ]);
+        var gLabel = { hour: 'par heure', day: 'par jour', month: 'par mois' }[rg.granularity] || '';
+        html += '<div class="gvx-charts"><div class="gvx-chart"><h4>💵 Ventes nettes et encaissements (' + esc(gLabel) + ')</h4><div class="c-box"><canvas id="gvx-chart-money"></canvas></div></div>' +
+          '<div class="gvx-chart"><h4>📦 Commandes et visites (' + esc(gLabel) + ')</h4><div class="c-box"><canvas id="gvx-chart-activity"></canvas></div></div></div>';
+        var li = function (p, extra) { return '<li><strong>' + esc(p.name || ('Produit ' + p.productId)) + '</strong>' + (p.deleted ? ' <small>(supprimé)</small>' : '') + ' — ' + esc(num(p.units)) + ' unité(s) · ' + esc(money(p.revenue)) + (extra || '') + '</li>'; };
+        html += '<div class="gvx-lists">' +
+          '<div class="gvx-list"><h4>🏆 Meilleures ventes</h4>' + ((pd.best || []).length ? '<ol>' + pd.best.map(function (p) { return li(p); }).join('') + '</ol>' : '<p class="gvx-muted">Aucune vente sur la période.</p>') + '</div>' +
+          '<div class="gvx-list"><h4>🐢 Moins vendus (produits en ligne)</h4>' + ((pd.least || []).length ? '<ol>' + pd.least.map(function (p) { return li(p); }).join('') + '</ol>' : '<p class="gvx-muted">Aucun produit en ligne.</p>') + '</div>' +
+          '<div class="gvx-list"><h4>⛔ En rupture de stock</h4>' + ((pd.outOfStock || []).length ? '<ul>' + pd.outOfStock.map(function (p) { return '<li><strong>' + esc(p.name) + '</strong> <button type="button" class="btn-secondary btn-sm" style="padding: 2px 8px; font-size: 11px;" onclick="editProduct(' + Number(p.productId) + ')">Réapprovisionner</button></li>'; }).join('') + '</ul>' : '<p class="gvx-muted">Tous les produits en ligne sont disponibles.</p>') + '</div>' +
+        '</div>';
+        html += '<p class="gvx-defs"><strong>Définitions.</strong> Ventes = commandes passées sur la période (payées avec le solde du client). Encaissements = argent réellement reçu : recharges confirmées par l\'opérateur Mobile Money ou validées par un administrateur. Les paiements en attente ou échoués ne sont jamais comptés comme encaissés. Les crédits offerts par l\'administrateur ne sont pas de l\'argent reçu. Bénéfice = ventes nettes − coût d\'achat, uniquement pour les produits dont le coût est renseigné.</p>';
+        body.innerHTML = html;
+        drawCharts(d);
+      }
+      function drawCharts(d) {
+        Object.keys(stats.charts).forEach(function (k) { try { stats.charts[k].destroy(); } catch (e) {} });
+        stats.charts = {};
+        if (typeof Chart === 'undefined') {
+          // Bibliothèque chargée en arrière-plan : graphiques dessinés dès son arrivée, message clair si elle échoue
+          var tag = document.getElementById('gv-chartjs');
+          var failed = !tag || tag.getAttribute('data-failed') === '1';
+          if (!failed && !stats.waitingChart) {
+            stats.waitingChart = true;
+            var done = function () { stats.waitingChart = false; if (stats.data) drawCharts(stats.data); };
+            tag.addEventListener('load', done, { once: true });
+            tag.addEventListener('error', function () { tag.setAttribute('data-failed', '1'); done(); }, { once: true });
+          }
+          document.querySelectorAll('#gvx-stats-body .c-box').forEach(function (b) {
+            b.style.height = 'auto';
+            b.innerHTML = failed
+              ? '<p class="gvx-muted" style="padding: 10px 0;">Graphique indisponible (bibliothèque non chargée : connexion lente ?). Les chiffres ci-dessus restent exacts. <button type="button" class="btn-secondary btn-sm" onclick="location.reload()">Recharger la page</button></p>'
+              : '<div style="padding: 6px 0;"><span class="gvx-skel" style="height: 180px;"></span><p class="gvx-muted" style="margin-top: 6px;">Chargement des graphiques…</p></div>';
+          });
+          return;
+        }
+        document.querySelectorAll('#gvx-stats-body .c-box').forEach(function (b) {
+          if (!b.querySelector('canvas')) { b.style.height = ''; b.innerHTML = '<canvas id="' + (b.parentElement.querySelector('h4').textContent.indexOf('Ventes') !== -1 ? 'gvx-chart-money' : 'gvx-chart-activity') + '"></canvas>'; }
+        });
+        var series = d.series || [];
+        var labels = series.map(function (b) { return b.label; });
+        var axis = { grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', font: { size: 10 } } };
+        var cm = $('gvx-chart-money'), ca = $('gvx-chart-activity');
+        if (cm) stats.charts.money = new Chart(cm.getContext('2d'), {
+          type: 'line',
+          data: { labels: labels, datasets: [
+            { label: 'Ventes nettes ($)', data: series.map(function (b) { return b.sales; }), borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.08)', borderWidth: 2, tension: 0.3, fill: true, pointRadius: 2 },
+            { label: 'Encaissements confirmés ($)', data: series.map(function (b) { return b.collected; }), borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.05)', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 2 }
+          ] },
+          options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 12, font: { size: 11 } } } }, scales: { y: Object.assign({ beginAtZero: true }, axis), x: { grid: { display: false }, ticks: axis.ticks } } }
+        });
+        if (ca) stats.charts.activity = new Chart(ca.getContext('2d'), {
+          data: { labels: labels, datasets: [
+            { type: 'bar', label: 'Commandes', data: series.map(function (b) { return b.orders; }), backgroundColor: '#0284c7', borderRadius: 4, yAxisID: 'y' },
+            { type: 'line', label: 'Visites', data: series.map(function (b) { return b.visits; }), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, tension: 0.3, pointRadius: 2, yAxisID: 'y1' }
+          ] },
+          options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { boxWidth: 12, font: { size: 11 } } } },
+            scales: { y: Object.assign({ beginAtZero: true, position: 'left', ticks: Object.assign({ precision: 0 }, axis.ticks) }, { grid: axis.grid }), y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: Object.assign({ precision: 0 }, axis.ticks) }, x: { grid: { display: false }, ticks: axis.ticks } } }
+        });
+      }
+
+      // ---------------------------------------------------------------- journal d'activité
+      var ACTION_LABELS = {
+        'product.created': 'Produit créé', 'product.updated': 'Produit modifié', 'product.deleted': 'Produit supprimé',
+        'product.purchases_suspended': 'Achats du produit suspendus', 'product.purchases_resumed': 'Achats du produit réactivés',
+        'keys.added': 'Clés ajoutées', 'key.updated': 'Clé modifiée', 'key.deleted': 'Clé supprimée',
+        'manual_stock.added': 'Stock manuel ajouté', 'manual_stock.updated': 'Stock manuel modifié', 'manual_stock.deleted': 'Stock manuel supprimé',
+        'order.delivered': 'Commande livrée', 'order.delivered_early': 'Livrée en avance', 'order.content_updated': 'Livraison corrigée',
+        'order.issue_flagged': 'Problème signalé', 'order.issue_cleared': 'Problème levé', 'order.cancelled': 'Commande annulée',
+        'order.note_updated': 'Note privée', 'order.deleted': 'Commande supprimée',
+        'wallet.adjusted': 'Solde ajusté', 'deposit.approved_manually': 'Recharge approuvée à la main', 'deposit.rejected': 'Recharge rejetée', 'transaction.deleted': 'Transaction supprimée',
+        'customer.account_suspended': 'Compte suspendu', 'customer.account_reactivated': 'Compte réactivé',
+        'customer.purchases_suspended': 'Achats client suspendus', 'customer.purchases_resumed': 'Achats client réactivés',
+        'customer.updated': 'Profil client modifié', 'customer.password_reset': 'Mot de passe temporaire', 'customer.deleted': 'Compte supprimé',
+        'purchases.global_suspended': 'Achats suspendus (tous)', 'purchases.global_resumed': 'Achats réactivés (tous)',
+        'payment_method.created': 'Moyen de paiement créé', 'payment_method.updated': 'Moyen de paiement modifié', 'payment_method.deleted': 'Moyen de paiement supprimé',
+        'settings.updated': 'Réglages modifiés', 'store.reset': 'Réinitialisation de la boutique', 'backup.downloaded': 'Sauvegarde téléchargée',
+        'stats.visits_reset': 'Visites remises à zéro', 'ticket.updated': 'Ticket mis à jour', 'ticket.deleted': 'Ticket supprimé',
+        'admin.login': 'Connexion administrateur', 'admin.login_failed': 'Connexion admin refusée', 'admin.password_changed': 'Mot de passe admin modifié'
+      };
+      function actionClass(a) {
+        if (/deleted|suspended|reset|failed|rejected|cancelled|issue_flagged/.test(a)) return 'a-danger';
+        if (/^wallet|^deposit|^transaction/.test(a)) return 'a-money';
+        return '';
+      }
+      function auditItem(e) {
+        var details = e.details && typeof e.details === 'object' ? JSON.stringify(e.details, null, 2) : '';
+        return '<article class="gvx-audit-item">' +
+          '<div class="gvx-audit-top"><span class="gvx-audit-action ' + actionClass(e.action) + '">' + esc(ACTION_LABELS[e.action] || e.action) + '</span>' +
+          '<span>🕒 ' + esc(dt(e.at)) + '</span><span>👤 ' + esc(e.actorName || 'Système') + (e.actorEmail ? ' (' + esc(e.actorEmail) + ')' : '') + '</span>' +
+          (e.targetType ? '<span>🎯 ' + esc(e.targetType) + (e.targetId ? ' ' + esc(e.targetId) : '') + '</span>' : '') + (e.ip ? '<span>🌐 ' + esc(e.ip) + '</span>' : '') + '</div>' +
+          '<div class="gvx-audit-summary">' + esc(e.summary || '') + '</div>' +
+          (details ? '<details><summary>Détails (avant / après, copie conservée)</summary><pre>' + esc(details) + '</pre></details>' : '') +
+        '</article>';
+      }
+      var auditState = { offset: 0, total: 0, loading: false, seq: 0 };
+      function auditQuery(extra) {
+        var p = [];
+        var q = $('gvx-audit-q') ? $('gvx-audit-q').value.trim() : '';
+        var type = $('gvx-audit-type') ? $('gvx-audit-type').value : '';
+        var from = $('gvx-audit-from') ? $('gvx-audit-from').value : '';
+        var to = $('gvx-audit-to') ? $('gvx-audit-to').value : '';
+        if (q) p.push('q=' + encodeURIComponent(q));
+        if (type) p.push('targetType=' + encodeURIComponent(type));
+        if (from) p.push('from=' + encodeURIComponent(new Date(from + 'T00:00:00').toISOString()));
+        if (to) p.push('to=' + encodeURIComponent(new Date(to + 'T23:59:59.999').toISOString()));
+        return p.concat(extra || []).join('&');
+      }
+      async function gvxLoadAudit(reset) {
+        var list = $('gvx-audit-list');
+        if (!list || !getAdminAuthToken()) return;
+        if (reset !== 'more') { auditState.offset = 0; list.innerHTML = '<div class="gvx-audit-item"><span class="gvx-skel" style="width:40%"></span><span class="gvx-skel" style="width:85%;margin-top:8px"></span></div><div class="gvx-audit-item"><span class="gvx-skel" style="width:35%"></span><span class="gvx-skel" style="width:70%;margin-top:8px"></span></div>'; }
+        var seq = ++auditState.seq;
+        try {
+          var d = await api('/api/data/audit?' + auditQuery(['limit=50', 'offset=' + auditState.offset, '_t=' + Date.now()]), { method: 'GET' }, 20000);
+          if (seq !== auditState.seq) return;
+          var html = (d.entries || []).map(auditItem).join('');
+          if (reset !== 'more') list.innerHTML = html || '<p class="gvx-muted" style="padding: 12px 0;">Aucune action enregistrée pour ces critères.</p>';
+          else list.insertAdjacentHTML('beforeend', html);
+          auditState.offset += (d.entries || []).length;
+          auditState.total = d.total || 0;
+          $('gvx-audit-count').textContent = auditState.total + ' action(s)' + (d.available === false ? ' — journal indisponible sur ce stockage' : '');
+          $('gvx-audit-more').innerHTML = auditState.offset < auditState.total ? '<button type="button" class="btn-secondary btn-sm" onclick="gvxLoadAudit(\'more\')">Afficher plus</button>' : '';
+        } catch (err) {
+          if (seq !== auditState.seq) return;
+          list.innerHTML = '<div class="gvx-error">⚠️ ' + esc(err.message) + ' <button type="button" class="btn-primary btn-sm" onclick="gvxLoadAudit(true)">Réessayer</button></div>';
+        }
+      }
+      window.gvxLoadAudit = gvxLoadAudit;
+
+      // ---------------------------------------------------------------- fiche commande : paiement, historique, note
+      var EVENT_LABELS = {
+        created: ['Commande payée', 'info'], awaiting_delivery: ['En attente de livraison', 'warn'], delivered: ['Livrée', 'ok'], delivered_early: ['Livrée avant la fin du délai', 'ok'],
+        content_updated: ['Contenu livré corrigé / remplacé', 'info'], issue_flagged: ['Problème de livraison signalé', 'bad'], issue_cleared: ['Problème levé', 'ok'],
+        cancelled: ['Commande annulée', 'bad'], note_updated: ['Note privée', ''], status_changed: ['Statut modifié', 'info']
+      };
+      function orderTimeline(o) {
+        var ev = Array.isArray(o.history) ? o.history.slice() : [];
+        if (!ev.length) { // anciennes commandes : historique reconstitué depuis les dates enregistrées
+          if (o.date) ev.push({ at: o.date, type: 'created', note: 'Commande payée : ' + money(o.amount) + ' (' + (o.method || 'Solde GetVirtu') + ')' });
+          if (o.delivery && o.delivery.deliveredAt) ev.push({ at: o.delivery.deliveredAt, type: 'delivered', by: o.delivery.deliveredBy });
+          else if (o.validatedAt) ev.push({ at: o.validatedAt, type: 'delivered' });
+          if (o.cancelledAt) ev.push({ at: o.cancelledAt, type: 'cancelled', note: o.refunded ? 'Client remboursé sur son solde' : '' });
+        }
+        return ev.sort(function (a, b) { return Date.parse(a.at || 0) - Date.parse(b.at || 0); });
+      }
+      window.gvxRenderOrderExtra = function (o) {
+        var box = $('review-order-extra');
+        if (!box || !o) return;
+        var txs = DB.get('transactions', []) || [];
+        var ledger = txs.find(function (t) { return t && (t.id === o.ledgerTransactionId || (t.metadata && t.metadata.orderId === o.id && t.type === 'purchase')); });
+        var pay = o.paymentTransactionId ? txs.find(function (t) { return t && t.id === o.paymentTransactionId; }) : null;
+        var d = o.delivery || {};
+        var unitCost = typeof o.unitCost === 'number' ? o.unitCost : null;
+        var kv = function (k, v) { return '<div><span>' + esc(k) + '</span>' + v + '</div>'; };
+        var html = '<div class="gvx-box"><h5>💳 Paiement</h5><div class="gvx-kv">' +
+          kv('Date', esc(dt(o.date))) +
+          kv('Montant payé', '<strong>' + esc(money(o.amount)) + '</strong> (' + esc(String(o.quantity || 1)) + ' × ' + esc(money(o.unitPrice || (o.amount / (o.quantity || 1)))) + ')') +
+          kv('Moyen', esc(o.method || 'Solde GetVirtu')) +
+          kv('Écriture du solde', ledger ? esc(ledger.id) + ' · solde ' + esc(money(ledger.balanceBefore)) + ' → ' + esc(money(ledger.balanceAfter)) : (o.ledgerTransactionId ? esc(o.ledgerTransactionId) : '—')) +
+          (o.paymentTransactionId ? kv('Paiement Mobile Money', esc(o.paymentTransactionId) + (pay ? ' · ' + esc(pay.status === 'completed' ? 'confirmé le ' + dt(pay.completedAt) : pay.status) : '')) : '') +
+          (unitCost !== null ? kv('Coût d\'achat / marge', esc(money(unitCost * (o.quantity || 1))) + ' · marge ' + esc(money((o.amount || 0) - unitCost * (o.quantity || 1)))) : '') +
+          (o.refunded ? kv('Remboursement', '↩ ' + esc(dt(o.refundedAt))) : '') +
+          '</div></div>';
+        if (o.delivery) {
+          var method = { instant: 'Automatique (immédiate)', whatsapp: 'Manuelle (WhatsApp)', delayed: 'Différée puis manuelle', admin_release: "Manuelle par l'administrateur" }[d.method] || d.method;
+          html += '<div class="gvx-box"><h5>🚚 Livraison</h5><div class="gvx-kv">' +
+            kv('Mode', esc(method)) +
+            (d.method === 'delayed' ? kv('Prévue au plus tard', esc(dt(d.eligibleAt)) + (typeof isOrderOverdue === 'function' && isOrderOverdue(o) ? ' <span class="gvx-pill bad">en retard</span>' : '')) : '') +
+            (d.deliveredAt ? kv('Livrée le', esc(dt(d.deliveredAt)) + (d.deliveredBy ? ' par ' + esc(d.deliveredBy) : '') + (d.deliveredEarly ? ' <span class="gvx-pill ok">en avance</span>' : '')) : kv('Statut', esc(o.status))) +
+            '</div></div>';
+        }
+        html += '<div class="gvx-box"><h5>🕒 Historique de la commande</h5><ul class="gvx-timeline">' + orderTimeline(o).map(function (e) {
+          var l = EVENT_LABELS[e.type] || [e.type, ''];
+          // dates techniques (ISO, UTC) des notes affichées à l'heure locale de l'administrateur
+          var note = e.note ? String(e.note).replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, function (m) { return dt(m); }) : '';
+          return '<li class="t-' + (l[1] || 'info') + '"><strong>' + esc(l[0]) + '</strong> <span class="t-when">' + esc(dt(e.at)) + (e.by ? ' · ' + esc(e.by) : '') + '</span>' + (note ? '<div>' + esc(note) + '</div>' : '') + '</li>';
+        }).join('') + '</ul><button type="button" class="btn-secondary btn-sm" style="font-size: 11px;" onclick="gvxShowOrderAudit(\'' + escapeJsStr(o.id) + '\')">Voir le détail dans le journal</button><div id="gvx-order-audit"></div></div>';
+        html += '<div class="gvx-box"><h5>📝 Note privée (jamais visible par le client)</h5><textarea id="gvx-order-note" rows="2" maxlength="2000" style="width: 100%; font-size: 13px;">' + esc(o.adminNote || '') + '</textarea>' +
+          '<button type="button" class="btn-secondary btn-sm" style="margin-top: 6px;" onclick="gvxSaveOrderNote(\'' + escapeJsStr(o.id) + '\', this)">Enregistrer la note</button></div>';
+        box.innerHTML = html;
+      };
+      window.gvxShowOrderAudit = async function (orderId) {
+        var el = $('gvx-order-audit');
+        if (!el) return;
+        el.innerHTML = '<span class="gvx-skel" style="width:70%;margin-top:8px"></span>';
+        try {
+          var d = await api('/api/data/audit?targetType=order&targetId=' + encodeURIComponent(orderId) + '&limit=50', { method: 'GET' });
+          el.innerHTML = (d.entries || []).length ? '<div class="gvx-audit-list" style="margin-top: 8px;">' + d.entries.map(auditItem).join('') + '</div>' : '<p class="gvx-muted" style="margin-top: 6px;">Aucune intervention d\'administrateur enregistrée pour cette commande.</p>';
+        } catch (e) { el.innerHTML = '<p class="gvx-muted" style="color: #b91c1c; margin-top: 6px;">' + esc(e.message) + '</p>'; }
+      };
+      window.gvxSaveOrderNote = async function (orderId, btn) {
+        var ta = $('gvx-order-note');
+        if (!ta) return;
+        if (btn) btn.disabled = true;
+        try {
+          var d = await api('/api/data/orders', { method: 'PUT', body: JSON.stringify({ id: orderId, action: 'update_note', adminNote: ta.value }) });
+          if (Array.isArray(d.orders)) DB.set('orders', d.orders);
+          showToast('Note privée enregistrée.', 'success');
+          var o = (DB.get('orders', []) || []).find(function (x) { return x && x.id === orderId; });
+          if (o) window.gvxRenderOrderExtra(o);
+          window.renderOrdersTable(DB.get('orders', []) || []);
+        } catch (e) { showToast(e.message, 'error'); } finally { if (btn) btn.disabled = false; }
+      };
+
+      // ---------------------------------------------------------------- fiche client
+      var custState = { userId: null, tab: 'orders' };
+      var cm = document.createElement('div');
+      cm.id = 'gvx-customer-modal';
+      cm.className = 'modal-backdrop';
+      cm.setAttribute('role', 'dialog');
+      cm.setAttribute('aria-modal', 'true');
+      cm.setAttribute('aria-label', 'Fiche client');
+      cm.innerHTML = '<div class="modal-window"><button type="button" class="modal-close-btn" aria-label="Fermer" onclick="gvxCloseCustomer()">✕</button><div id="gvx-customer-body"></div></div>';
+      document.body.appendChild(cm);
+      window.gvxCloseCustomer = function () { cm.classList.remove('active'); custState.userId = null; };
+      window.gvxOpenCustomer = function (userId) {
+        custState.userId = String(userId);
+        custState.tab = 'orders';
+        renderCustomer();
+        cm.classList.add('active');
+      };
+      function customerData() {
+        var u = (DB.get('users', []) || []).find(function (x) { return x && String(x.id) === custState.userId; });
+        if (!u) return null;
+        var orders = (DB.get('orders', []) || []).filter(function (o) { return o && (String(o.userId) === custState.userId || (u.email && o.userEmail && o.userEmail.toLowerCase() === u.email.toLowerCase())); });
+        var txs = (DB.get('transactions', []) || []).filter(function (t) { return t && String(t.userId) === custState.userId; });
+        return { u: u, orders: orders, txs: txs };
+      }
+      var TX_TYPES = { deposit: 'Recharge', purchase: 'Achat', refund: 'Remboursement', gift: 'Cadeau admin', credit_manuel_admin: 'Crédit admin', debit_manuel_admin: 'Débit admin' };
+      var TX_STATUS = { completed: ['Confirmée', 'ok'], pending: ['En attente', 'warn'], failed: ['Échouée', 'bad'], cancelled: ['Annulée', 'bad'] };
+      function renderCustomer() {
+        var body = $('gvx-customer-body');
+        var data = customerData();
+        if (!body) return;
+        if (!data) { body.innerHTML = '<p class="gvx-muted">Client introuvable (il a peut-être été supprimé).</p>'; return; }
+        var u = data.u, id = escapeJsStr(u.id);
+        var live = data.orders.filter(function (o) { return o.status !== 'Annulé'; });
+        var spent = live.reduce(function (s, o) { return s + (Number(o.amount) || 0); }, 0);
+        var topups = data.txs.filter(function (t) { return t.type === 'deposit' && t.status === 'completed'; }).reduce(function (s, t) { return s + (Number(t.amount) || 0); }, 0);
+        var pendingOrders = data.orders.filter(function (o) { return o.status === 'En attente'; }).length;
+        var html = '<div class="gvx-cust-head"><div><h2 class="modal-title" style="margin: 0 0 2px;">👤 ' + esc(u.name || 'Client') + '</h2>' +
+          '<div class="gvx-muted">' + esc(u.email) + ' · inscrit le ' + esc(dt(u.created_at)) + ' · ' + esc(u.auth_provider === 'google' ? 'compte Google' : 'e-mail + mot de passe') + '</div>' +
+          '<div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">' +
+            (u.accountSuspended ? '<span class="gvx-pill bad">⛔ Compte suspendu' + (u.accountSuspendedAt ? ' depuis le ' + esc(dt(u.accountSuspendedAt)) : '') + '</span>' : '<span class="gvx-pill ok">✓ Compte actif</span>') +
+            (u.purchasesSuspended ? '<span class="gvx-pill warn">⛔ Achats suspendus</span>' : '<span class="gvx-pill ok">✓ Achats autorisés</span>') +
+            (u.mustChangePassword ? '<span class="gvx-pill info">Mot de passe temporaire</span>' : '') +
+          '</div>' + (u.accountSuspended && u.accountSuspensionReason ? '<div class="gvx-note gvx-note-danger">Motif : ' + esc(u.accountSuspensionReason) + '</div>' : '') + '</div>' +
+          '<div style="text-align: right;"><div class="gvx-muted">Solde actuel</div><div class="gvx-cust-balance">' + esc(money(u.balance)) + '</div></div></div>';
+        html += '<div class="gvx-kv" style="margin-bottom: 8px;">' +
+          '<div><span>Commandes</span>' + esc(num(data.orders.length)) + (pendingOrders ? ' (' + esc(num(pendingOrders)) + ' à livrer)' : '') + '</div>' +
+          '<div><span>Total acheté</span>' + esc(money(spent)) + '</div>' +
+          '<div><span>Recharges confirmées</span>' + esc(money(topups)) + '</div>' +
+          '<div><span>Identifiant</span><code style="font-size: 11px;">' + esc(u.id) + '</code></div></div>';
+        html += '<div class="gvx-actions-row">' +
+          '<button type="button" class="btn-primary btn-sm" onclick="gvxCloseCustomer(); openBalanceModal(\'' + id + '\')">💰 Ajuster le solde</button>' +
+          '<button type="button" class="btn-secondary btn-sm" onclick="gvxToggleAccount(\'' + id + '\', ' + (u.accountSuspended ? 'false' : 'true') + ')" style="' + (u.accountSuspended ? '' : 'color: #b91c1c; border-color: #fecaca;') + '">' + (u.accountSuspended ? '✓ Réactiver le compte' : '⛔ Suspendre le compte') + '</button>' +
+          '<button type="button" class="btn-secondary btn-sm" onclick="togglePurchaseSuspension(\'' + id + '\', ' + (u.purchasesSuspended ? 'false' : 'true') + ', null)">' + (u.purchasesSuspended ? '✓ Réactiver les achats' : '⏸️ Suspendre les achats') + '</button>' +
+          '<button type="button" class="btn-secondary btn-sm" onclick="gvxCloseCustomer(); resetCustomerPassword(\'' + id + '\')">🔑 Mot de passe temporaire</button>' +
+          '<button type="button" class="btn-secondary btn-sm" onclick="gvxCustomerOrders(\'' + id + '\')">📑 Ses commandes dans la liste</button>' +
+        '</div>';
+        html += '<form class="gvx-box" onsubmit="gvxSaveCustomerProfile(event, \'' + id + '\')"><h5>✏️ Informations du client</h5><div class="gvx-form-row">' +
+          '<div><label for="gvx-cust-name">Nom</label><input type="text" id="gvx-cust-name" maxlength="80" required value="' + esc(u.name || '') + '"></div>' +
+          '<div><label for="gvx-cust-email">E-mail (identifiant de connexion)</label><input type="email" id="gvx-cust-email" maxlength="254" required value="' + esc(u.email || '') + '"></div>' +
+          '<button type="submit" class="btn-primary btn-sm">Enregistrer</button></div></form>';
+        html += '<div class="gvx-tabs" role="tablist">' + ['orders', 'txs', 'audit'].map(function (t) {
+          var lbl = { orders: 'Commandes (' + data.orders.length + ')', txs: 'Transactions (' + data.txs.length + ')', audit: 'Journal' }[t];
+          return '<button type="button" role="tab" class="' + (custState.tab === t ? 'active' : '') + '" onclick="gvxCustomerTab(\'' + t + '\')">' + esc(lbl) + '</button>';
+        }).join('') + '</div><div id="gvx-cust-tab"></div>';
+        body.innerHTML = html;
+        renderCustomerTab(data);
+      }
+      function renderCustomerTab(data) {
+        var el = $('gvx-cust-tab');
+        if (!el) return;
+        if (custState.tab === 'orders') {
+          el.innerHTML = data.orders.length ? '<table class="gvx-mini-table"><thead><tr><th>Date</th><th>Commande</th><th>Produit</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>' + data.orders.map(function (o) {
+            var st = o.status === 'Annulé' ? ['Annulée', 'bad'] : (o.status === 'En attente' ? [(typeof isOrderOverdue === 'function' && isOrderOverdue(o)) ? 'En retard' : 'À livrer', (typeof isOrderOverdue === 'function' && isOrderOverdue(o)) ? 'bad' : 'warn'] : ['Livrée', 'ok']);
+            return '<tr><td>' + esc(dt(o.date)) + '</td><td><code style="font-size: 11px;">' + esc(o.id) + '</code></td><td>' + esc(o.productName) + ' × ' + esc(String(o.quantity || 1)) + '</td><td>' + esc(money(o.amount)) + '</td><td><span class="gvx-pill ' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+              '<td><button type="button" class="btn-secondary btn-sm" style="font-size: 11px;" onclick="gvxCloseCustomer(); openOrderReviewModal(\'' + escapeJsStr(o.id) + '\')">Gérer</button></td></tr>';
+          }).join('') + '</tbody></table>' : '<p class="gvx-muted">Aucune commande.</p>';
+        } else if (custState.tab === 'txs') {
+          el.innerHTML = data.txs.length ? '<table class="gvx-mini-table"><thead><tr><th>Date</th><th>Type</th><th>Montant</th><th>Statut</th><th>Moyen / détail</th><th>Solde</th></tr></thead><tbody>' + data.txs.map(function (t) {
+            var st = TX_STATUS[t.status] || [t.status, 'muted'];
+            var credit = ['deposit', 'refund', 'gift', 'credit_manuel_admin'].indexOf(t.type) !== -1;
+            return '<tr><td>' + esc(dt(t.createdAt)) + (t.completedAt && t.completedAt !== t.createdAt ? '<div style="font-size: 10.5px; color: var(--text-muted);">confirmée ' + esc(dt(t.completedAt)) + '</div>' : '') + '</td>' +
+              '<td>' + esc(TX_TYPES[t.type] || t.type) + '</td><td style="font-weight: 700; color: ' + (credit ? '#059669' : '#0f172a') + ';">' + (credit ? '+' : '−') + esc(money(t.amount)) + '</td>' +
+              '<td><span class="gvx-pill ' + st[1] + '">' + esc(st[0]) + '</span>' + (t.failureReason ? '<div style="font-size: 10.5px; color: #9f1239;">' + esc(t.failureReason) + '</div>' : '') + '</td>' +
+              '<td>' + esc(t.paymentMethod || t.provider || '') + (t.notes ? '<div style="font-size: 10.5px; color: var(--text-muted);">' + esc(t.notes) + '</div>' : '') + '<div style="font-size: 10.5px; color: var(--text-muted);">' + esc(t.id) + '</div></td>' +
+              '<td>' + (t.balanceBefore !== null && t.balanceBefore !== undefined ? esc(money(t.balanceBefore)) + ' → ' + esc(money(t.balanceAfter)) : '—') + '</td></tr>';
+          }).join('') + '</tbody></table>' : '<p class="gvx-muted">Aucune transaction.</p>';
+        } else {
+          el.innerHTML = '<span class="gvx-skel" style="width:60%"></span>';
+          api('/api/data/audit?targetType=customer&targetId=' + encodeURIComponent(custState.userId) + '&limit=50', { method: 'GET' }).then(function (d) {
+            if (custState.tab !== 'audit') return;
+            el.innerHTML = (d.entries || []).length ? '<div class="gvx-audit-list">' + d.entries.map(auditItem).join('') + '</div>' : '<p class="gvx-muted">Aucune intervention d\'administrateur sur ce compte.</p>';
+          }).catch(function (e) { el.innerHTML = '<p class="gvx-muted" style="color: #b91c1c;">' + esc(e.message) + '</p>'; });
+        }
+      }
+      window.gvxCustomerTab = function (t) { custState.tab = t; renderCustomer(); };
+      window.gvxCustomerOrders = function (userId) {
+        var u = (DB.get('users', []) || []).find(function (x) { return x && String(x.id) === String(userId); });
+        window.gvxCloseCustomer();
+        switchAdminTab('orders');
+        window.gvxSetFilter('orders', { q: u ? u.email : String(userId), status: 'all', product: '', from: '', to: '' });
+      };
+      function mergeUser(user) {
+        if (!user) return;
+        var users = DB.get('users', []) || [];
+        var i = users.findIndex(function (x) { return x && String(x.id) === String(user.id); });
+        if (i !== -1) users[i] = Object.assign({}, users[i], user); else users.push(user);
+        DB.set('users', users);
+        window.renderUsersTable(users);
+        if (custState.userId) renderCustomer();
+      }
+      window.gvxToggleAccount = async function (userId, suspend) {
+        var reason = '';
+        if (suspend) {
+          reason = window.prompt('Suspendre ce compte ?\n\nLe client ne pourra plus se connecter et toutes ses sessions seront fermées. Son solde, ses commandes et son historique sont conservés.\n\nMotif (visible par les administrateurs uniquement) :', '');
+          if (reason === null) return;
+        } else if (!window.confirm('Réactiver ce compte ? Le client pourra de nouveau se connecter.')) return;
+        try {
+          var d = await api('/api/data/users', { method: 'POST', body: JSON.stringify({ userId: userId, action: suspend ? 'suspend_account' : 'reactivate_account', reason: reason }) });
+          mergeUser(d.user);
+          showToast(suspend ? 'Compte suspendu : connexion bloquée et sessions fermées.' : 'Compte réactivé.', 'success');
+        } catch (e) { showToast(e.message, 'error'); }
+      };
+      window.gvxSaveCustomerProfile = async function (e, userId) {
+        if (e) e.preventDefault();
+        var name = $('gvx-cust-name').value.trim(), email = $('gvx-cust-email').value.trim();
+        try {
+          var d = await api('/api/data/users', { method: 'POST', body: JSON.stringify({ userId: userId, action: 'update_profile', name: name, email: email }) });
+          mergeUser(d.user);
+          showToast('Informations du client enregistrées.', 'success');
+        } catch (err) { showToast(err.message, 'error'); }
+      };
+
+      // ---------------------------------------------------------------- installation
+      ['products', 'orders', 'users', 'recharges'].forEach(installToolbar);
+      // Premier affichage : squelettes jusqu'à la réponse du serveur (rechargement / connexion lente)
+      if (getAdminAuthToken() && !(window._gvxSyncState && window._gvxSyncState.done)) {
+        [['admin-products-tbody', 9], ['admin-orders-tbody', 8], ['admin-users-tbody', 6], ['admin-recharges-tbody', 8]].forEach(function (x) {
+          var tb = $(x[0]);
+          if (tb && !tb.children.length) tb.innerHTML = skeletonRows(x[1]);
+        });
+      }
+    })();
   </script>
 </body>
 </html>

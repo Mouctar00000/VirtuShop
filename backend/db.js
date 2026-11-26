@@ -23,7 +23,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 
 loadLocalEnv();
 
-const { createStore, IS_SERVERLESS } = require('./store');
+const { createStore, IS_SERVERLESS, bucketKey, clampTz } = require('./store');
 
 const SCHEMA_VERSION = 2;
 const DATA_DIR = process.env.GV_DATA_DIR || path.join(__dirname, '..', 'data');
@@ -392,7 +392,8 @@ class Database {
   ready() {
     if (!this._readyPromise) {
       this._readyPromise = (async () => {
-        await this.store.init(createInitialState);
+        // The version lets the Postgres store keep a rollback snapshot the first time a new release starts
+        await this.store.init(createInitialState, { version: (this.getDeploymentVersion() || {}).version });
         // Normalisation / bootstrap admin / migration d'images une seule fois par instance
         await this._runTx(async () => {
           // normalizeState already ran (and marked dirty) inside _runTx
@@ -408,6 +409,34 @@ class Database {
   }
 
   persist() { this._dirty = true; }
+
+  /**
+   * Administrator activity log: append-only record written in the SAME transaction as the change it describes
+   * (no log without the change, no change without the log). Must be called inside db.tx().
+   */
+  audit(actor, action, { targetType = null, targetId = null, summary = '', details = null, ip = null } = {}) {
+    if (!this._ctx || typeof this._ctx.audit !== 'function') return;
+    const a = actor && actor.user ? actor.user : actor;
+    this._ctx.audit({
+      at: nowIso(),
+      actorId: a && a.id ? String(a.id) : null,
+      actorName: a ? (a.name || a.email || 'Administrateur') : 'Système',
+      actorEmail: a && a.email ? a.email : null,
+      action: String(action || 'unknown'),
+      targetType,
+      targetId: targetId === null || targetId === undefined ? null : String(targetId),
+      summary: cleanText(summary, 500),
+      ip: ip ? cleanText(ip, 80) : null,
+      details: details === null || details === undefined ? null : clone(details)
+    });
+  }
+
+  async listAudit(opts = {}) {
+    await this.ready();
+    if (typeof this.store.listAudit !== 'function') return { entries: [], total: 0, available: false };
+    return this.store.listAudit(opts);
+  }
+
   // Compatibility no-ops (the old remote-sync API): durability is now guaranteed by tx()
   async flushRemoteIfServerless() {}
   async persistToRemote() { return true; }
@@ -670,14 +699,78 @@ class Database {
     return u.session_version;
   }
 
+  /** Account suspension (administrator): the customer can no longer log in; every open session is closed.
+   *  Balance, orders and history are kept untouched; reactivation restores normal access. */
+  isAccountSuspended(u) {
+    return Boolean(u && u.accountSuspended === true);
+  }
+
+  setAccountSuspension(userId, suspended, { adminName = 'Administrateur', reason = '' } = {}) {
+    const u = this.getUserById(userId);
+    if (!u) throw httpError(404, 'Client introuvable.');
+    if (isAdminUser(u)) throw httpError(400, 'Un compte administrateur ne peut pas être suspendu.');
+    const now = nowIso();
+    const on = Boolean(suspended);
+    u.accountSuspended = on;
+    u.accountSuspensionUpdatedAt = now;
+    u.accountSuspensionUpdatedBy = cleanText(adminName, 80) || 'Administrateur';
+    if (on) {
+      u.accountSuspendedAt = now;
+      u.accountSuspensionReason = cleanText(reason, 300);
+      u.session_version = (u.session_version || 0) + 1; // logs the customer out everywhere
+    } else {
+      u.accountSuspensionReason = '';
+    }
+    u.updated_at = now;
+    this.persist();
+    return u;
+  }
+
+  /** Administrator edit of a customer's profile (name, e-mail). The balance is never changed here. */
+  adminUpdateCustomer(userId, { name, email } = {}) {
+    const u = this.getUserById(userId);
+    if (!u) throw httpError(404, 'Client introuvable.');
+    if (isAdminUser(u)) throw httpError(403, "Le profil administrateur ne se modifie pas depuis la liste des clients.");
+    const before = { name: u.name, email: u.email };
+    if (name !== undefined) {
+      const n = cleanText(name, 80);
+      if (n.length < 2) throw httpError(400, 'Le nom doit contenir au moins 2 caractères.');
+      u.name = n;
+    }
+    if (email !== undefined) {
+      const em = String(email || '').trim().toLowerCase();
+      if (em.length > 254 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(em)) throw httpError(400, "Format d'adresse e-mail invalide.");
+      const other = this.getUserByEmail(em);
+      if (other && String(other.id) !== String(u.id)) throw httpError(409, 'Cette adresse e-mail est déjà utilisée par un autre compte.');
+      u.email = em;
+    }
+    u.updated_at = nowIso();
+    this.persist();
+    return { user: u, before, after: { name: u.name, email: u.email } };
+  }
+
+  /**
+   * Permanent deletion of a customer account. Refused while money or deliveries are still owed to the customer
+   * (positive balance, order awaiting delivery): settle them first, so that no balance or purchase silently vanishes.
+   * The API layer keeps a full copy of the deleted account in the activity log.
+   */
   deleteUser(id) {
     if (!id) throw httpError(400, 'ID utilisateur requis.');
     const u = this.getUserById(id) || this.getUserByEmail(String(id));
     if (!u) throw httpError(404, 'Utilisateur introuvable.');
     if (isAdminUser(u)) throw httpError(403, 'Action refusée : un compte administrateur ne peut pas être supprimé.');
+    if (roundMoney(u.balance) > 0) {
+      throw httpError(409, `Ce client a encore un solde de ${roundMoney(u.balance).toFixed(2)} $ : remettez-le à zéro (opération tracée) ou suspendez le compte au lieu de le supprimer.`, 'BALANCE_NOT_ZERO');
+    }
+    const pending = this.data.orders.filter(o => o && String(o.userId) === String(u.id) && o.status === ORDER_STATUS.PENDING);
+    if (pending.length) {
+      throw httpError(409, `Ce client a ${pending.length} commande(s) en attente de livraison : livrez-les ou annulez-les avant de supprimer le compte.`, 'PENDING_ORDERS');
+    }
+    const snapshot = clone(u);
+    delete snapshot.password_hash;
     this.data.users = this.data.users.filter(x => String(x.id) !== String(u.id));
     this.persist();
-    return { success: true, deletedUser: { id: u.id, email: u.email, name: u.name } };
+    return { success: true, deletedUser: { id: u.id, email: u.email, name: u.name }, snapshot };
   }
 
   linkGoogleAccount(userId, { google_id, profile_picture, name }) {
@@ -808,7 +901,7 @@ class Database {
   }
 
   getPublicProducts() {
-    return this.getProducts().filter(p => p && p.published === true).map(p => {
+    const list = this.getProducts().filter(p => p && p.published === true).map(p => {
       const purchaseMode = this.purchaseModeOf(p);
       const showStock = p.showStock !== false;
       return {
@@ -838,6 +931,9 @@ class Database {
         updated_at: p.updated_at
       };
     });
+    // Out-of-stock products always come after the available ones and climb back automatically when restocked.
+    // Stable: the administrator's order is kept inside each group, identical on every device.
+    return list.filter(p => p.available).concat(list.filter(p => !p.available));
   }
 
   /** Reuses the spelling of an existing category typed with a different case ("e-mail" -> "E-mail"). */
@@ -920,6 +1016,16 @@ class Database {
       if (!isFinite(cap) || cap < 0 || cap > MAX_MONEY) throw httpError(400, `Prix barré invalide (0 à ${MAX_MONEY} $).`);
       compareAtPrice = cap > 0 ? cap : null;
     }
+    // Optional purchase cost (administrator only, never public): used for the profit statistics
+    let costPrice;
+    if (prod.costPrice !== undefined) {
+      if (prod.costPrice === null || prod.costPrice === '') costPrice = null;
+      else {
+        const rawCost = Number(prod.costPrice);
+        if (!isFinite(rawCost) || rawCost < 0 || rawCost > MAX_MONEY) throw httpError(400, `Coût d'achat invalide (0 à ${MAX_MONEY} $).`);
+        costPrice = roundMoney(rawCost);
+      }
+    }
     const effPrice = price !== undefined ? price : (target ? target.price : 0);
     const effCompareAt = compareAtPrice !== undefined ? compareAtPrice : (target ? target.compareAtPrice : null);
     if (typeof effCompareAt === 'number' && effCompareAt <= effPrice && (compareAtPrice !== undefined || price !== undefined)) {
@@ -952,6 +1058,7 @@ class Database {
         category: this._canonicalCategory(prod.category, id),
         price: price !== undefined ? price : 0,
         compareAtPrice: compareAtPrice !== undefined ? compareAtPrice : null,
+        costPrice: costPrice !== undefined ? costPrice : null,
         stock: 0,
         description: cleanText(prod.description, 2000),
         features: sheet.features || [],
@@ -973,6 +1080,7 @@ class Database {
       if (prod.category !== undefined) p.category = this._canonicalCategory(prod.category, p.id);
       if (price !== undefined) p.price = price;
       if (compareAtPrice !== undefined) p.compareAtPrice = compareAtPrice;
+      if (costPrice !== undefined) p.costPrice = costPrice;
       Object.assign(p, sheet);
       if (prod.description !== undefined) p.description = cleanText(prod.description, 2000);
       if (image !== undefined && image !== p.image) {
@@ -1265,7 +1373,7 @@ class Database {
    * Complete purchase with the customer balance — a single atomic unit:
    * stock/keys reservation + balance debit + order + ledger entry (+ idempotency).
    */
-  purchaseWithBalance(user, { productId, productName, quantity, contactInfo, idempotencyKey, paymentLabel }) {
+  purchaseWithBalance(user, { productId, productName, quantity, contactInfo, idempotencyKey, paymentLabel, paymentTransactionId }) {
     const u = this.getUserById(user.id);
     if (!u) throw httpError(401, 'Compte client introuvable.', 'SESSION_INVALID');
     if (isAdminUser(u)) throw httpError(403, 'Un compte administrateur ne peut pas passer de commande. Utilisez un compte client.');
@@ -1336,9 +1444,12 @@ class Database {
       delivery,
       vaultContent,
       idempotencyKey: idem || null,
-      refunded: false
+      refunded: false,
+      // Purchase cost frozen at sale time (administrator statistics only, never shown to the customer)
+      unitCost: typeof prod.costPrice === 'number' ? prod.costPrice : null,
+      paymentTransactionId: paymentTransactionId ? cleanText(paymentTransactionId, 80) : null
     });
-    this.createTransaction({
+    const ledger = this.createTransaction({
       userId: u.id,
       userEmail: u.email,
       userName: u.name,
@@ -1353,8 +1464,38 @@ class Database {
       notes: `Achat ${prod.name} (x${qty}) — commande ${orderId}`,
       metadata: { orderId }
     });
+    order.ledgerTransactionId = ledger.id;
+    const via = cleanText(paymentLabel, 60) || 'Solde GetVirtu';
+    this._orderEvent(order, 'created', { by: 'Client', note: `Commande payée : ${total.toFixed(2)} $ (${via})` + (paymentTransactionId ? ` — paiement ${paymentTransactionId}` : '') });
+    if (!isManual) this._orderEvent(order, 'delivered', { by: 'Système', note: 'Livraison automatique immédiate' });
+    else if (delivery && delivery.method === 'delayed') this._orderEvent(order, 'awaiting_delivery', { by: 'Système', note: `Livraison prévue au plus tard le ${delivery.eligibleAt} (délai ${Math.round(delivery.delaySeconds / 60)} min) — l'administrateur peut livrer avant` });
+    else this._orderEvent(order, 'awaiting_delivery', { by: 'Système', note: delivery && delivery.method === 'admin_release' ? "Livraison manuelle par l'administrateur" : 'Livraison manuelle (WhatsApp)' });
     this.persist();
     return { order, newBalance, remainingStock: alloc.remainingStock };
+  }
+
+  /** Order timeline: every event that changes an order (creation, delivery, corrections, issues, cancellation). */
+  _orderEvent(o, type, { by = null, note = '', data = null } = {}) {
+    if (!o) return;
+    if (!Array.isArray(o.history)) o.history = [];
+    const ev = { at: nowIso(), type: String(type), by: by ? cleanText(by, 80) : null };
+    if (note) ev.note = cleanText(note, 500);
+    if (data && typeof data === 'object') Object.assign(ev, clone(data));
+    o.history.push(ev);
+    if (o.history.length > 200) o.history = o.history.slice(-200);
+    this.persist();
+  }
+
+  /** Administrator: private note on an order (never shown to the customer). */
+  setOrderAdminNote(orderId, note, { adminName = 'Administrateur' } = {}) {
+    const o = this.getOrderById(orderId);
+    if (!o) throw httpError(404, 'Commande introuvable.');
+    const before = o.adminNote || '';
+    o.adminNote = cleanText(note, 2000);
+    o.updatedAt = nowIso();
+    if (before !== o.adminNote) this._orderEvent(o, 'note_updated', { by: adminName, note: o.adminNote ? 'Note privée mise à jour' : 'Note privée effacée' });
+    this.persist();
+    return { order: o, before, after: o.adminNote };
   }
 
   /** Admin: deliver a pending order (manual delivery) with the content entered in the dashboard. */
@@ -1362,12 +1503,12 @@ class Database {
     const o = this.getOrderById(orderId);
     if (!o) throw httpError(404, 'Commande introuvable.');
     if (o.status === ORDER_STATUS.CANCELLED) throw httpError(409, 'Une commande annulée (et remboursée) ne peut pas être livrée.');
-    // Delayed fulfilment: nothing can be delivered before the end of the waiting period (server clock)
+    // Delayed fulfilment: the waiting period is the MAXIMUM expected delivery time, never a lock. The administrator
+    // can deliver at any moment (even one minute after payment); an early delivery is recorded as such.
     const d0 = o.delivery;
-    if (d0 && d0.method === 'delayed' && d0.status !== 'delivered' && Date.now() < Date.parse(d0.eligibleAt)) {
-      const mins = Math.ceil((Date.parse(d0.eligibleAt) - Date.now()) / 60000);
-      throw httpError(409, "La période d'attente de cette commande n'est pas terminée (encore environ " + mins + ' min). Vous pourrez la livrer ensuite.', 'DELIVERY_WAITING');
-    }
+    const wasDelivered = o.status === ORDER_STATUS.DONE || o.status === ORDER_STATUS.DELIVERED || Boolean(d0 && d0.status === 'delivered');
+    const deliveredEarly = Boolean(d0 && d0.method === 'delayed' && !wasDelivered && Date.now() < Date.parse(d0.eligibleAt));
+    const deliveredLate = Boolean(d0 && d0.method === 'delayed' && !wasDelivered && Date.now() >= Date.parse(d0.eligibleAt));
     // Items of the manual stock chosen by the administrator (never picked automatically)
     const pickedItems = this._pickManualStockItems(o, stockItemIds);
     if (pickedItems.length) {
@@ -1412,10 +1553,17 @@ class Database {
       o.delivery.status = 'delivered';
       o.delivery.deliveredAt = nowIso();
       o.delivery.deliveredBy = cleanText(adminName, 80) || 'Administrateur';
+      if (deliveredEarly) o.delivery.deliveredEarly = true;
+      if (deliveredLate) o.delivery.deliveredLateBySeconds = Math.max(0, Math.round((Date.now() - Date.parse(d0.eligibleAt)) / 1000));
     }
     if (o.delivery && pickedItems.length) o.delivery.stockItemIds = Array.from(new Set([...(o.delivery.stockItemIds || []), ...pickedItems.map(it => it.id)]));
     if (o.delivery && o.delivery.issue) o.delivery.issue = null;
     o.updatedAt = nowIso();
+    const by = cleanText(adminName, 80) || 'Administrateur';
+    const what = vc.type === 'file' ? 'fichier' : (vc.type === 'link' ? 'lien' : 'contenu texte') + (pickedItems.length ? ` (${pickedItems.length} élément(s) du stock manuel)` : '');
+    if (wasDelivered) this._orderEvent(o, 'content_updated', { by, note: `Contenu livré corrigé / remplacé : ${what}` });
+    else if (deliveredEarly) this._orderEvent(o, 'delivered_early', { by, note: `Livrée avant la fin du délai prévu (${what})` });
+    else this._orderEvent(o, 'delivered', { by, note: `Livrée manuellement : ${what}` + (deliveredLate ? ` — ${Math.round(o.delivery.deliveredLateBySeconds / 60)} min après le délai prévu` : '') });
     this.persist();
     return o;
   }
@@ -1481,20 +1629,35 @@ class Database {
     o.wasDeliveredBeforeCancel = wasDelivered;
     o.vaultContent = null; // access revoked
     o.updatedAt = now;
+    if (cleanText(reason, 300)) o.cancelReason = cleanText(reason, 300);
+    this._orderEvent(o, 'cancelled', {
+      by: adminName,
+      note: 'Commande annulée' + (refundTx ? ` — client remboursé de ${refundAmount.toFixed(2)} $ sur son solde (${refundTx.id})` : ' — sans remboursement') +
+        (keysReturned ? ` — ${keysReturned} clé(s) remise(s) en vente` : '') + (keysRevoked ? ` — ${keysRevoked} clé(s) retirée(s) de la vente` : '') +
+        (cleanText(reason, 150) ? ` — motif : ${cleanText(reason, 150)}` : '')
+    });
     this.persist();
     return { order: o, refundTransaction: refundTx, keysReturned, keysRevoked, newBalance: buyer ? buyer.balance : null };
   }
 
+  /**
+   * Permanent deletion of an order: only once it is cancelled (the customer has been refunded / no access is owed).
+   * A paid order (pending or delivered) must be cancelled first. The API keeps a full copy in the activity log.
+   */
   deleteOrder(id) {
     const o = this.getOrderById(id);
     if (!o) throw httpError(404, 'Commande introuvable.');
+    if (o.status !== ORDER_STATUS.CANCELLED) {
+      throw httpError(409, 'Seule une commande annulée peut être supprimée : annulez-la d’abord (le client est alors remboursé une seule fois et son accès retiré).', 'ORDER_NOT_CANCELLED');
+    }
+    const snapshot = clone(o);
     this.data.orders = this.data.orders.filter(x => x !== o);
     if (o.vaultContent && o.vaultContent.blobId) {
       const stillUsed = this._blobReferencedByOrders(o.vaultContent.blobId) || Object.values(this.data.vault).some(v => v && v.blobId === o.vaultContent.blobId);
       if (!stillUsed) this._discardBlobs([o.vaultContent.blobId]);
     }
     this.persist();
-    return { success: true, deletedOrder: { id: o.id } };
+    return { success: true, deletedOrder: { id: o.id }, snapshot };
   }
 
   // ============================================================ CONFIGURABLE DELIVERY & MANUAL STOCK
@@ -1550,8 +1713,8 @@ class Database {
     if (!o) return false;
     const d = o.delivery;
     if (!d || !FULFILMENT_TIMINGS.includes(d.method)) return true; // instant / WhatsApp / older orders: unchanged
-    return (o.status === ORDER_STATUS.DONE || o.status === ORDER_STATUS.DELIVERED) && d.status === 'delivered'
-      && (d.method !== 'delayed' || Date.now() >= Date.parse(d.eligibleAt));
+    // Released as soon as the administrator has delivered it (an early delivery is visible immediately)
+    return (o.status === ORDER_STATUS.DONE || o.status === ORDER_STATUS.DELIVERED) && d.status === 'delivered';
   }
 
   /** Copy of an order as its customer may see it (no admin note, no stock references, content only once delivered). */
@@ -1560,6 +1723,11 @@ class Database {
     const released = this.isOrderContentReleased(o);
     const copy = JSON.parse(JSON.stringify(o));
     delete copy.adminNote;
+    // Administrator-only information: timeline (names, notes), purchase cost, internal references
+    delete copy.history;
+    delete copy.unitCost;
+    delete copy.ledgerTransactionId;
+    delete copy.cancelReason;
     if (copy.delivery) {
       const phase = this.deliveryPhaseOf(o);
       delete copy.delivery.deliveredBy;
@@ -1582,6 +1750,7 @@ class Database {
     if (!o.delivery) o.delivery = { method: o.deliveryMode === 'manual' ? 'whatsapp' : 'instant', status: o.status === ORDER_STATUS.PENDING ? 'pending' : 'delivered' };
     o.delivery.issue = issue ? { note: cleanText(note, 500), at: nowIso(), by: cleanText(adminName, 80) || 'Administrateur' } : null;
     o.updatedAt = nowIso();
+    this._orderEvent(o, issue ? 'issue_flagged' : 'issue_cleared', { by: adminName, note: issue ? ('Problème de livraison signalé' + (cleanText(note, 300) ? ' : ' + cleanText(note, 300) : '')) : 'Problème de livraison levé' });
     this.persist();
     return o;
   }
@@ -1751,13 +1920,26 @@ class Database {
     return { transaction: t, newBalance: user.balance, creditedAmount: t.amount };
   }
 
+  /**
+   * Deleting a ledger entry. Confirmed transactions (they changed a balance) are part of the financial history and
+   * are never deleted; a pending one must be verified or rejected first (otherwise a payment confirmed later by the
+   * provider could no longer be credited). Failed / cancelled entries can be removed; the API keeps a full copy in
+   * the activity log.
+   */
   deleteTransaction(id) {
     const t = this.getTransactionById(id);
     if (!t) throw httpError(404, 'Transaction introuvable.');
+    if (t.status === 'completed') {
+      throw httpError(409, 'Transaction confirmée : elle a modifié un solde et reste dans l’historique financier (elle ne peut pas être supprimée). Pour corriger un solde, utilisez un ajustement tracé.', 'TX_PROTECTED');
+    }
+    if (t.status === 'pending') {
+      throw httpError(409, 'Transaction en attente : vérifiez-la (SasPay) ou rejetez-la avant de pouvoir la supprimer.', 'TX_PENDING');
+    }
+    const snapshot = clone(t);
     this.data.transactions = this.data.transactions.filter(x => x !== t);
     if (t.proofImage && /^prv_/.test(t.proofImage)) this._discardBlobs([t.proofImage]);
     this.persist();
-    return { success: true, deletedTransaction: { id: t.id } };
+    return { success: true, deletedTransaction: { id: t.id }, snapshot };
   }
 
   // ============================================================ VAULT
@@ -1953,6 +2135,203 @@ class Database {
       chartLabels: labels,
       chartRevenue: rev,
       chartVolume: vol
+    };
+  }
+
+  /**
+   * Administrator statistics, computed from the real records only (no estimate, no stored counter).
+   * Range = the administrator's local calendar days [from, to] inclusive; tz = Date#getTimezoneOffset() of the browser.
+   * from = 'all' starts at the first record. Definitions:
+   *  - sales.gross     : amount of every order placed in the period (paid from the customer balance at order time)
+   *  - sales.net       : gross minus the orders cancelled since (refunded to the balance)
+   *  - collected       : money actually received = top-ups confirmed by the provider (or approved by an administrator)
+   *  - pending/failed  : top-ups not confirmed (never counted as collected)
+   *  - refunds         : refunds credited to customer balances in the period
+   *  - adminAdjustments: gifts / manual credits / debits by an administrator (not money received)
+   *  - profit          : net sales minus the purchase cost, only for orders whose cost is known
+   */
+  async getStatistics({ from, to, tz } = {}) {
+    const tzMin = clampTz(tz);
+    const DAY = 86400000;
+    const now = Date.now();
+    const dayStart = (ymd) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+      if (!m) return null;
+      const t = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+      return Number.isFinite(t) ? t + tzMin * 60000 : null;
+    };
+    const localYmd = (ms) => new Date(ms - tzMin * 60000).toISOString().slice(0, 10);
+    let toMs = dayStart(to);
+    toMs = toMs === null ? dayStart(localYmd(now)) + DAY : toMs + DAY; // inclusive end day
+    let fromMs = dayStart(from);
+    if (fromMs === null) {
+      if (String(from || '') === 'all') {
+        let first = Infinity;
+        const seen = (iso) => { const t = Date.parse(iso || ''); if (Number.isFinite(t) && t < first) first = t; };
+        for (const o of this.data.orders) seen(o && o.date);
+        for (const t of this.data.transactions) seen(t && t.createdAt);
+        for (const u of this.data.users) seen(u && u.created_at);
+        if (!Number.isFinite(first) || first >= toMs) first = toMs - 30 * DAY;
+        fromMs = dayStart(localYmd(first));
+      } else {
+        fromMs = toMs - 30 * DAY;
+      }
+    }
+    if (!(fromMs < toMs)) throw httpError(400, 'Période invalide : la date de début doit précéder la date de fin.');
+    if (toMs - fromMs > 3700 * DAY) throw httpError(400, 'Période trop longue (10 ans maximum).');
+    const span = toMs - fromMs;
+    const gran = span <= 2 * DAY ? 'hour' : (span <= 92 * DAY ? 'day' : 'month');
+
+    const inRange = (iso) => { const t = Date.parse(iso || ''); return Number.isFinite(t) && t >= fromMs && t < toMs; };
+    const sum = (list, f) => roundMoney(list.reduce((s, x) => s + (Number(f(x)) || 0), 0));
+    const amt = x => x.amount;
+    const qty = o => parseInt(o.quantity, 10) || 1;
+    const isDone = o => o.status === ORDER_STATUS.DONE || o.status === ORDER_STATUS.DELIVERED;
+    const isCancelled = o => o.status === ORDER_STATUS.CANCELLED;
+    const isPending = o => o.status === ORDER_STATUS.PENDING;
+
+    // ---- orders & sales
+    const orders = this.data.orders.filter(o => o && inRange(o.date));
+    const live = orders.filter(o => !isCancelled(o));
+    const sales = {
+      gross: sum(orders, amt),
+      cancelled: sum(orders.filter(isCancelled), amt),
+      net: sum(live, amt),
+      delivered: sum(orders.filter(isDone), amt),
+      awaitingDelivery: sum(orders.filter(isPending), amt),
+      units: live.reduce((s, o) => s + qty(o), 0),
+      avgOrder: live.length ? roundMoney(sum(live, amt) / live.length) : 0
+    };
+    const orderCounts = { total: orders.length, delivered: orders.filter(isDone).length, pending: orders.filter(isPending).length, cancelled: orders.filter(isCancelled).length };
+    const pendingNow = this.data.orders.filter(o => o && isPending(o));
+    const overdueNow = pendingNow.filter(o => o.delivery && o.delivery.method === 'delayed' && Date.parse(o.delivery.eligibleAt) <= now);
+
+    // ---- money: received, pending, failed, refunds, administrator adjustments
+    const txs = this.data.transactions.filter(Boolean);
+    const txTime = t => (t.status === 'completed' ? (t.completedAt || t.createdAt) : t.createdAt);
+    const deposits = txs.filter(t => t.type === 'deposit');
+    const depCompleted = deposits.filter(t => t.status === 'completed' && inRange(txTime(t)));
+    const depPending = deposits.filter(t => t.status === 'pending' && inRange(t.createdAt));
+    const depFailed = deposits.filter(t => (t.status === 'failed' || t.status === 'cancelled') && inRange(t.createdAt));
+    const collected = {
+      total: sum(depCompleted, amt),
+      count: depCompleted.length,
+      mobileMoney: sum(depCompleted.filter(t => t.provider === 'saspay'), amt),
+      manual: sum(depCompleted.filter(t => t.provider !== 'saspay'), amt),
+      approvedByAdmin: depCompleted.filter(t => t.adminResponsible).length,
+      forDirectPurchase: sum(depCompleted.filter(t => t.metadata && t.metadata.purchase), amt),
+      walletTopUps: sum(depCompleted.filter(t => !(t.metadata && t.metadata.purchase)), amt)
+    };
+    const pendingPayments = { total: sum(depPending, amt), count: depPending.length, allPendingNow: deposits.filter(t => t.status === 'pending').length };
+    const failedPayments = { total: sum(depFailed, amt), count: depFailed.length };
+    const refundTx = txs.filter(t => t.type === 'refund' && t.status === 'completed' && inRange(txTime(t)));
+    const creditTx = txs.filter(t => (t.type === 'gift' || t.type === 'credit_manuel_admin') && t.status === 'completed' && inRange(txTime(t)));
+    const debitTx = txs.filter(t => t.type === 'debit_manuel_admin' && t.status === 'completed' && inRange(txTime(t)));
+    const refunds = { total: sum(refundTx, amt), count: refundTx.length };
+    const adminAdjustments = { credits: sum(creditTx, amt), creditsCount: creditTx.length, debits: sum(debitTx, amt), debitsCount: debitTx.length };
+
+    // ---- profit (purchase cost frozen on the order, or current product cost for older orders)
+    const productsById = new Map(this.data.products.filter(Boolean).map(p => [String(p.id), p]));
+    let profit = 0, costed = 0, revenueCovered = 0;
+    for (const o of live) {
+      const p = productsById.get(String(o.productId));
+      const unitCost = typeof o.unitCost === 'number' ? o.unitCost : (p && typeof p.costPrice === 'number' ? p.costPrice : null);
+      if (unitCost === null) continue;
+      costed++;
+      revenueCovered += Number(o.amount) || 0;
+      profit += (Number(o.amount) || 0) - unitCost * qty(o);
+    }
+    const profitInfo = { available: costed > 0, amount: roundMoney(profit), ordersWithCost: costed, ordersTotal: live.length, revenueCovered: roundMoney(revenueCovered) };
+
+    // ---- customers
+    const customers = this.data.users.filter(u => u && !isAdminUser(u));
+    const customerStats = {
+      total: customers.length,
+      newInPeriod: customers.filter(u => inRange(u.created_at)).length,
+      withBalance: customers.filter(u => roundMoney(u.balance) > 0).length,
+      walletsTotal: sum(customers, u => u.balance),
+      suspended: customers.filter(u => u.accountSuspended === true).length
+    };
+
+    // ---- products: best / least sellers of the period, out of stock now
+    const perProduct = new Map();
+    for (const o of live) {
+      const k = String(o.productId);
+      const cur = perProduct.get(k) || { productId: o.productId, name: o.productName, units: 0, revenue: 0, orders: 0 };
+      cur.units += qty(o);
+      cur.revenue = roundMoney(cur.revenue + (Number(o.amount) || 0));
+      cur.orders++;
+      perProduct.set(k, cur);
+    }
+    for (const [k, v] of perProduct) { const p = productsById.get(k); if (p) v.name = p.name; else v.deleted = true; }
+    this.getProducts(); // automatic stock refreshed from the key vault
+    const published = this.data.products.filter(p => p && p.published === true);
+    const best = [...perProduct.values()].sort((a, b) => b.units - a.units || b.revenue - a.revenue).slice(0, 5);
+    const least = published.map(p => perProduct.get(String(p.id)) || { productId: p.id, name: p.name, units: 0, revenue: 0, orders: 0 })
+      .sort((a, b) => a.units - b.units || a.revenue - b.revenue).slice(0, 5);
+    const outOfStock = published.filter(p => this.purchaseModeOf(p) === 'site' && !this.isProductAvailable(p))
+      .map(p => ({ productId: p.id, name: p.name, stock: parseInt(p.stock, 10) || 0 }));
+    const productStats = { total: this.data.products.length, published: published.length, hidden: this.data.products.filter(p => p && p.published !== true).length, outOfStockCount: outOfStock.length, outOfStock, best, least };
+
+    // ---- visitors (dedicated table, one aggregated query each)
+    let visitors = { totalVisits: 0, uniqueVisitors: 0, newVisitors: 0, available: true };
+    let visitSeries = {};
+    try { visitors = { ...visitors, ...(await this.store.visitStats(fromMs, toMs)) }; } catch (e) { visitors.available = false; console.error('[Stats] visits unavailable', e.message); }
+    try { if (typeof this.store.visitSeries === 'function') visitSeries = await this.store.visitSeries(fromMs, toMs, gran, tzMin); } catch (e) { console.error('[Stats] visit series unavailable', e.message); }
+
+    // ---- time series (local buckets)
+    const keys = [];
+    if (gran === 'month') {
+      const d = new Date(fromMs - tzMin * 60000);
+      let y = d.getUTCFullYear(), m = d.getUTCMonth();
+      for (let guard = 0; guard < 200; guard++) {
+        const start = Date.UTC(y, m, 1) + tzMin * 60000;
+        if (start >= toMs) break;
+        keys.push(`${y}-${String(m + 1).padStart(2, '0')}`);
+        m++; if (m > 11) { m = 0; y++; }
+      }
+    } else {
+      const step = gran === 'hour' ? 3600000 : DAY;
+      for (let t = fromMs; t < toMs && keys.length < 400; t += step) keys.push(bucketKey(t, gran, tzMin));
+    }
+    const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    const label = (k) => {
+      if (gran === 'month') return MONTHS[parseInt(k.slice(5, 7), 10) - 1] + ' ' + k.slice(0, 4);
+      if (gran === 'hour') return (span > DAY ? k.slice(8, 10) + '/' + k.slice(5, 7) + ' ' : '') + k.slice(11, 13) + 'h';
+      return k.slice(8, 10) + '/' + k.slice(5, 7);
+    };
+    const series = keys.map(k => ({ key: k, label: label(k), orders: 0, sales: 0, collected: 0, visits: 0, uniqueVisitors: 0 }));
+    const idx = new Map(keys.map((k, i) => [k, i]));
+    for (const o of live) {
+      const i = idx.get(bucketKey(Date.parse(o.date), gran, tzMin));
+      if (i !== undefined) { series[i].orders++; series[i].sales = roundMoney(series[i].sales + (Number(o.amount) || 0)); }
+    }
+    for (const t of depCompleted) {
+      const i = idx.get(bucketKey(Date.parse(txTime(t)), gran, tzMin));
+      if (i !== undefined) series[i].collected = roundMoney(series[i].collected + (Number(t.amount) || 0));
+    }
+    for (const [k, v] of Object.entries(visitSeries || {})) {
+      const i = idx.get(k);
+      if (i !== undefined) { series[i].visits = v.visits || 0; series[i].uniqueVisitors = v.unique || 0; }
+    }
+
+    return {
+      range: { from: localYmd(fromMs), to: localYmd(toMs - 1), fromIso: new Date(fromMs).toISOString(), toIso: new Date(toMs).toISOString(), tzOffsetMin: tzMin, granularity: gran, days: Math.round(span / DAY) },
+      generatedAt: nowIso(),
+      orders: orderCounts,
+      pendingNow: pendingNow.length,
+      overdueNow: overdueNow.length,
+      sales,
+      collected,
+      pendingPayments,
+      failedPayments,
+      refunds,
+      adminAdjustments,
+      profit: profitInfo,
+      customers: customerStats,
+      products: productStats,
+      visitors,
+      series
     };
   }
 

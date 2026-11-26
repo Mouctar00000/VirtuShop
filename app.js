@@ -56,6 +56,48 @@ var DB = {
   };
 })();
 
+// ========== RÉSEAU : DÉLAI MAXIMAL PAR REQUÊTE + BANDEAU DE CONNEXION ==========
+// Une connexion lente ou coupée ne laisse jamais une page bloquée en chargement infini.
+function gvFetch(url, init, timeoutMs) {
+  var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+  var opts = Object.assign({}, init || {});
+  if (ctrl) opts.signal = ctrl.signal;
+  var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, timeoutMs || 15000) : null;
+  return fetch(url, opts).finally(function() { if (timer) clearTimeout(timer); });
+}
+
+function gvSetNetBanner(show, text) {
+  var el = document.getElementById('gv-net-banner');
+  if (!show) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'gv-net-banner';
+    el.className = 'gv-net-banner';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<span>' + escapeHtml(text) + '</span><button type="button" onclick="gvRetryConnection()">Réessayer</button>';
+}
+
+function gvRetryConnection() {
+  gvSetNetBanner(true, 'Nouvelle tentative de connexion…');
+  syncProductsFromServer(true);
+  syncPaymentMethodsFromServer();
+  syncUserSessionAndBalance();
+}
+
+window.addEventListener('offline', function() {
+  gvSetNetBanner(true, 'Vous êtes hors ligne. Les informations affichées seront actualisées dès le retour de la connexion.');
+});
+window.addEventListener('online', function() {
+  gvSetNetBanner(false);
+  syncProductsFromServer(true);
+  syncPaymentMethodsFromServer();
+  syncUserSessionAndBalance();
+  if (typeof resumeMomoTracking === 'function') { try { resumeMomoTracking(); } catch (e) {} }
+});
+
 // ========== ÉTAT CENTRALISÉ ET RÉACTIF D'AUTHENTIFICATION (SINGLE SOURCE OF TRUTH) ==========
 var AuthState = {
   _session: null,
@@ -415,10 +457,10 @@ async function syncUserSessionAndBalance() {
   if (!s || !s.userId) return;
   try {
     var token = s.token || '';
-    var res = await fetch('/api/auth/me?_t=' + Date.now(), {
+    var res = await gvFetch('/api/auth/me?_t=' + Date.now(), {
       cache: 'no-store',
       headers: token ? { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' } : { 'Cache-Control': 'no-cache' }
-    });
+    }, 15000);
     if (res.ok) {
       var data = await res.json();
       if (data && data.user) {
@@ -449,10 +491,10 @@ async function syncUserSessionAndBalance() {
 async function syncUserOrdersFromServer(token) {
   if (!token) return;
   try {
-    var res = await fetch('/api/data/orders?_t=' + Date.now(), {
+    var res = await gvFetch('/api/data/orders?_t=' + Date.now(), {
       cache: 'no-store',
       headers: { 'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache' }
-    });
+    }, 20000);
     if (res.ok) {
       var data = await res.json();
       if (data && Array.isArray(data.orders)) {
@@ -708,7 +750,8 @@ function renderLandingShowcase() {
   var container = document.getElementById('hero-featured-items');
   if (!container) return;
 
-  var prods = DB.get('products', []).filter(function(p) { return p.published; });
+  // Mise en avant : les produits disponibles d'abord (un produit en rupture n'occupe jamais les premières places)
+  var prods = getConsolidatedProducts();
   var topProds = prods.slice(0, 3);
 
   if (topProds.length === 0) {
@@ -778,13 +821,19 @@ function getConsolidatedProducts() {
     }
   });
 
-  return Array.from(map.values());
+  // Produits en rupture toujours après les produits disponibles (ordre de l'administrateur conservé dans chaque
+  // groupe, identique sur ordinateur et téléphone) ; ils remontent d'eux-mêmes dès le réapprovisionnement.
+  var list = Array.from(map.values());
+  var inStock = list.filter(function(p) { return productBuyInfo(p).available; });
+  var soldOut = list.filter(function(p) { return !productBuyInfo(p).available; });
+  return inStock.concat(soldOut);
 }
 
 function renderLandingCategories() {
   var container = document.getElementById('landing-cats-filters');
   if (!container) return;
   var prods = getConsolidatedProducts();
+  if (!prods.length && window._gvCatalogState === 'loading') { container.innerHTML = categoryPillsSkeleton(); return; }
   var cats = ['all'];
   prods.forEach(function(p) { if (p.category && cats.indexOf(p.category) === -1) cats.push(p.category); });
 
@@ -821,6 +870,7 @@ function renderConnectedCategories() {
   var container = document.getElementById('connected-cats-filters');
   if (!container) return;
   var prods = getConsolidatedProducts();
+  if (!prods.length && window._gvCatalogState === 'loading') { container.innerHTML = categoryPillsSkeleton(); return; }
   var cats = ['all'];
   prods.forEach(function(p) { if (p.category && cats.indexOf(p.category) === -1) cats.push(p.category); });
 
@@ -3941,17 +3991,23 @@ function openOrdersModal() {
     return;
   }
 
-  // Rendu immédiat et synchrone
+  // Rendu immédiat (commandes déjà connues), squelette tant que le serveur n'a pas répondu
+  window._gvOrdersState = session.token ? 'loading' : 'ready';
   renderOrdersListInModal();
   document.getElementById('modal-orders').classList.add('active');
 
   // Synchronisation des commandes du compte depuis le serveur si en ligne
   if (session.token) {
-    fetch('/api/data/orders?_t=' + Date.now(), {
+    gvFetch('/api/data/orders?_t=' + Date.now(), {
       cache: 'no-store',
       headers: { 'Authorization': 'Bearer ' + session.token, 'Cache-Control': 'no-cache' }
-    }).then(function(r) { return r.json(); }).then(function(res) {
+    }, 20000).then(function(r) {
+      if (r.status === 401) { AuthState.clearSession(); throw new Error('session'); }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(res) {
       if (res && res.orders && Array.isArray(res.orders)) {
+        window._gvOrdersState = 'ready';
         if (session.role === 'admin') {
           DB.set('orders', res.orders);
         } else {
@@ -3970,7 +4026,11 @@ function openOrdersModal() {
           renderOrdersListInModal();
         }
       }
-    }).catch(function() {});
+    }).catch(function() {
+      window._gvOrdersState = 'error';
+      var modalOrders = document.getElementById('modal-orders');
+      if (modalOrders && modalOrders.classList.contains('active')) renderOrdersListInModal();
+    });
   }
 }
 
@@ -3990,6 +4050,22 @@ function renderOrdersListInModal() {
 
   var container = document.getElementById('orders-container-list');
   if (!container) return;
+
+  var ordersStatusNote = '';
+  if (window._gvOrdersState === 'error') {
+    ordersStatusNote = '<div class="gv-load-error gv-load-error-compact" style="margin-bottom: 12px;"><strong>Impossible d\'actualiser vos commandes</strong> (connexion lente ou interrompue).' +
+      ' <button type="button" class="btn-primary btn-sm" style="margin-top: 8px;" onclick="openOrdersModal()">Réessayer</button></div>';
+  }
+  if (orders.length === 0 && window._gvOrdersState === 'loading') {
+    var sk = '<span class="gv-sr-only" role="status">Chargement de vos commandes…</span>';
+    for (var si = 0; si < 3; si++) sk += '<div class="gv-skel-order" aria-hidden="true"><span class="gv-skel gv-skel-line" style="width: 45%;"></span><span class="gv-skel gv-skel-line" style="width: 75%; margin-top: 10px;"></span><span class="gv-skel gv-skel-line" style="width: 30%; margin-top: 10px;"></span></div>';
+    container.innerHTML = sk;
+    return;
+  }
+  if (orders.length === 0 && ordersStatusNote) {
+    container.innerHTML = ordersStatusNote;
+    return;
+  }
 
   if (orders.length === 0) {
     container.innerHTML = `
@@ -4066,7 +4142,7 @@ function renderOrdersListInModal() {
       </div>
     `;
   });
-  container.innerHTML = html;
+  container.innerHTML = ordersStatusNote + html;
 }
 
 function jsStr(val) {
@@ -5284,17 +5360,52 @@ function initMobileViewportUX() {
 // Le catalogue n'est jamais affiché depuis un ancien cache local (évite de montrer des produits supprimés).
 window._gvCatalogState = window._gvCatalogState || 'loading';
 
+// Squelettes animés affichés pendant le chargement (jamais une page vide ni une fausse « boutique vide »)
+function catalogSkeletonCards(n) {
+  var html = '<span class="gv-sr-only" role="status">Chargement du catalogue…</span>';
+  for (var i = 0; i < n; i++) {
+    html += '<div class="product-card gv-skel-card" aria-hidden="true">' +
+      '<div class="product-image-box gv-skel gv-skel-media"></div>' +
+      '<div class="product-body">' +
+        '<span class="gv-skel gv-skel-line" style="width: 38%;"></span>' +
+        '<span class="gv-skel gv-skel-line gv-skel-title" style="width: ' + (70 + (i * 7) % 25) + '%;"></span>' +
+        '<span class="gv-skel gv-skel-line" style="width: 95%;"></span>' +
+        '<span class="gv-skel gv-skel-line" style="width: ' + (55 + (i * 11) % 35) + '%;"></span>' +
+        '<div class="gv-skel-footer"><span class="gv-skel gv-skel-pill"></span><span class="gv-skel gv-skel-btn"></span></div>' +
+      '</div>' +
+    '</div>';
+  }
+  return html;
+}
+
+function catalogSkeletonShowcase() {
+  var html = '<span class="gv-sr-only" role="status">Chargement…</span>';
+  for (var i = 0; i < 3; i++) {
+    html += '<div class="showcase-item gv-skel-showcase" aria-hidden="true">' +
+      '<span class="gv-skel gv-skel-thumb"></span>' +
+      '<div style="flex: 1; min-width: 0;"><span class="gv-skel gv-skel-line" style="width: ' + (60 + i * 12) + '%;"></span><span class="gv-skel gv-skel-line" style="width: 35%; margin-top: 8px;"></span></div>' +
+      '<span class="gv-skel gv-skel-btn" style="width: 72px;"></span>' +
+    '</div>';
+  }
+  return html;
+}
+
 function catalogPlaceholderHtml(compact) {
   if (window._gvCatalogState === 'loading') {
-    return compact
-      ? '<div style="text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13px;">Chargement du catalogue…</div>'
-      : '<div style="grid-column: 1/-1; text-align: center; padding: 48px 20px; color: var(--text-muted); font-size: 14px;">Chargement du catalogue…</div>';
+    return compact ? catalogSkeletonShowcase() : catalogSkeletonCards(window.innerWidth < 640 ? 4 : 8);
   }
   if (window._gvCatalogState === 'error') {
-    return (compact ? '<div style="text-align: center; padding: 24px 16px;' : '<div style="grid-column: 1/-1; text-align: center; padding: 40px 20px;') +
-      ' color: var(--text-secondary); font-size: 13.5px;">Impossible de charger le catalogue pour le moment. <a href="javascript:void(0)" onclick="syncProductsFromServer()" style="color: var(--primary-600); font-weight: 700;">Réessayer</a></div>';
+    return (compact ? '<div class="gv-load-error gv-load-error-compact">' : '<div class="gv-load-error" style="grid-column: 1/-1;">') +
+      '<div style="font-size: 26px; margin-bottom: 6px;">📡</div>' +
+      '<strong>Impossible de charger le catalogue pour le moment.</strong>' +
+      '<div style="margin-top: 4px;">Votre connexion semble lente ou interrompue. Nouvelle tentative automatique en cours.</div>' +
+      '<button type="button" class="btn-primary btn-sm" style="margin-top: 12px;" onclick="syncProductsFromServer(true)">Réessayer maintenant</button></div>';
   }
   return null;
+}
+
+function categoryPillsSkeleton() {
+  return '<span class="gv-skel gv-skel-cat" style="width: 120px;"></span><span class="gv-skel gv-skel-cat"></span><span class="gv-skel gv-skel-cat" style="width: 110px;"></span><span class="gv-skel gv-skel-cat"></span>';
 }
 
 function rerenderCatalogViews() {
@@ -5306,45 +5417,68 @@ function rerenderCatalogViews() {
   if (typeof maybeOpenProductFromHash === 'function') maybeOpenProductFromHash(false);
 }
 
-async function syncProductsFromServer() {
-  try {
-    var res = await fetch('/api/data/products?_t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    if (res.ok) {
-      var data = await res.json();
-      if (data && Array.isArray(data.products)) {
-        window._gvCatalogState = 'ready';
-        DB.set('products', data.products);
-        if (data.products.length === 0) {
-          DB.set('vault', {});
-          currentLandingCat = 'all';
-          currentConnectedCat = 'all';
-        } else {
-          var validCats = data.products.map(function(p) { return p && p.category; }).filter(Boolean);
-          if (currentLandingCat !== 'all' && validCats.indexOf(currentLandingCat) === -1) {
-            currentLandingCat = 'all';
-          }
-          if (currentConnectedCat !== 'all' && validCats.indexOf(currentConnectedCat) === -1) {
-            currentConnectedCat = 'all';
-          }
-        }
-        rerenderCatalogViews();
+var _gvProductSync = null;
+var _gvCatalogRetryTimer = null;
+// Catalogue : délai maximal par tentative, nouvelles tentatives progressives, puis reprise automatique.
+function syncProductsFromServer(manual) {
+  if (_gvProductSync) return _gvProductSync;
+  if (manual && window._gvCatalogState === 'error') {
+    window._gvCatalogState = 'loading';
+    rerenderCatalogViews();
+  }
+  var timeouts = [12000, 20000, 30000];
+  _gvProductSync = (async function() {
+    for (var attempt = 0; attempt < timeouts.length; attempt++) {
+      try {
+        await syncProductsOnce(timeouts[attempt]);
+        if (_gvCatalogRetryTimer) { clearTimeout(_gvCatalogRetryTimer); _gvCatalogRetryTimer = null; }
+        if (navigator.onLine !== false) gvSetNetBanner(false);
+        return true;
+      } catch (e) {
+        if (attempt < timeouts.length - 1) await new Promise(function(r) { setTimeout(r, attempt === 0 ? 1500 : 4000); });
       }
     }
-  } catch (e) {
     if (window._gvCatalogState !== 'ready') {
       window._gvCatalogState = 'error';
       rerenderCatalogViews();
     }
+    gvSetNetBanner(true, navigator.onLine === false ? 'Vous êtes hors ligne. Les informations affichées seront actualisées dès le retour de la connexion.' : 'Connexion au serveur difficile : nouvelle tentative automatique dans 30 secondes.');
+    if (_gvCatalogRetryTimer) clearTimeout(_gvCatalogRetryTimer);
+    _gvCatalogRetryTimer = setTimeout(function() { _gvCatalogRetryTimer = null; syncProductsFromServer(); }, 30000);
+    return false;
+  })().finally(function() { _gvProductSync = null; });
+  return _gvProductSync;
+}
+
+async function syncProductsOnce(timeoutMs) {
+  var res = await gvFetch('/api/data/products?_t=' + Date.now(), { cache: 'no-store' }, timeoutMs);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  var data = await res.json();
+  if (!data || !Array.isArray(data.products)) throw new Error('Réponse du catalogue invalide');
+  window._gvCatalogState = 'ready';
+  DB.set('products', data.products);
+  if (data.products.length === 0) {
+    DB.set('vault', {});
+    currentLandingCat = 'all';
+    currentConnectedCat = 'all';
+  } else {
+    var validCats = data.products.map(function(p) { return p && p.category; }).filter(Boolean);
+    if (currentLandingCat !== 'all' && validCats.indexOf(currentLandingCat) === -1) {
+      currentLandingCat = 'all';
+    }
+    if (currentConnectedCat !== 'all' && validCats.indexOf(currentConnectedCat) === -1) {
+      currentConnectedCat = 'all';
+    }
   }
+  rerenderCatalogViews();
 }
 
 // Synchronisation parallèle des méthodes de paiement actives et paramètres depuis le serveur
 async function syncPaymentMethodsFromServer() {
   var ts = Date.now();
   var results = await Promise.allSettled([
-    fetch('/api/data/methods?_t=' + ts, { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; }),
-    fetch('/api/data/settings?_t=' + ts, { cache: 'no-store' }).then(function(r) { return r.ok ? r.json() : null; })
+    gvFetch('/api/data/methods?_t=' + ts, { cache: 'no-store' }, 15000).then(function(r) { return r.ok ? r.json() : null; }),
+    gvFetch('/api/data/settings?_t=' + ts, { cache: 'no-store' }, 15000).then(function(r) { return r.ok ? r.json() : null; })
   ]);
 
   var data = results[0].status === 'fulfilled' ? results[0].value : null;
@@ -5437,38 +5571,36 @@ var VersionManager = {
   }
 };
 
-// Traçabilité des visites réelles et visiteurs uniques
+// Traçabilité des visites réelles et visiteurs uniques.
+// Une visite = une session de navigation : elle est comptée à l'arrivée, puis à nouveau seulement après
+// 30 minutes sans activité (même règle que les outils d'audience courants). Le serveur ne reçoit qu'un
+// identifiant anonyme aléatoire de navigateur (aucune donnée personnelle) et l'enregistre haché.
+var GV_VISIT_GAP_MS = 30 * 60 * 1000;
 function trackVisitor() {
   try {
     var vid = localStorage.getItem('gv_visitor_id');
     var isNew = false;
     if (!vid) {
-      vid = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      vid = 'v_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
       localStorage.setItem('gv_visitor_id', vid);
       isNew = true;
     }
-    var todayStr = new Date().toISOString().split('T')[0];
-    var lastVisit = localStorage.getItem('gv_last_visit_date');
-    if (lastVisit !== todayStr) {
-      localStorage.setItem('gv_last_visit_date', todayStr);
-      var visits = DB.get('visitor_logs', []);
-      visits.push({
-        id: 'vis_' + Date.now(),
-        vid: vid,
-        isNew: isNew,
-        date: new Date().toISOString()
-      });
-      if (visits.length > 3000) visits = visits.slice(-3000);
-      DB.set('visitor_logs', visits);
-
-      fetch('/api/data/visitors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vid: vid, isNew: isNew })
-      }).catch(function() {});
-    }
+    var now = Date.now();
+    var last = parseInt(localStorage.getItem('gv_last_activity_at') || '0', 10) || 0;
+    localStorage.setItem('gv_last_activity_at', String(now));
+    // Ancien journal local (n'a jamais servi aux statistiques du serveur) : libère le stockage du navigateur
+    if (localStorage.getItem('vs_visitor_logs') !== null) DB.del('visitor_logs');
+    if (!isNew && now - last < GV_VISIT_GAP_MS) return;
+    gvFetch('/api/data/visitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vid: vid, isNew: isNew }),
+      keepalive: true
+    }, 10000).catch(function() {});
   } catch (e) {}
 }
+// Retour sur l'onglet après une longue absence = nouvelle visite ; sinon l'activité prolonge la visite en cours
+document.addEventListener('visibilitychange', function() { if (!document.hidden) trackVisitor(); });
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', startApp);
