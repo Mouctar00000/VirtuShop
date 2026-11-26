@@ -3540,6 +3540,11 @@
       if (bPRech) bPRech.textContent = pendingRecharges + ' en attente';
       var bPOrd = document.getElementById('pending-orders-badge');
       if (bPOrd) bPOrd.textContent = pendingOrders + ' en attente';
+      // Compteurs de l'en-tête des onglets Commandes / Recharges (affichaient toujours « 0 en attente »)
+      var kOrd = document.getElementById('kpi-orders-chip');
+      if (kOrd) kOrd.textContent = pendingOrders + ' en attente';
+      var kRech = document.getElementById('kpi-recharges-chip');
+      if (kRech) kRech.textContent = pendingRecharges + ' en attente';
 
       var alertBox = document.getElementById('recharge-alert-box');
       if (alertBox) {
